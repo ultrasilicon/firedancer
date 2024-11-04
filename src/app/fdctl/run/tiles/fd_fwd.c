@@ -120,7 +120,7 @@ after_frag( fd_fwd_tile_ctx_t *   ctx,
      [ payload_sz       ] (2B) */
 
   uchar  src_proto   = fd_disco_tpu_sig_src_proto( sig );
-  if( src_proto==DST_PROTO_TPU_QUIC ) {
+  if( src_proto==DST_PROTO_TPU_UDP ) {
     return;
   }
   ulong payload_sz = sz;
@@ -128,7 +128,7 @@ after_frag( fd_fwd_tile_ctx_t *   ctx,
   ushort src_port    = fd_disco_tpu_sig_src_port( sig );
 
   fd_net_hdrs_t * hdrs = (fd_net_hdrs_t *)ctx->send_buf;
-  hdrs = fd_net_create_packet_header_template( hdrs, payload_sz, src_ip_addr, ctx->src_mac_addr, src_port );
+  hdrs = fd_net_create_packet_header_template( hdrs, payload_sz, src_ip_addr, ctx->src_mac_addr, fd_ushort_bswap(src_port) );
   memcpy( hdrs->eth->dst, ctx->dst_mac_addr, 6UL );
   memcpy( hdrs->ip4->daddr_c, &ctx->dst_ip_addr, 4UL );
   hdrs->udp->net_dport = fd_ushort_bswap( (ushort)ctx->dst_ip_port );
