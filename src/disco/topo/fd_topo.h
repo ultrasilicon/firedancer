@@ -342,6 +342,16 @@ typedef struct {
       uint    tpu_ip_addr;
       char    identity_key_path[ PATH_MAX ];
     } rpcserv;
+
+    struct {
+      char   interface[ 16 ];
+      uint   src_ip_addr;
+      uchar  src_mac_addr[ 6 ];
+      ushort src_ip_port;
+      uint   dst_ip_addr;
+      uchar  dst_mac_addr[ 6 ];
+      ushort dst_ip_port;
+    } fwd;
   };
 } fd_topo_tile_t;
 

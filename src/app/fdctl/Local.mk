@@ -38,6 +38,7 @@ $(call add-objs,run/tiles/fd_cswtch,fd_fdctl)
 $(call add-objs,run/tiles/fd_metric,fd_fdctl)
 $(call add-objs,run/tiles/fd_gui,fd_fdctl)
 $(call add-objs,run/tiles/fd_plugin,fd_fdctl)
+$(call add-objs,run/tiles/fd_fwd,fd_fdctl)
 $(call add-objs,run/tiles/generated/http_import_dist,fd_fdctl)
 $(call add-objs,run/tiles/fd_blackhole,fd_fdctl)
 
@@ -97,6 +98,7 @@ $(OBJDIR)/obj/app/fdctl/run/tiles/fd_cswtch.o: src/app/fdctl/run/tiles/generated
 $(OBJDIR)/obj/app/fdctl/run/tiles/fd_gui.o: src/app/fdctl/run/tiles/generated/gui_seccomp.h src/app/fdctl/run/tiles/generated/http_import_dist.h
 $(OBJDIR)/obj/app/fdctl/run/tiles/fd_plugin.o: src/app/fdctl/run/tiles/generated/plugin_seccomp.h
 $(OBJDIR)/obj/app/fdctl/run/tiles/fd_sign.o: src/app/fdctl/run/tiles/generated/sign_seccomp.h
+$(OBJDIR)/obj/app/fdctl/run/tiles/fd_fwd.o: src/app/fdctl/run/tiles/generated/fwd_seccomp.h
 ifdef FD_HAS_NO_AGAVE
 $(OBJDIR)/obj/app/fdctl/run/tiles/fd_repair.o: src/app/fdctl/run/tiles/generated/repair_seccomp.h
 $(OBJDIR)/obj/app/fdctl/run/tiles/fd_gossip.o: src/app/fdctl/run/tiles/generated/gossip_seccomp.h

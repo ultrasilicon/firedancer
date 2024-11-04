@@ -5,6 +5,7 @@
 #include "../../../../disco/topo/fd_pod_format.h"
 #include "../../../../util/tile/fd_tile_private.h"
 #include "../../../../util/shmem/fd_shmem_private.h"
+#include "../../../../util/net/fd_eth.h"
 
 void
 fd_topo_initialize( config_t * config ) {
@@ -49,6 +50,7 @@ fd_topo_initialize( config_t * config ) {
   fd_topob_wksp( topo, "sign"         );
   fd_topob_wksp( topo, "metric"       );
   fd_topob_wksp( topo, "cswtch"       );
+  fd_topob_wksp( topo, "fwd"          );
 
   #define FOR(cnt) for( ulong i=0UL; i<cnt; i++ )
 
@@ -120,6 +122,7 @@ fd_topo_initialize( config_t * config ) {
   /**/                 fd_topob_tile( topo, "sign",    "sign",    "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0 );
   /**/                 fd_topob_tile( topo, "metric",  "metric",  "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0 );
   /**/                 fd_topob_tile( topo, "cswtch",  "cswtch",  "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0 );
+  /**/                 fd_topob_tile( topo, "fwd",     "fwd",     "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0 );
 
   if( FD_LIKELY( !is_auto_affinity ) ) {
     if( FD_UNLIKELY( affinity_tile_cnt<topo->tile_cnt ) )
@@ -174,6 +177,7 @@ fd_topo_initialize( config_t * config ) {
   /* All verify tiles read from all QUIC tiles, packets are round robin. */
   FOR(verify_tile_cnt) for( ulong j=0UL; j<quic_tile_cnt; j++ )
                        fd_topob_tile_in(  topo, "verify",  i,            "metric_in", "quic_verify",  j,            FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED ); /* No reliable consumers, verify tiles may be overrun */
+  FOR(quic_tile_cnt)   fd_topob_tile_in(  topo, "fwd",     0UL,          "metric_in", "quic_verify",  i,            FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED ); /* No reliable consumers, fwd tiles may be overrun */
   FOR(verify_tile_cnt) fd_topob_tile_out( topo, "verify",  i,                         "verify_dedup", i                                                  );
   /* Declare the single gossip link before the variable length verify-dedup links so we could have a compile-time index to the gossip link. */
   /**/                 fd_topob_tile_in(  topo, "dedup",   0UL,          "metric_in", "gossip_dedup", 0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
@@ -432,6 +436,27 @@ fd_topo_initialize( config_t * config ) {
 
     } else if( FD_UNLIKELY( !strcmp( tile->name, "plugin" ) ) ) {
 
+    } else if( FD_UNLIKELY( !strcmp( tile->name, "fwd" ) ) ) {
+      strncpy( tile->fwd.interface,    config->development.fwd.interface, sizeof(tile->fwd.interface) );
+
+      if( FD_UNLIKELY( !fd_cstr_to_ip4_addr( config->development.fwd.dst_ip_addr, &tile->fwd.dst_ip_addr ) ) ) {
+        FD_LOG_ERR(( "bad config" ));
+      }
+
+      if( FD_UNLIKELY( !fd_cstr_to_ip4_addr( config->development.fwd.src_ip_addr, &tile->fwd.src_ip_addr ) ) ) {
+        FD_LOG_ERR(( "bad config" ));
+      }
+
+      if( FD_UNLIKELY( !fd_cstr_to_mac_addr( config->development.fwd.dst_mac_addr, tile->fwd.dst_mac_addr ) ) ) {
+        FD_LOG_ERR(( "bad config" ));
+      }
+
+      if( FD_UNLIKELY( !fd_cstr_to_mac_addr( config->development.fwd.src_mac_addr, tile->fwd.src_mac_addr ) ) ) {
+        FD_LOG_ERR(( "bad config" ));
+      }
+
+      tile->fwd.dst_ip_port = config->development.fwd.dst_ip_port;
+      tile->fwd.src_ip_port = config->development.fwd.src_ip_port;
     } else {
       FD_LOG_ERR(( "unknown tile name %lu `%s`", i, tile->name ));
     }

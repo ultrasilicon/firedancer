@@ -347,6 +347,14 @@ fdctl_pod_to_cfg( config_t * config,
   CFG_POP      ( ulong,  development.bench.disable_blockstore_from_slot   );
   CFG_POP      ( bool,   development.bench.disable_status_cache           );
 
+  CFG_POP      ( cstr,   development.fwd.interface                        );
+  CFG_POP      ( cstr,   development.fwd.src_mac_addr                     );
+  CFG_POP      ( cstr,   development.fwd.src_ip_addr                      );
+  CFG_POP      ( ushort, development.fwd.src_ip_port                      );
+  CFG_POP      ( cstr,   development.fwd.dst_mac_addr                     );
+  CFG_POP      ( cstr,   development.fwd.dst_ip_addr                      );
+  CFG_POP      ( ushort, development.fwd.dst_ip_port                      );
+
   /* Firedancer-only configuration */
 
   CFG_POP_ARRAY( cstr,   tiles.gossip.entrypoints                         );

@@ -1,0 +1,41 @@
+# logfile_fd: It can be disabled by configuration, but typically tiles
+#             will open a log file on boot and write all messages there.
+unsigned int logfile_fd, unsigned int sock_fd
+
+# logging: all log messages are written to a file and/or pipe
+#
+# 'WARNING' and above are written to the STDERR pipe, while all messages
+# are always written to the log file.
+#
+# arg 0 is the file descriptor to write to.  The boot process ensures
+# that descriptor 2 is always STDERR.
+write: (or (eq (arg 0) 2)
+           (eq (arg 0) logfile_fd))
+
+# logging: 'WARNING' and above fsync the logfile to disk immediately
+#
+# arg 0 is the file descriptor to fsync.
+fsync: (eq (arg 0) logfile_fd)
+
+# XDP: we need to call sendto to notify the kernel there are new entries
+#      in the TX ring
+#
+# The kernel has no mechanism to continuously poll the TX queue to see if
+# there are new packets for the driver to send, so instead we must
+# notify it.  The sendto syscall has been overloaded by Linux for this
+# purpose.
+#
+# arg 0 is the file descriptor of the XSK that the kernel should poll
+# for entries.  There are two possible XSKs, since we can send packets
+# on a network device or the loopback device.
+
+# netlink: send netlink messages to kernel requesting ARP tables
+#
+# Because Firedancer does kernel bypass for networking, it needs to populate
+# the ethernet headers on UDP packets it sends.  This requires consulting the
+# kernel ARP table, which is done by calling sendto() on a special netlink
+# socket.
+#
+# arg 0 is the netlink file descriptor to send packets to.
+sendto: (and (eq (arg 0) sock_fd)
+             (eq (arg 3) 0))

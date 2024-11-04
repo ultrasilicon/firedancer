@@ -346,6 +346,7 @@ fd_topob_auto_layout( fd_topo_t * topo ) {
     "net",
     "quic",
     "verify",
+    "fwd",
     "dedup",
     "resolv",
     "pack",

@@ -164,6 +164,16 @@ typedef struct {
     } netns;
 
     struct {
+      char   interface[ IF_NAMESIZE ];
+      char   src_mac_addr[ 32 ];
+      char   src_ip_addr[ 32 ];
+      ushort src_ip_port;
+      char   dst_mac_addr[ 32 ];
+      char   dst_ip_addr[ 32 ];
+      ushort dst_ip_port;
+    } fwd;
+
+    struct {
       int allow_private_address;
     } gossip;
 

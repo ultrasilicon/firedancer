@@ -1,0 +1,9 @@
+[development]
+  [development.fwd]
+    interface = "bond0"
+    dst_mac_addr = "D4:04:E6:D6:75:D0"
+    dst_ip_addr  = "64.130.56.125"
+    dst_ip_port  = 8090
+    src_mac_addr = "D4:04:E6:D6:75:D0"
+    src_ip_addr  = "64.130.56.125"
+    src_ip_port  = 8000
