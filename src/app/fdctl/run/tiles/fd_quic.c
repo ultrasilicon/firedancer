@@ -8,6 +8,7 @@
 #include "../../../../waltz/xdp/fd_xsk.h"
 #include "../../../../waltz/ip/fd_netlink.h"
 #include "../../../../disco/quic/fd_tpu.h"
+#include "../../../../util/net/fd_net_headers.h"
 
 #include <linux/unistd.h>
 #include <sys/random.h>
@@ -117,7 +118,9 @@ scratch_footprint( fd_topo_tile_t const * tile ) {
 static void
 legacy_stream_notify( fd_quic_ctx_t * ctx,
                       uchar *         packet,
-                      ulong           packet_sz ) {
+                      ulong           packet_sz,
+                      uint            ip_addr,
+                      ushort          udp_port ) {
 
   fd_stem_context_t * stem = ctx->stem;
 
@@ -130,6 +133,8 @@ legacy_stream_notify( fd_quic_ctx_t * ctx,
   uint   tspub = (uint)fd_frag_meta_ts_comp( fd_tickcount() );
   void * base  = ctx->verify_out_mem;
   ulong  seq   = stem->seqs[0];
+  
+  ulong  sig   = fd_disco_tpu_sig( ip_addr, udp_port, DST_PROTO_TPU_UDP );
 
   int pub_err = fd_tpu_reasm_publish( ctx->reasm, slot, stem->mcaches[0], base, seq, tspub );
   if( FD_UNLIKELY( pub_err!=FD_TPU_REASM_SUCCESS ) ) return; /* unreachable */
@@ -282,7 +287,9 @@ after_frag( fd_quic_ctx_t *     ctx,
       return;
     }
 
-    legacy_stream_notify( ctx, ctx->buffer+network_hdr_sz, data_sz );
+    fd_net_hdrs_t * hdrs = (fd_net_hdrs_t *)ctx->buffer;
+    uint ip_addr = FD_LOAD( uint, hdrs->ip4->saddr_c );
+    legacy_stream_notify( ctx, ctx->buffer+network_hdr_sz, data_sz, ip_addr, hdrs->udp->net_sport );
   }
 }
 
@@ -419,6 +426,10 @@ quic_stream_notify( fd_quic_stream_t * stream,
   }
 
   /* Publish message */
+
+  uint   ip_addr  = stream->conn->peer[stream->conn->cur_peer_idx].net.ip_addr;
+  ushort udp_port = stream->conn->peer[stream->conn->cur_peer_idx].net.udp_port;
+  ulong  sig      = fd_disco_tpu_sig( ip_addr, udp_port, DST_PROTO_TPU_QUIC );
 
   ulong  seq   = stem->seqs[0];
   uint   tspub = (uint)fd_frag_meta_ts_comp( fd_tickcount() );

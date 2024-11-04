@@ -256,7 +256,8 @@ fd_tpu_reasm_publish( fd_tpu_reasm_t *      reasm,
                       fd_frag_meta_t *      mcache,
                       void *                base,  /* Assumed aligned FD_CHUNK_ALIGN */
                       ulong                 seq,
-                      ulong                 tspub );
+                      ulong                 tspub,
+                      ulong                 sig );
 
 /* fd_tpu_reasm_cancel cancels the given stream reassembly. */
 

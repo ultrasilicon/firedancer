@@ -188,7 +188,8 @@ fd_tpu_reasm_publish( fd_tpu_reasm_t *      reasm,
                       fd_frag_meta_t *      mcache,
                       void *                base,  /* Assumed aligned FD_CHUNK_ALIGN */
                       ulong                 seq,
-                      ulong                 tspub ) {
+                      ulong                 tspub,
+                      ulong                 sig ) {
 
   if( FD_UNLIKELY( slot->state != FD_TPU_REASM_STATE_BUSY ) )
     return FD_TPU_REASM_ERR_STATE;
@@ -256,6 +257,7 @@ fd_tpu_reasm_publish( fd_tpu_reasm_t *      reasm,
   meta->ctl    = (ushort)ctl;
   meta->tsorig = (uint  )tsorig;
   meta->tspub  = (uint  )tspub;
+  meta->sig    = sig;
   FD_COMPILER_MFENCE();
   meta->seq    = seq;
   FD_COMPILER_MFENCE();

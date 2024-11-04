@@ -83,6 +83,17 @@ FD_FN_CONST static inline uint  fd_disco_netmux_sig_dst_ip( ulong sig ) { return
 FD_FN_CONST static inline ulong  fd_disco_netmux_sig_hdr_sz( ulong sig ) { return 4UL*((sig>>44UL) & 0xFUL) + 42UL; }
 
 FD_FN_CONST static inline ulong
+fd_disco_tpu_sig( uint   src_ip_addr,
+                  ushort src_port,
+                  uchar  src_proto ) {
+  return ( (ulong)src_ip_addr << 32UL ) | ( (ulong)src_port << 16UL ) | ( (ulong)src_proto );
+}
+
+FD_FN_CONST static inline uint   fd_disco_tpu_sig_src_ip_addr ( ulong sig ) { return (uint)(sig>>32UL) & 0xFFFFFFFFUL; }
+FD_FN_CONST static inline ushort fd_disco_tpu_sig_src_port    ( ulong sig ) { return (ushort)(sig>>16UL) & 0xFFFFUL; }
+FD_FN_CONST static inline uchar  fd_disco_tpu_sig_src_proto   ( ulong sig ) { return (uchar)((sig) & 0xFFUL); }
+
+FD_FN_CONST static inline ulong
 fd_disco_poh_sig( ulong slot,
                   ulong pkt_type,
                   ulong bank_tile ) {
