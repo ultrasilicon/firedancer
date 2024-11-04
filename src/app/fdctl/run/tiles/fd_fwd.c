@@ -123,7 +123,7 @@ after_frag( fd_fwd_tile_ctx_t *   ctx,
 
   fd_net_hdrs_t * hdrs = (fd_net_hdrs_t *)ctx->send_buf;
   hdrs = fd_net_create_packet_header_template( hdrs, payload_sz, ctx->src_ip_addr, ctx->src_mac_addr, (ushort)ctx->src_ip_port );
-  memcpy( hdrs->eth->src, ctx->dst_mac_addr, 6UL );
+  memcpy( hdrs->eth->dst, ctx->dst_mac_addr, 6UL );
   memcpy( hdrs->ip4->daddr_c, &ctx->dst_ip_addr, 4UL );
   hdrs->udp->net_dport = fd_ushort_bswap( (ushort)ctx->dst_ip_port );
   hdrs->udp->check = fd_ip4_udp_check( *(uint *)FD_ADDRESS_OF_PACKED_MEMBER( hdrs->ip4->saddr_c ),
@@ -182,6 +182,7 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->src_ip_addr = tile->fwd.src_ip_addr;
   ctx->dst_ip_port = tile->fwd.dst_ip_port;
   ctx->src_ip_port = tile->fwd.src_ip_port;
+
 
   memcpy( ctx->dst_mac_addr, tile->fwd.dst_mac_addr, sizeof(ctx->dst_mac_addr) );
   memcpy( ctx->src_mac_addr, tile->fwd.src_mac_addr, sizeof(ctx->src_mac_addr) );
