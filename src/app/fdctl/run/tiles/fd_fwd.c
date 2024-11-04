@@ -119,7 +119,7 @@ after_frag( fd_fwd_tile_ctx_t *   ctx,
      [ fd_txn_t         ] (? bytes)
      [ payload_sz       ] (2B) */
 
-  uchar  src_proto   = fd_disco_netmux_sig_proto( sig );
+  uchar  src_proto   = fd_disco_tpu_sig_src_proto( sig );
   if( src_proto==DST_PROTO_TPU_QUIC ) {
     return;
   }
