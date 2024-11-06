@@ -429,7 +429,7 @@ quic_stream_notify( fd_quic_stream_t * stream,
 
   uint   ip_addr  = stream->conn->peer[stream->conn->cur_peer_idx].net.ip_addr;
   ushort udp_port = stream->conn->peer[stream->conn->cur_peer_idx].net.udp_port;
-  ulong  sig      = fd_disco_tpu_sig( ip_addr, udp_port, DST_PROTO_TPU_QUIC );
+  ulong  sig      = fd_disco_tpu_sig( ip_addr, fd_ushort_bswap( udp_port ), DST_PROTO_TPU_QUIC );
 
   ulong  seq   = stem->seqs[0];
   uint   tspub = (uint)fd_frag_meta_ts_comp( fd_tickcount() );
