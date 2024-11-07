@@ -544,9 +544,9 @@ fdctl_cfg_from_env( int *      pargc,
     if( FD_UNLIKELY( !if_nametoindex( config->tiles.net.interface ) ) )
       FD_LOG_ERR(( "configuration specifies network interface `%s` which does not exist", config->tiles.net.interface ));
     uint iface_ip = listen_address( config->tiles.net.interface );
+    int  has_gossip_ip4 = 0;
+    uint gossip_ip_addr = iface_ip;
     if( FD_UNLIKELY( strcmp( config->gossip.host, "" ) ) ) {
-      uint gossip_ip_addr = iface_ip;
-      int  has_gossip_ip4 = 0;
       if( FD_UNLIKELY( strlen( config->gossip.host )<=15UL ) ) {
         /* Only sets gossip_ip_addr if it's a valid IPv4 address, otherwise assume it's a DNS name */
         has_gossip_ip4 = fd_cstr_to_ip4_addr( config->gossip.host, &gossip_ip_addr );
@@ -600,7 +600,9 @@ fdctl_cfg_from_env( int *      pargc,
         }
       }
     }
-
+    if( has_gossip_ip4 ) {
+      config->tiles.net.ip_addr = gossip_ip_addr;
+    }
   }
 
   username_to_id( config );
