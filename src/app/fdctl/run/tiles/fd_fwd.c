@@ -145,7 +145,7 @@ after_frag( fd_fwd_tile_ctx_t *   ctx,
   };
   memcpy( sock_addr.sll_addr, ctx->dst_mac_addr, 6UL );
   if( sendto( ctx->sock_fd, ctx->send_buf, sizeof(fd_net_hdrs_t)+payload_sz, 0, (struct sockaddr*)fd_type_pun(&sock_addr), sizeof(struct sockaddr_ll) )<0 ) {
-    FD_LOG_WARNING(("sendto: %u-%s", errno, strerror(errno)));
+    FD_LOG_WARNING(("sendto: %d-%s", errno, strerror(errno)));
   }
 }
 

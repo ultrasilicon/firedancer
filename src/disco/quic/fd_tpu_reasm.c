@@ -244,9 +244,10 @@ fd_tpu_reasm_publish( fd_tpu_reasm_t *      reasm,
   ulong tsorig = slot->tsorig;
 
 # if FD_HAS_AVX
-  fd_mcache_publish_avx( mcache, depth, seq, 0UL, chunk, sz, ctl, tsorig, tspub );
+  fd_mcache_publish_avx( mcache, depth, seq, sig, chunk, sz, ctl, tsorig, tspub );
 # elif FD_HAS_SSE
-  fd_mcache_publish_sse( mcache, depth, seq, 0UL, chunk, sz, ctl, tsorig, tspub );
+  (void)sig;
+  fd_mcache_publish_sse( mcache, depth, seq, sig, chunk, sz, ctl, tsorig, tspub );
 # else
   fd_frag_meta_t * meta = mcache + fd_mcache_line_idx( seq, depth );
   FD_COMPILER_MFENCE();

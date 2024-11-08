@@ -42,9 +42,9 @@ before_frag( fd_verify_ctx_t * ctx,
              ulong             seq,
              ulong             sig ) {
   (void)in_idx;
-  (void)sig;
+  uchar  src_proto   = fd_disco_tpu_sig_src_proto( sig );
 
-  return (seq % ctx->round_robin_cnt) != ctx->round_robin_idx;
+  return (seq % ctx->round_robin_cnt) != ctx->round_robin_idx || src_proto != DST_PROTO_TPU_UDP;
 }
 
 /* during_frag is called between pairs for sequence number checks, as

@@ -136,7 +136,7 @@ legacy_stream_notify( fd_quic_ctx_t * ctx,
   
   ulong  sig   = fd_disco_tpu_sig( ip_addr, udp_port, DST_PROTO_TPU_UDP );
 
-  int pub_err = fd_tpu_reasm_publish( ctx->reasm, slot, stem->mcaches[0], base, seq, tspub );
+  int pub_err = fd_tpu_reasm_publish( ctx->reasm, slot, stem->mcaches[0], base, seq, tspub, sig );
   if( FD_UNLIKELY( pub_err!=FD_TPU_REASM_SUCCESS ) ) return; /* unreachable */
   ctx->metrics.txns_received_udp++;
 
@@ -427,13 +427,13 @@ quic_stream_notify( fd_quic_stream_t * stream,
 
   /* Publish message */
 
-  uint   ip_addr  = stream->conn->peer[stream->conn->cur_peer_idx].net.ip_addr;
-  ushort udp_port = stream->conn->peer[stream->conn->cur_peer_idx].net.udp_port;
+  uint   ip_addr  = stream->conn->peer[0].ip_addr;
+  ushort udp_port = stream->conn->peer[0].udp_port;
   ulong  sig      = fd_disco_tpu_sig( ip_addr, fd_ushort_bswap( udp_port ), DST_PROTO_TPU_QUIC );
 
   ulong  seq   = stem->seqs[0];
   uint   tspub = (uint)fd_frag_meta_ts_comp( fd_tickcount() );
-  int pub_err = fd_tpu_reasm_publish( reasm, slot, mcache, base, seq, tspub );
+  int pub_err = fd_tpu_reasm_publish( reasm, slot, mcache, base, seq, tspub, sig );
   if( FD_UNLIKELY( pub_err!=FD_TPU_REASM_SUCCESS ) ) return;
   ctx->metrics.txns_received_quic++;
 
