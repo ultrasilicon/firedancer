@@ -474,8 +474,12 @@ metric introduced.
 <tile name="replay">
   <gauge name="Slot" label="The slot that is currently being executing" />
   <gauge name="LastVotedSlot" label="The last slot that was voted on" />
-
 </tile>
+
+<tile name="repair">
+    <counter name="ShredsDelivered" summary="Count of repair shreds delivered to store" />
+</tile>
+
 <tile name="storei">
   <gauge name="FirstTurbineSlot" label="The first slot for which we have received a turbine shred" />
   <gauge name="CurrentTurbineSlot" label="The latest slot for which we have received a turbine shred" />

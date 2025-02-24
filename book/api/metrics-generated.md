@@ -503,3 +503,8 @@
 | netlnk_&#8203;route_&#8203;count_&#8203;main | `gauge` | Number of IPv4 routes (Main) |
 | netlnk_&#8203;neighbor_&#8203;solicits_&#8203;sent | `counter` | Number of neighbor solicit requests sent to kernel |
 | netlnk_&#8203;neighbor_&#8203;solicits_&#8203;fails | `counter` | Number of neighbor solicit requests that failed to send |
+
+## Repair Tile
+| Metric | Type | Description |
+|--------|------|-------------|
+| repair_&#8203;shreds_&#8203;delivered | `counter` | Count of repair shreds delivered to store |
