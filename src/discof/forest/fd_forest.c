@@ -610,15 +610,78 @@ ancestry_print( fd_forest_t const * forest, fd_forest_ele_t const * ele, int spa
   }
 }
 
+/* invariant: print myself first, and then set up PREFIX for my children */
+
+static void FD_FN_UNUSED
+ancestry_print3( fd_forest_t const * forest, fd_forest_ele_t const * ele, int space, const char * prefix, fd_forest_ele_t const * prev, int should_print ) {
+  //if( ele->slot == 1568381 ) __asm__("int $3");
+  fd_forest_ele_t const * pool = fd_forest_pool_const( forest );
+
+  if( ele == NULL ) return;
+
+  /* print the slot itself. either we might need to start a new interval, or it may get elided */
+  fd_forest_ele_t const * child = fd_forest_pool_ele_const( pool, ele->child );
+
+  if( should_print ) {
+    if( space > 0 ) printf( "\n" );
+    for( int i = 0; i < space; i++ ) printf( " " );
+    printf( "%s", prefix );
+    printf( "%lu", ele->slot );
+  }
+
+  if( !child && should_print ) { /* double check these cases arent the same...*/
+    printf( "]" );
+    return;
+  } /* no children, close bracket */
+  if( !child && !should_print ) {
+    printf( ", %lu]", ele->slot );
+    return;
+  }
+
+  prev = ele;
+  char new_prefix[1024]; /* FIXME size this correctly */
+  int one_child = child && child->sibling == ULONG_MAX;
+  if( one_child &&
+      child->slot != ele->slot + 1 ) { // if I have ONE CHILD and one child is non-consecutive
+
+    if( !should_print ) { /* i didn't print myself, but maybe i should ^3^ */
+      printf( ", %lu]", ele->slot );
+      space += fd_int_max( num_digits( ele->slot ) + 2, 0 );
+    } else {
+      printf( "]");
+    }
+
+    sprintf( new_prefix, "└── [" ); /* end branch */
+    ancestry_print3( forest, child, space + 5, new_prefix, prev, 1 );
+  } else if ( one_child && child->slot == ele->slot + 1 ) {
+    ancestry_print3( forest, child, space, prefix, prev, 0);
+  } else { /* multiple children */
+
+    if( !should_print ) { /* i didn't print myself, but maybe i should ^3^ */
+      printf( ", %lu]", ele->slot );
+      space += fd_int_max( num_digits( ele->slot ) + 2, 0 );
+    } else {
+      printf( "]");
+    }
+
+    while( child ) {
+      if( fd_forest_pool_ele_const( pool, child->sibling ) ) {
+        sprintf( new_prefix, "├── [" ); /* branch indicating more siblings follow */
+        ancestry_print3( forest, child, space + 5, new_prefix, prev, 1 );
+      } else {
+        sprintf( new_prefix, "└── [" ); /* end branch */
+        ancestry_print3( forest, child, space + 5, new_prefix, prev, 1 );
+      }
+      child = fd_forest_pool_ele_const( pool, child->sibling );
+    }
+  }
+}
 
 void
 fd_forest_ancestry_print( fd_forest_t const * forest ) {
-  FD_LOG_NOTICE( ( "\n\n[Ancestry]\n%lu", fd_forest_pool_ele_const( fd_forest_pool_const( forest ), forest->root )->slot ) );
+  FD_LOG_NOTICE(("\n\n[Ancestry]\n\n" ) );
 
-  ancestry_print2( forest, fd_forest_pool_ele_const( fd_forest_pool_const( forest ), forest->root ), NULL, 0, 0, "" );
-
-  //FD_LOG_NOTICE(("\n\n[Ancestry]\n%lu", fd_forest_pool_ele_const( fd_forest_pool_const( forest ), forest->root )->slot ) );
-
+  ancestry_print3( forest, fd_forest_pool_ele_const( fd_forest_pool_const( forest ), forest->root ), 0, "[", NULL, 1 );
   //ancestry_print( forest, fd_forest_pool_ele_const( fd_forest_pool_const( forest ), forest->root ), 0, "" );
 
 }
@@ -632,8 +695,8 @@ fd_forest_frontier_print( fd_forest_t const * forest ) {
        !fd_forest_frontier_iter_done( iter, frontier, pool );
        iter = fd_forest_frontier_iter_next( iter, frontier, pool ) ) {
     fd_forest_ele_t const * ele = fd_forest_frontier_iter_ele_const( iter, frontier, pool );
-    // printf("%lu ", ele->slot);
-    ancestry_print( forest, fd_forest_pool_ele_const( fd_forest_pool_const( forest ), fd_forest_pool_idx( pool, ele ) ), 0, "" );
+    printf("%lu (%u/%u)\n", ele->slot, ele->buffered_idx + 1, ele->complete_idx + 1 );
+   //ancestry_print( forest, fd_forest_pool_ele_const( fd_forest_pool_const( forest ), fd_forest_pool_idx( pool, ele ) ), 0, "" );
   }
 }
 
