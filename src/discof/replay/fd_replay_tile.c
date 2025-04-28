@@ -1902,7 +1902,6 @@ handle_slice( fd_replay_tile_ctx_t * ctx,
   ctx->slice_exec_ctx.last_mblk_off = 0;
 
   if( FD_UNLIKELY( err ) ) {
-    __asm__("int $3");
     FD_LOG_ERR(( "Failed to query blockstore for slot %lu", slot ));
   }
 }
