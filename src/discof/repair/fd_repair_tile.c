@@ -25,7 +25,7 @@
 
 #include <errno.h>
 
-#define IN_KIND_NET     (0)
+#define IN_KIND_SNP     (0)
 #define IN_KIND_CONTACT (1)
 #define IN_KIND_STAKE   (2)
 #define IN_KIND_STORE   (3)
@@ -556,7 +556,7 @@ before_frag( fd_repair_tile_ctx_t * ctx,
              ulong                  seq FD_PARAM_UNUSED,
              ulong                  sig ) {
   uint in_kind = ctx->in_kind[ in_idx ];
-  if( FD_LIKELY( in_kind==IN_KIND_NET ) ) return fd_disco_netmux_sig_proto( sig )!=DST_PROTO_REPAIR;
+  if( FD_LIKELY( in_kind==IN_KIND_SNP ) ) return fd_disco_netmux_sig_proto( sig )!=DST_PROTO_REPAIR;
   return 0;
 }
 
@@ -581,7 +581,7 @@ during_frag( fd_repair_tile_ctx_t * ctx,
   // TODO: check for sz>MTU for failure once MTUs are decided
   uint in_kind = ctx->in_kind[ in_idx ];
   fd_repair_in_ctx_t const * in_ctx = &ctx->in_links[ in_idx ];
-  if( FD_LIKELY( in_kind==IN_KIND_NET ) ) {
+  if( FD_LIKELY( in_kind==IN_KIND_SNP ) ) {
     dcache_entry = fd_net_rx_translate_frag( &in_ctx->net_rx, chunk, ctl, sz );
     dcache_entry_sz = sz;
 
@@ -1257,8 +1257,8 @@ unprivileged_init( fd_topo_t *      topo,
   uint sign_link_in_idx = UINT_MAX;
   for( uint in_idx=0U; in_idx<(tile->in_cnt); in_idx++ ) {
     fd_topo_link_t * link = &topo->links[ tile->in_link_id[ in_idx ] ];
-    if( 0==strcmp( link->name, "net_repair" ) ) {
-      ctx->in_kind[ in_idx ] = IN_KIND_NET;
+    if( 0==strcmp( link->name, "snp_repair" ) ) {
+      ctx->in_kind[ in_idx ] = IN_KIND_SNP;
       fd_net_rx_bounds_init( &ctx->in_links[ in_idx ].net_rx, link->dcache );
       continue;
     } else if( 0==strcmp( link->name, "gossip_repai" ) ) {
@@ -1302,9 +1302,9 @@ unprivileged_init( fd_topo_t *      topo,
       ctx->store_out_wmark  = fd_dcache_compact_wmark( ctx->store_out_mem, link->dcache, link->mtu );
       ctx->store_out_chunk  = ctx->store_out_chunk0;
 
-    } else if( 0==strcmp( link->name, "repair_net" ) ) {
+    } else if( 0==strcmp( link->name, "repair_snp" ) ) {
 
-      if( FD_UNLIKELY( ctx->net_out_mcache ) ) FD_LOG_ERR(( "repair tile has multiple repair_net out links" ));
+      if( FD_UNLIKELY( ctx->net_out_mcache ) ) FD_LOG_ERR(( "repair tile has multiple repair_snp out links" ));
       ctx->net_out_mcache = link->mcache;
       ctx->net_out_sync   = fd_mcache_seq_laddr( ctx->net_out_mcache );
       ctx->net_out_depth  = fd_mcache_depth( ctx->net_out_mcache );

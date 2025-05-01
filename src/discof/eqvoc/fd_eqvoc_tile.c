@@ -35,6 +35,7 @@ struct fd_eqvoc_tile_ctx {
 
   fd_shred_t  shred;
 
+  /* TODO move to snp_net_... ? */
   ulong       shred_net_in_idx;
   fd_wksp_t * shred_net_in_mem;
   ulong       shred_net_in_chunk0;
@@ -243,7 +244,7 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->gossip_in_chunk0 = fd_dcache_compact_chunk0( ctx->gossip_in_mem, gossip_in_link->dcache );
   ctx->gossip_in_wmark  = fd_dcache_compact_wmark( ctx->gossip_in_mem, gossip_in_link->dcache, gossip_in_link->mtu );
 
-  ctx->shred_net_in_idx = fd_topo_find_tile_in_link( topo, tile, "shred_net", 0 );
+  ctx->shred_net_in_idx = fd_topo_find_tile_in_link( topo, tile, "snp_net", 0 );
   FD_TEST( ctx->shred_net_in_idx != ULONG_MAX );
   fd_topo_link_t * shred_net_in_link = &topo->links[tile->in_link_id[ctx->shred_net_in_idx]];
   ctx->shred_net_in_mem = topo->workspaces[topo->objs[shred_net_in_link->dcache_obj_id].wksp_id].wksp;

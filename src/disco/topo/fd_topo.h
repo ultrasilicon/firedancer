@@ -239,6 +239,11 @@ typedef struct {
     } shred;
 
     struct {
+      ulong depth; /* TODO expand */
+      char identity_key_path[ PATH_MAX ];
+    } snp;
+
+    struct {
       ulong disable_blockstore_from_slot;
     } store;
 
