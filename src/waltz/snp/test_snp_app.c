@@ -243,6 +243,7 @@ test_snp_app_send_recv_v1( fd_wksp_t * wksp ) {
   client->cb.ctx = client_cb_test;
   client_cb_test->out_packet = client_packet;
   external_generate_keypair( client_cb_test->private_key, client_cb_test->public_key );
+  memcpy( client->config.identity, client_cb_test->public_key, 32 );
   client_cb_test->snp = client;
   client->apps_cnt = 1;
   client->apps[0].port = client_port;
@@ -272,6 +273,7 @@ test_snp_app_send_recv_v1( fd_wksp_t * wksp ) {
   server->cb.ctx = server_cb_test;
   server_cb_test->out_packet = server_packet;
   external_generate_keypair( server_cb_test->private_key, server_cb_test->public_key );
+  memcpy( server->config.identity, server_cb_test->public_key, 32 );
   server_cb_test->snp = server;
   server->apps_cnt = 1;
   server->apps[0].port = server_port;
@@ -287,17 +289,21 @@ test_snp_app_send_recv_v1( fd_wksp_t * wksp ) {
   client_sz = fd_snp_app_send( client_app, client_packet, FD_SNP_MTU, client_msg, client_msg_sz, client_meta );
   assert( client_sz>0 );
   client_sz = fd_snp_send( client, client_packet, (ulong)client_sz, client_meta ); /* client_init */
+  // FD_LOG_HEXDUMP_WARNING(( "hs1", client_packet, (ulong)client_sz ));
   assert( client_sz>0 );
 
   /* Handshake - snp_app is not involved - don't really need to memcpy packet all the times */
   server_sz = fd_snp_process_packet( server, client_packet, (ulong)client_sz );    /* server_init */
+  // FD_LOG_HEXDUMP_WARNING(( "hs2", client_packet, (ulong)server_sz ));
   assert( server_sz>0 );
   client_sz = fd_snp_process_packet( client, client_packet, (ulong)server_sz );    /* client_cont */
+  // FD_LOG_HEXDUMP_WARNING(( "hs3", client_packet, (ulong)client_sz ));
   assert( client_sz>0 );
 
   assert( server_cb_test->buf_cnt==0 );
   assert( server_cb_test->sign_cnt==0 );
   server_sz = fd_snp_process_packet( server, client_packet, (ulong)client_sz );    /* server_fini */
+  // FD_LOG_HEXDUMP_WARNING(( "hs4", client_packet, (ulong)server_sz ));
   assert( server_sz>0 );
   assert( server_cb_test->buf_cnt==1 );
   assert( server_cb_test->sign_cnt==1 );

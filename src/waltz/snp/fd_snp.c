@@ -1,8 +1,6 @@
 #include "fd_snp.h"
 #include "fd_snp_private.h"
 
-#include "../../util/rng/fd_rng.h"
-
 ulong
 fd_snp_footprint( fd_snp_limits_t const * limits ) {
   fd_snp_layout_t layout;
@@ -195,6 +193,13 @@ fd_snp_init( fd_snp_t * snp ) {
     return NULL;
   }
 
+  /* Initialize private state */
+  fd_rng_join( fd_rng_new( snp->config._rng, (uint)fd_tickcount(), 0UL ) );
+  uchar random_aes_key[ 16 ] = { 0 };
+  fd_snp_rng( random_aes_key, 16 );
+  fd_aes_set_encrypt_key( random_aes_key, 128, snp->config._state_enc_key );
+  fd_aes_set_decrypt_key( random_aes_key, 128, snp->config._state_dec_key );
+
   return snp;
 }
 
@@ -215,8 +220,6 @@ fd_snp_conn_create( fd_snp_t * snp,
   fd_snp_conn_map_t * entry = NULL;
   ulong session_id = 0UL;
   int i = 0;
-  //FIXME: move rng in snp
-  fd_rng_t rng[1]; fd_rng_join( fd_rng_new( rng, 32, 44 ) );
 
   /* get a new conn from pool */
   fd_snp_conn_t * conn = fd_snp_conn_pool_ele_acquire( snp->conn_pool );
@@ -236,7 +239,7 @@ fd_snp_conn_create( fd_snp_t * snp,
      session_id is randomly generated, in case of failure we
      retry FD_SNP_MAX_SESSION_ID_RETRIES times, then fail. */
   for( i=0, entry=NULL; i<FD_SNP_MAX_SESSION_ID_RETRIES && entry==NULL; i++ ) {
-    session_id = fd_rng_ulong( rng );
+    session_id = fd_rng_ulong( snp->config._rng );
     entry = fd_snp_conn_map_insert( snp->conn_map, session_id );
   }
   if( FD_LIKELY( entry ) ) {
@@ -258,6 +261,7 @@ fd_snp_conn_create( fd_snp_t * snp,
   conn->session_id = session_id;
   conn->state = FD_SNP_STATE_INVALID;
   conn->last_pkt = last_pkt;
+  conn->_pubkey = snp->config.identity;
 
   /* init last_pkt */
   last_pkt->data_sz = 0;
@@ -482,7 +486,7 @@ fd_snp_send( fd_snp_t *    snp,
   } /* else is implicit */
 
   /* 8. Prepare client_initial, overwrite packet */
-  int sz = fd_snp_v1_client_init( &snp->config, conn, NULL, packet + sizeof(fd_ip4_udp_hdrs_t), NULL );
+  int sz = fd_snp_v1_client_init( &snp->config, conn, NULL, 0UL, packet + sizeof(fd_ip4_udp_hdrs_t), NULL );
   if( FD_UNLIKELY( sz<=0 ) ) {
     FD_LOG_WARNING(( "[SNP] fd_snp_s0_client_initial failed" ));
     return -1;
@@ -490,7 +494,7 @@ fd_snp_send( fd_snp_t *    snp,
 
   /* 9. Send client_initial */
   FD_LOG_INFO(( "[SNP] SNP send hs1 session_id=%016lx", conn->session_id ));
-  return fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, (ulong)sz, meta );
+  return fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, (ulong)sz + sizeof(fd_ip4_udp_hdrs_t), meta );
 }
 
 /* Workflow:
@@ -516,9 +520,14 @@ fd_snp_process_packet( fd_snp_t * snp,
                        uchar *    packet,
                        ulong      packet_sz ) {
   /* 1. Parse UDP: derive which app to send the packet to */
-  if( packet_sz < sizeof(fd_ip4_udp_hdrs_t) ) {
+  if( packet_sz <= sizeof(fd_ip4_udp_hdrs_t) ) {
     return -1;
   }
+
+  // int res = fd_snp_parse( &proto, &type, &session_id, &meta, packet, packet_sz );
+  // if( FD_UNLIKELY( res < 0 ) ) {
+  //   return -1;
+  // }
 
   fd_ip4_udp_hdrs_t * hdr  = (fd_ip4_udp_hdrs_t *)packet;
   uint src_ip = hdr->ip4->saddr;
@@ -542,7 +551,7 @@ fd_snp_process_packet( fd_snp_t * snp,
 
   //TODO: proper fd_snp_parse()
   if( FD_LIKELY( packet_sz >= sizeof(fd_ip4_udp_hdrs_t) + 4 ) ) {
-    uchar const * magic = packet + sizeof(fd_ip4_udp_hdrs_t) + 1;
+    uchar const * magic = packet + sizeof(fd_ip4_udp_hdrs_t);
     if( (*magic)=='S' && (*(magic+1))=='O' && (*(magic+2))=='L' ) {
       proto = FD_SNP_META_PROTO_V1;
     }
@@ -589,19 +598,21 @@ fd_snp_process_packet( fd_snp_t * snp,
   /* 6. Handshake state machine */
 
   uchar * pkt = packet + sizeof(fd_ip4_udp_hdrs_t);
+  ulong pkt_sz = packet_sz - sizeof(fd_ip4_udp_hdrs_t);
   uchar to_sign[32];
   int sz = 0;
   switch( type ) {
 
     /* HS1. Server receives client_init and sends server_init */
     case FD_SNP_TYPE_HS_CLIENT_INIT: {
-      sz = fd_snp_v1_server_init( &snp->config, conn, pkt, pkt, NULL );
-      //TODO: delete conn
+      //TODO: handle both peers sending client_init
+      fd_snp_conn_t _conn[1]; _conn->peer_addr = peer_addr;
+      sz = fd_snp_v1_server_init( &snp->config, _conn, pkt, pkt_sz, pkt, NULL );
     } break;
 
     /* HS2. Client receives server_init and sends client_cont */
     case FD_SNP_TYPE_HS_SERVER_INIT: {
-      sz = fd_snp_v1_client_cont( &snp->config, conn, pkt, pkt, NULL );
+      sz = fd_snp_v1_client_cont( &snp->config, conn, pkt, pkt_sz, pkt, NULL );
     } break;
 
     /* HS3. Server receives client_cont and sends server_fini */
@@ -611,19 +622,19 @@ fd_snp_process_packet( fd_snp_t * snp,
         return -1;
       }
       conn->is_server = 1;
-      sz = fd_snp_v1_server_fini( &snp->config, conn, pkt, pkt, to_sign );
+      sz = fd_snp_v1_server_fini( &snp->config, conn, pkt, pkt_sz, pkt, to_sign );
       return fd_snp_cache_packet_and_invoke_sign_cb( snp, conn, packet, sz, to_sign );
     } break;
 
     /* HS4. Client receives server_fini and sends client_fini */
     case FD_SNP_TYPE_HS_SERVER_FINI: {
-      sz = fd_snp_v1_client_fini( &snp->config, conn, pkt, pkt, to_sign );
+      sz = fd_snp_v1_client_fini( &snp->config, conn, pkt, pkt_sz, pkt, to_sign );
       return fd_snp_cache_packet_and_invoke_sign_cb( snp, conn, packet, sz, to_sign );
     } break;
 
     /* HS5. Server receives client_fini and accepts */
     case FD_SNP_TYPE_HS_CLIENT_FINI: {
-      sz = fd_snp_v1_server_acpt( &snp->config, conn, pkt, pkt, NULL );
+      sz = fd_snp_v1_server_acpt( &snp->config, conn, pkt, pkt_sz, pkt, NULL );
     } break;
 
     /* Drop any other packet */
@@ -651,9 +662,9 @@ fd_snp_process_packet( fd_snp_t * snp,
 }
 
 int
-fd_snp_process_signature( fd_snp_t * snp,
-                          ulong      session_id,
-                          uchar      signature[ 64 ] ) {
+fd_snp_process_signature( fd_snp_t *  snp,
+                          ulong       session_id,
+                          uchar const signature[ 64 ] ) {
 
   fd_snp_conn_t * conn = fd_snp_conn_query( snp, session_id );
   if( conn==NULL ) {

@@ -4,6 +4,8 @@
 /* snp_proto.h defines SNP protocol data structures. */
 
 #include "../../util/fd_util_base.h"
+#include "../../util/rng/fd_rng.h"
+#include "../../ballet/aes/fd_aes_base.h"
 
 /* SNP_MTU controls the maximum supported UDP payload size. */
 
@@ -85,8 +87,11 @@ struct fd_snp_config {
   /* identity pubkey */
   uchar identity[ SNP_ED25519_KEY_SZ ];
 
-  /* random AES-128 key to encrypt state (to avoid storing state) */
-  uchar state_enc_key[ SNP_STATE_KEY_SZ ];
+  /* Private members */
+
+  fd_rng_t     _rng[1];
+  fd_aes_key_t _state_enc_key[1];
+  fd_aes_key_t _state_dec_key[1];
 };
 typedef struct fd_snp_config fd_snp_config_t;
 
@@ -131,19 +136,30 @@ FD_STATIC_ASSERT( sizeof(fd_snp_pkt_t)==2048UL, fd_snp_pkt_t );
 struct FD_SNP_ALIGNED fd_snp_conn {
   ulong next; // fd_pool
 
-  ulong session_id;
+  ulong session_id; // can be removed if needed
   ulong peer_addr;
   ulong peer_session_id;
+
   uchar state;
+  uchar is_server;
 
   fd_snp_pkt_t * last_pkt;
 
-  uint is_server : 1;
 
   long last_sent_ts;
 
-  // handshake
-  uchar client_token[ SNP_TOKEN_SZ ];
+  /* public key. Access via: fd_snp_conn_pubkey() */
+  uchar * _pubkey;
+
+  /* peer public key. Access via: fd_snp_conn_peer_pubkey() */
+  uchar _peer_pubkey[ 32 ];
+
+  /* Memory area for key material:
+     - For established connections: 2x 256-bit keys (HMAC-SHA-256-128, RFC 4868)
+     - During handshake: Noise hash transcript, and symmetric encryption key
+     - For client, before Noise, ephemeral DH keypair
+     TODO: maybe we want to move it to protected pages at some point */
+  uchar _sensitive_keys[ 64 ];
 };
 typedef struct fd_snp_conn fd_snp_conn_t;
 
@@ -197,19 +213,32 @@ typedef struct snp_hs_hdr snp_hdr_hs_t;
 
 FD_PROTOTYPES_BEGIN
 
+static inline int
+fd_snp_rng( uchar * buf, ulong buf_sz ) {
+  if( FD_LIKELY( fd_rng_secure( buf, buf_sz )!=NULL ) ) {
+    return (int)buf_sz;
+  }
+  return -1;
+}
+
+static inline long
+fd_snp_timestamp_ms( void ) {
+  return fd_log_wallclock() / 1000;
+}
+
 /* snp_hdr_{version,type} extract the version and type fields from
    an snp_hdr_t. */
 
 __attribute__((pure))
 static inline uchar
 snp_hdr_version( snp_hdr_t const * hdr ) {
-  return (uchar)( hdr->version_type >> 4 );
+  return (uchar)( hdr->version_type >> (24+4) );
 }
 
 __attribute__((pure))
 static inline uchar
 snp_hdr_type( snp_hdr_t const * hdr ) {
-  return (uchar)( hdr->version_type & 0x0F );
+  return (uchar)( (hdr->version_type >> 24) & 0x0F );
 }
 
 /* snp_hdr_version_type assembles the version_type compound field. */
@@ -218,10 +247,10 @@ __attribute__((const))
 static inline uint
 fd_snp_hdr_version_type( uint version,
                          uint type ) {
-  return (uchar)( ( version << 4 ) | ( type & 0x0F ) )
-    | (uint)'S' << 8
-    | (uint)'O' << 16
-    | (uint)'L' << 24;
+  return (uchar)( ( version << 4 ) | ( type & 0x0F ) ) << 24
+    | (uint)'S' << 0
+    | (uint)'O' << 8
+    | (uint)'L' << 16;
 }
 
 /* seq_{compress,expand} compress 64-bit sequence numbers to 32-bit

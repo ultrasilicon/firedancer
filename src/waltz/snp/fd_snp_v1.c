@@ -1,361 +1,483 @@
 #include "fd_snp_v1.h"
 
+#include "../../util/bits/fd_bits.h"
 #include "../../ballet/aes/fd_aes_gcm.h"
+#include "../../ballet/sha256/fd_sha256.h"
 #include "../../ballet/ed25519/fd_ed25519.h"
 #include "../../ballet/ed25519/fd_x25519.h"
 
-void snp_gen_session_id(ulong * session_id)
-{
-  static fd_rng_t _rng[1];
-  static int _done_init = 0;
-  if( !_done_init ) {
-    fd_rng_join( fd_rng_new( _rng, 3, 4 ) ); /* TODO - figure out correct args here */
-    _done_init = 1;
-  }
+#define FD_SNP_HS_SERVER_CHALLENGE_TIMOUT_MS (2000L)
 
-  *session_id = fd_rng_ulong( _rng );
-#if 0
-  ((uchar *)session_id)[3] = (uchar)0xDE;
-  ((uchar *)session_id)[4] = (uchar)0xAD;
-  ((uchar *)session_id)[5] = (uchar)0xBE;
-  ((uchar *)session_id)[6] = (uchar)0xEF;
-#endif
+#define FD_SNP_SIZEOF_CLIENT_INIT_PAYLOAD (52UL)
+#define FD_SNP_SIZEOF_CLIENT_INIT         FD_SNP_MTU_MIN
+#define FD_SNP_SIZEOF_SERVER_INIT_PAYLOAD (36UL)
+#define FD_SNP_SIZEOF_SERVER_INIT         FD_SNP_MTU_MIN
+#define FD_SNP_SIZEOF_CLIENT_CONT_PAYLOAD (68UL)
+#define FD_SNP_SIZEOF_CLIENT_CONT         FD_SNP_MTU_MIN
+#define FD_SNP_SIZEOF_SERVER_FINI_PAYLOAD (196UL)
+#define FD_SNP_SIZEOF_SERVER_FINI         FD_SNP_MTU_MIN
+#define FD_SNP_SIZEOF_CLIENT_FINI_PAYLOAD (148UL)
+#define FD_SNP_SIZEOF_CLIENT_FINI         FD_SNP_MTU_MIN
+
+#define FD_SNP_PKT_SRC_SESSION_ID_OFF     (12UL)
+#define FD_SNP_PKT_CLIENT_EPHEMERAL_OFF   (20UL)
+#define FD_SNP_PKT_CLIENT_CHALLENGE_OFF   (52UL)
+#define FD_SNP_PKT_CLIENT_ENC_PUBKEY_OFF  (20UL)
+#define FD_SNP_PKT_CLIENT_ENC_SIG_OFF     (68UL)
+#define FD_SNP_PKT_SERVER_CHALLENGE_OFF   (20UL)
+#define FD_SNP_PKT_SERVER_EPHEMERAL_OFF   (36UL)
+#define FD_SNP_PKT_SERVER_ENC_PUBKEY_OFF  (68UL)
+#define FD_SNP_PKT_SERVER_ENC_SIG_OFF    (116UL)
+
+static inline uchar *
+fd_snp_conn_ephemeral_private_key( fd_snp_conn_t * conn ) {
+  return conn->_sensitive_keys;
 }
 
-static inline void
-fd_snp_rng( uchar * buf, ulong buf_sz ) {
-  FD_TEST( fd_rng_secure( buf, buf_sz )!=NULL );
+static inline uchar *
+fd_snp_conn_ephemeral_public_key( fd_snp_conn_t * conn ) {
+  return conn->_sensitive_keys + 32;
+}
+
+static inline uchar *
+fd_snp_conn_noise_hash( fd_snp_conn_t * conn ) {
+  return conn->_sensitive_keys;
+}
+
+static inline uchar *
+fd_snp_conn_noise_key( fd_snp_conn_t * conn ) {
+  return conn->_sensitive_keys + 32;
+}
+
+static inline uchar *
+fd_snp_conn_noise_shared_secret( fd_snp_conn_t * conn ) {
+  return fd_snp_conn_noise_key( conn );
 }
 
 void
-fd_snp_s0_crypto_key_share_generate( uchar private_key[32], uchar public_key[32] ) {
-  fd_snp_rng( private_key, 32 );
-  fd_x25519_public( public_key, private_key );
+fd_snp_v1_noise_mix_hash( fd_snp_conn_t * conn,
+                          uchar const *   data,
+                          ulong           data_sz ) {
+  fd_sha256_t sha[1];
+  uchar * hash = fd_snp_conn_noise_hash( conn );
+  fd_sha256_init( sha );
+  fd_sha256_append( sha, hash, 32 );
+  fd_sha256_append( sha, data, data_sz );
+  fd_sha256_fini( sha, fd_snp_conn_noise_hash( conn ) );
 }
 
 void
-fd_snp_s0_crypto_enc_state_generate( uchar private_key_enc[48], uchar public_key[32], uchar const key[16] ) {
-  uchar private_key[32];
-  fd_snp_rng( private_key, 32 );
-  fd_x25519_public( public_key, private_key );
+fd_snp_v1_noise_init( fd_snp_conn_t * conn ) {
+  uchar * hash = fd_snp_conn_noise_hash( conn );
+  memset( hash, 0, 32 );
+  memcpy( hash, "Noise_XX_25519_AESGCM_SHA256", 28 );
+  fd_snp_v1_noise_mix_hash( conn, NULL, 0 );
+}
 
-  fd_aes_gcm_t aes_gcm[1];
-  fd_aes_128_gcm_init( aes_gcm, key, public_key );
-  fd_aes_gcm_encrypt( aes_gcm, private_key_enc, private_key, 32, NULL, 0, private_key_enc+32 );
+void
+fd_snp_v1_noise_mix_key( fd_snp_conn_t * conn,
+                         uchar const *   data,
+                         ulong           data_sz ) {
+  //FIXME
+  memcpy( fd_snp_conn_noise_key( conn ), data, data_sz );
+}
+
+void
+fd_snp_v1_noise_enc_and_hash( fd_snp_conn_t * conn,
+                              uchar           nonce,
+                              uchar const *   data,
+                              ulong           data_sz,
+                              uchar *         out ) {
+  fd_aes_gcm_t aes[1];
+  uchar iv[16] = { 0 };
+  uchar * hash = fd_snp_conn_noise_hash( conn );
+
+  iv[0] = nonce;
+  fd_aes_128_gcm_init( aes, fd_snp_conn_noise_key( conn ), iv );
+  fd_aes_gcm_encrypt( aes, out, data, data_sz, hash, 32, out+data_sz );
+  fd_snp_v1_noise_mix_key( conn, out, data_sz+16 );
 }
 
 int
-fd_snp_s0_crypto_enc_state_verify( uchar private_key[32], uchar const private_key_enc[48], uchar const public_key[32], uchar const key[16] ) {
-  uchar public_key_check[32];
+fd_snp_v1_noise_dec_and_hash( fd_snp_conn_t * conn,
+                              uchar           nonce,
+                              uchar const *   data,
+                              ulong           data_sz,
+                              uchar *         out ) {
+  fd_aes_gcm_t aes[1];
+  uchar iv[16] = { 0 };
+  uchar * hash = fd_snp_conn_noise_hash( conn );
 
-  fd_aes_gcm_t aes_gcm[1];
-  fd_aes_128_gcm_init( aes_gcm, key, public_key );
-  if( FD_UNLIKELY( 1!=fd_aes_gcm_decrypt( aes_gcm, private_key_enc, private_key, 32, NULL, 0, private_key_enc+32 ) ) ) {
-    return -1;
-  };
+  iv[0] = nonce;
+  fd_aes_128_gcm_init( aes, fd_snp_conn_noise_key( conn ), iv );
+  if( FD_LIKELY( fd_aes_gcm_decrypt( aes, data, out, data_sz-16, hash, 32, data+data_sz-16 )==1 ) ) {
+    fd_snp_v1_noise_mix_key( conn, data, data_sz );
+    return 0;
+  }
+  return -1;
+}
 
-  fd_x25519_public( public_key_check, private_key );
-  if( FD_UNLIKELY( 0!=memcmp( public_key, public_key_check, 32 ) ) ) {
+int
+fd_snp_v1_noise_sig_verify( fd_snp_conn_t * conn,
+                            uchar           pubkey[32],
+                            uchar           sig[64] ) {
+  fd_sha512_t sha[1];
+  uchar const * msg = fd_snp_conn_noise_hash( conn );
+  if( FD_LIKELY( fd_ed25519_verify( msg, 32, sig, pubkey, sha )==FD_ED25519_SUCCESS ) ) {
+    return 0;
+  }
+  return -1;
+}
+
+void
+fd_snp_v1_noise_fini( fd_snp_conn_t * conn ) {
+  //FIXME
+  (void)conn;
+}
+
+static inline int
+fd_snp_v1_crypto_key_share_generate( uchar private_key[32], uchar public_key[32] ) {
+  int res = fd_snp_rng( private_key, 32 );
+  if( FD_UNLIKELY( res < 0 ) ) {
     return -1;
   }
-
+  fd_x25519_public( public_key, private_key );
   return 0;
+}
+
+static inline int
+fd_snp_v1_crypto_enc_state_generate( fd_snp_config_t const * server,
+                                     fd_snp_conn_t const *   conn,
+                                     uchar                   out_challenge[ 16 ] ) {
+  fd_snp_v1_pkt_hs_server_r_t challenge[1] = { 0 };
+  challenge->timestamp_ms = fd_snp_timestamp_ms();
+  challenge->peer_addr = conn->peer_addr;
+  fd_aes_encrypt( (uchar const *)challenge, out_challenge, server->_state_enc_key );
+  return 0;
+}
+
+static inline int
+fd_snp_v1_crypto_enc_state_validate( fd_snp_config_t const * server,
+                                     fd_snp_conn_t const *   conn,
+                                     uchar const *           pkt_in ) {
+  fd_snp_v1_pkt_hs_server_r_t decrypted[1] = { 0 };
+  fd_aes_decrypt( pkt_in+FD_SNP_PKT_CLIENT_CHALLENGE_OFF, (uchar *)decrypted, server->_state_dec_key );
+
+  long now_ms = fd_snp_timestamp_ms();
+  long min_ms = now_ms - FD_SNP_HS_SERVER_CHALLENGE_TIMOUT_MS;
+  if( FD_LIKELY(
+    ( min_ms <= decrypted->timestamp_ms && decrypted->timestamp_ms <= now_ms )
+    && ( decrypted->peer_addr == conn->peer_addr )
+  ) ) {
+    return 0;
+  }
+  return -1;
 }
 
 int
 fd_snp_v1_client_init( fd_snp_config_t const * client,
                        fd_snp_conn_t *         conn,
                        uchar const *           pkt_in,
+                       ulong                   pkt_in_sz,
                        uchar *                 pkt_out,
                        uchar *                 extra ) {
-  (void)pkt_in;
+  (void)client;
+  (void)pkt_in;    /* no incoming data */
+  (void)pkt_in_sz; /* no incoming data */
   (void)extra;
+  fd_snp_v1_pkt_hs_client_t out[1] = { 0 };
 
-  /* Expect client state to be just initialized */
+  /* Validate */
   if( FD_UNLIKELY( conn->state != 0 ) ) {
     return -1;
   }
 
-  snp_s0_hs_pkt_t * out = (snp_s0_hs_pkt_t *)pkt_out;
-  fd_memset( out, 0, FD_SNP_MTU_MIN );
-  out->hs.base.version_type = fd_snp_hdr_version_type( FD_SNP_V1, FD_SNP_TYPE_HS_CLIENT_INIT );
+  /* Prepare data */
+  uchar * private_key = fd_snp_conn_ephemeral_private_key( conn );
+  uchar * public_key  = fd_snp_conn_ephemeral_public_key ( conn );
+  if( FD_UNLIKELY( fd_snp_v1_crypto_key_share_generate( private_key, public_key )<0 ) ) {
+    return -1;
+  }
+
+  /* Prepare packet */
+  out->hs.version = fd_snp_hdr_version_type( FD_SNP_V1, FD_SNP_TYPE_HS_CLIENT_INIT );
   out->hs.src_session_id = conn->session_id;
+  memcpy( out->e, conn->_sensitive_keys+32, 32 );
 
-  /* client identity - useless? */
-  fd_memcpy( out->identity, client->identity, SNP_ED25519_KEY_SZ );
+  /* Finalize packet and copy to output buffer */
+  memset( pkt_out+FD_SNP_SIZEOF_CLIENT_INIT_PAYLOAD, 0, FD_SNP_SIZEOF_CLIENT_INIT );
+  memcpy( pkt_out, out, FD_SNP_SIZEOF_CLIENT_INIT_PAYLOAD );
 
-  /* client token */
-  fd_snp_rng( conn->client_token, SNP_TOKEN_SZ );
-  fd_memcpy( out->client_token, conn->client_token, SNP_TOKEN_SZ );
-
-  /* set next expected state */
+  /* Update conn state */
   conn->state = FD_SNP_TYPE_HS_CLIENT_INIT;
 
-  return FD_SNP_MTU_MIN;
+  return (int)FD_SNP_SIZEOF_CLIENT_INIT;
 }
 
 int
 fd_snp_v1_server_init( fd_snp_config_t const * server,
                        fd_snp_conn_t *         conn,
                        uchar const *           pkt_in,
+                       ulong                   pkt_in_sz,
                        uchar *                 pkt_out,
                        uchar *                 extra ) {
-  (void)conn;
+  (void)conn; /* stateless */
   (void)extra;
+  fd_snp_v1_pkt_hs_server_t out[1] = { 0 };
 
-  snp_s0_hs_pkt_t const * pkt = (snp_s0_hs_pkt_t const *)pkt_in;
-  if( FD_UNLIKELY( snp_hdr_type( &pkt->hs.base ) != FD_SNP_TYPE_HS_CLIENT_INIT ) ) {
+  /* Validate */
+  if( FD_UNLIKELY( pkt_in_sz != FD_SNP_SIZEOF_CLIENT_INIT ) ) {
     return -1;
   }
 
-  ulong session_id = pkt->hs.src_session_id;
+  /* Prepare data */
+  ulong session_id = fd_ulong_load_8_fast( pkt_in+FD_SNP_PKT_SRC_SESSION_ID_OFF );
 
-  /* Create key_share */
-  uchar key_share[32];
-  uchar key_share_private_enc[32+16];
-  fd_snp_s0_crypto_enc_state_generate( key_share_private_enc, key_share, server->state_enc_key );
+  /* Prepare packet */
+  out->hs.version = fd_snp_hdr_version_type( FD_SNP_V1, FD_SNP_TYPE_HS_SERVER_INIT );
+  out->hs.session_id = session_id;
+  fd_snp_v1_crypto_enc_state_generate( server, conn, out->r );
 
-  /* Send back the cookie and our server identity */
+  /* Finalize packet and copy to output buffer */
+  memset( pkt_out+FD_SNP_SIZEOF_SERVER_INIT_PAYLOAD, 0, FD_SNP_SIZEOF_SERVER_INIT );
+  memcpy( pkt_out, out, FD_SNP_SIZEOF_SERVER_INIT_PAYLOAD );
 
-  snp_s0_hs_pkt_server_continue_t * out = (snp_s0_hs_pkt_server_continue_t *)pkt_out;
-  fd_memset( out, 0, FD_SNP_MTU_MIN );
+  /* NO conn state update: stateless */
 
-  out->hs.base.version_type = fd_snp_hdr_version_type( FD_SNP_V1, FD_SNP_TYPE_HS_SERVER_INIT );
-  out->hs.base.session_id = session_id;
-
-  fd_memcpy( out->client_token, pkt->client_token, SNP_TOKEN_SZ  );
-  fd_memcpy( out->key_share, key_share, 32 );
-  fd_memcpy( out->key_share_enc, key_share_private_enc, 48 );
-
-  /* Return info to user */
-
-  return (int)FD_SNP_MTU_MIN;
+  return (int)FD_SNP_SIZEOF_SERVER_INIT;
 }
 
 int
 fd_snp_v1_client_cont( fd_snp_config_t const * client,
                        fd_snp_conn_t *         conn,
                        uchar const *           pkt_in,
+                       ulong                   pkt_in_sz,
                        uchar *                 pkt_out,
                        uchar *                 extra ) {
+  (void)client;
   (void)extra;
+  fd_snp_v1_pkt_hs_client_t out[1] = { 0 };
 
-  /* Expect client state to be awaiting FD_SNP_TYPE_HS_CLIENT_INIT */
+  /* Validate */
   if( FD_UNLIKELY( conn->state != FD_SNP_TYPE_HS_CLIENT_INIT ) ) {
     return -1;
   }
 
-  snp_s0_hs_pkt_t const * pkt = (snp_s0_hs_pkt_t const *)pkt_in;
-  if( FD_UNLIKELY( snp_hdr_type( &pkt->hs.base ) != FD_SNP_TYPE_HS_SERVER_INIT ) ) {
+  if( FD_UNLIKELY( pkt_in_sz != FD_SNP_SIZEOF_SERVER_INIT ) ) {
     return -1;
   }
 
-  /* Check client token */
-  snp_s0_hs_pkt_server_continue_t * in = (snp_s0_hs_pkt_server_continue_t *)pkt_in;
-  if( FD_UNLIKELY( 0!=memcmp( in->client_token, conn->client_token, SNP_TOKEN_SZ ) ) ) {
-    // return -1; // FIXME
-  }
-
-  /* Generate key_share */
-  uchar key_share[32];
-  uchar key_share_private[32];
-  fd_snp_s0_crypto_key_share_generate( key_share_private, key_share );
-
-  /* Compute shared_secret */
-  uchar shared_secret_ee[32];
-  fd_x25519_exchange( shared_secret_ee, key_share_private, in->key_share );
-
-  /* FIXME: encrypt identity s */
-
-  /* FIXME: prepare signature */
-
-  /* assemble response */
-  snp_s0_hs_pkt_client_accept_t * out = (snp_s0_hs_pkt_client_accept_t *)pkt_out;
-  fd_memset( out, 0, FD_SNP_MTU_MIN );
-
-  out->hs.base.version_type = fd_snp_hdr_version_type( FD_SNP_V1, FD_SNP_TYPE_HS_CLIENT_CONT );
+  /* Prepare packet */
+  out->hs.version = fd_snp_hdr_version_type( FD_SNP_V1, FD_SNP_TYPE_HS_CLIENT_CONT );
   out->hs.src_session_id = conn->session_id;
-  fd_memcpy( out->server_key_share, in->key_share, 32 );
-  fd_memcpy( out->server_key_share_enc, in->key_share_enc, 48 );
-  fd_memcpy( out->key_share, key_share, 32 );
-  fd_memcpy( out->identity, client->identity, 32 ); //FIXME
+  memcpy( out->e, fd_snp_conn_ephemeral_public_key( conn ), 32 );
+  memcpy( out->r, pkt_in+FD_SNP_PKT_SERVER_CHALLENGE_OFF, 16 );
 
-  //FIXME
-  // fd_memcpy( extra, shared_secret_ee, 32 );
+  /* Finalize packet and copy to output buffer */
+  memset( pkt_out+FD_SNP_SIZEOF_CLIENT_CONT_PAYLOAD, 0, FD_SNP_SIZEOF_CLIENT_CONT );
+  memcpy( pkt_out, out, FD_SNP_SIZEOF_CLIENT_CONT_PAYLOAD );
 
+  /* Update conn state */
   conn->state = FD_SNP_TYPE_HS_CLIENT_CONT;
-  return (int)FD_SNP_MTU_MIN;
+
+  return (int)FD_SNP_SIZEOF_CLIENT_CONT;
 }
 
 int
 fd_snp_v1_server_fini( fd_snp_config_t const * server,
                        fd_snp_conn_t *         conn,
                        uchar const *           pkt_in,
+                       ulong                   pkt_in_sz,
                        uchar *                 pkt_out,
                        uchar *                 extra ) {
+  fd_snp_v1_pkt_hs_server_t out[1] = { 0 };
+
+  /* Validate */
+  if( FD_UNLIKELY( pkt_in_sz != FD_SNP_SIZEOF_CLIENT_CONT ) ) {
+    return -1;
+  }
+
   /* Expect server state to be just initialized
-     (because it wasn't modified by server_initial) */
+     (because it wasn't modified by server_init) */
   if( FD_UNLIKELY( conn->state != 0 ) ) {
     return -1;
   }
 
-  snp_s0_hs_pkt_t const * pkt = (snp_s0_hs_pkt_t const *)pkt_in;
-  if( FD_UNLIKELY( snp_hdr_type( &pkt->hs.base ) != FD_SNP_TYPE_HS_CLIENT_CONT ) ) {
+  if( FD_UNLIKELY( fd_snp_v1_crypto_enc_state_validate( server, conn, pkt_in )<0 ) ) {
     return -1;
   }
 
-  ulong session_id = pkt->hs.src_session_id;
-  snp_s0_hs_pkt_client_accept_t * in = (snp_s0_hs_pkt_client_accept_t *)pkt_in;
+  /* Prepare data */
+  ulong session_id = fd_ulong_load_8_fast( pkt_in+FD_SNP_PKT_SRC_SESSION_ID_OFF );
+  uchar const * client_ephemeral = pkt_in + FD_SNP_PKT_CLIENT_EPHEMERAL_OFF;
+  uchar const * challenge = pkt_in + FD_SNP_PKT_CLIENT_CHALLENGE_OFF;
 
-  /* Decrypt and verify state */
-  uchar key_share_private[32];
-  if( FD_UNLIKELY( fd_snp_s0_crypto_enc_state_verify( key_share_private, in->server_key_share_enc, in->server_key_share, server->state_enc_key )<0 ) ) {
-    // return -1; //FIXME
+  uchar * server_ephemeral_private = fd_snp_conn_ephemeral_private_key( conn );
+  uchar   server_ephemeral[ 32 ];
+  if( FD_UNLIKELY( fd_snp_v1_crypto_key_share_generate( server_ephemeral_private, server_ephemeral )<0 ) ) {
+    return -1;
   }
 
-  /* Compute shared_secret */
-  uchar shared_secret_ee[32];
-  fd_x25519_exchange( shared_secret_ee, key_share_private, in->key_share );
+  uchar * shared_secret_ee = fd_snp_conn_noise_shared_secret( conn );
+  fd_x25519_exchange( shared_secret_ee, server_ephemeral_private, client_ephemeral );
 
-  /* FIXME: decrypt client identity s and signature sig */
-  uchar client_identity[32];
-  uchar signature[64];
-  fd_memcpy( client_identity, in->identity, 32 );
-  fd_memcpy( signature, in->signature, 64 );
+  fd_snp_v1_noise_init( conn );
+  fd_snp_v1_noise_mix_hash( conn, client_ephemeral, 32 );
+  fd_snp_v1_noise_mix_hash( conn, challenge, 16 );
+  fd_snp_v1_noise_mix_hash( conn, server_ephemeral, 32 );
+  fd_snp_v1_noise_mix_key( conn, shared_secret_ee, 32 );
+  fd_snp_v1_noise_enc_and_hash( conn, 0, conn->_pubkey, 32, out->enc_s1 );
 
-  /* FIXME: verify signature */
-  // if( FD_UNLIKELY( fd_ed25519_verify( ... )!=FD_ED25519_SUCCESS ) ) {
-  //   return -1;
-  // }
-
-  /* FIXME: encrypt identity s */
-
-  /* FIXME: prepare signature */
-
-  /* Derive session ID */
-
-  /* assemble response */
-
-  snp_s0_hs_pkt_server_accept_t * out = (snp_s0_hs_pkt_server_accept_t *)pkt_out;
-  fd_memset( out, 0, FD_SNP_MTU_MIN );
-
-  out->hs.base.version_type = fd_snp_hdr_version_type( FD_SNP_V1, FD_SNP_TYPE_HS_SERVER_FINI );
-  out->hs.base.session_id = session_id;
+  /* Prepare packet */
+  out->hs.version = fd_snp_hdr_version_type( FD_SNP_V1, FD_SNP_TYPE_HS_SERVER_FINI );
+  out->hs.session_id = session_id;
   out->hs.src_session_id = conn->session_id;
-  fd_memcpy( out->identity, server->identity, 32 ); //FIXME
+  memcpy( out->r, challenge, 16 );
+  memcpy( out->e, server_ephemeral, 32 );
 
-  //FIXME
-  fd_memcpy( extra, shared_secret_ee, 32 );
+  /* Finalize packet and copy to output buffer */
+  memset( pkt_out+FD_SNP_SIZEOF_SERVER_FINI_PAYLOAD, 0, FD_SNP_SIZEOF_SERVER_FINI );
+  memcpy( pkt_out, out, FD_SNP_SIZEOF_SERVER_FINI_PAYLOAD );
 
-  /* Return info to caller */
-
+  /* Update conn state */
   conn->peer_session_id = session_id;
   conn->state = FD_SNP_TYPE_HS_SERVER_FINI_SIG;
-  return (int)FD_SNP_MTU_MIN;
+
+  /* Prepare payload to sign */
+  memcpy( extra, fd_snp_conn_noise_hash( conn ), 32 );
+
+  return (int)FD_SNP_SIZEOF_SERVER_FINI;
 }
 
 int
 fd_snp_v1_client_fini( fd_snp_config_t const * client,
                        fd_snp_conn_t *         conn,
                        uchar const *           pkt_in,
+                       ulong                   pkt_in_sz,
                        uchar *                 pkt_out,
                        uchar *                 extra ) {
-  /* Expect client state to be awaiting FD_SNP_TYPE_HS_CLIENT_CONT */
+  (void)client;
+  fd_snp_v1_pkt_hs_client_t out[1] = { 0 };
+
+  /* Validate */
   if( FD_UNLIKELY( conn->state != FD_SNP_TYPE_HS_CLIENT_CONT ) ) {
     return -1;
   }
 
-  snp_s0_hs_pkt_t const * pkt = (snp_s0_hs_pkt_t const *)pkt_in;
-  if( FD_UNLIKELY( snp_hdr_type( &pkt->hs.base ) != FD_SNP_TYPE_HS_SERVER_FINI ) ) {
+  if( FD_UNLIKELY( pkt_in_sz != FD_SNP_SIZEOF_SERVER_FINI ) ) {
     return -1;
   }
-  ulong session_id = pkt->hs.src_session_id;
 
-  /* Check client token */
-  snp_s0_hs_pkt_server_continue_t * in = (snp_s0_hs_pkt_server_continue_t *)pkt_in;
-  if( FD_UNLIKELY( 0!=memcmp( in->client_token, conn->client_token, SNP_TOKEN_SZ ) ) ) {
-    // return -1; // FIXME
+  /* Prepare data */
+  ulong session_id = fd_ulong_load_8_fast( pkt_in+FD_SNP_PKT_SRC_SESSION_ID_OFF );
+  uchar const * challenge = pkt_in + FD_SNP_PKT_SERVER_CHALLENGE_OFF;
+  uchar const * server_ephemeral = pkt_in + FD_SNP_PKT_SERVER_EPHEMERAL_OFF;
+  uchar const * enc_server_pubkey = pkt_in + FD_SNP_PKT_SERVER_ENC_PUBKEY_OFF;
+  uchar const * enc_server_sig = pkt_in + FD_SNP_PKT_SERVER_ENC_SIG_OFF;
+
+  uchar * client_ephemeral_private = fd_snp_conn_ephemeral_private_key( conn );
+  uchar   client_ephemeral[ 32 ];
+  memcpy( client_ephemeral, fd_snp_conn_ephemeral_public_key( conn ), 32 );
+
+  uchar * shared_secret_ee = fd_snp_conn_noise_shared_secret( conn );
+  fd_x25519_exchange( shared_secret_ee, client_ephemeral_private, server_ephemeral );
+
+  fd_snp_v1_noise_init( conn );
+  fd_snp_v1_noise_mix_hash( conn, client_ephemeral, 32 );
+  fd_snp_v1_noise_mix_hash( conn, challenge, 16 );
+  fd_snp_v1_noise_mix_hash( conn, server_ephemeral, 32 );
+  fd_snp_v1_noise_mix_key( conn, shared_secret_ee, 32 );
+
+  uchar server_pubkey[ 32 ];
+  uchar server_sig   [ 64 ];
+  if( FD_UNLIKELY( fd_snp_v1_noise_dec_and_hash( conn, 0, enc_server_pubkey, 32+16, server_pubkey )<0 ) ) {
+    return -1;
+  }
+  if( FD_UNLIKELY( fd_snp_v1_noise_dec_and_hash( conn, 1, enc_server_sig, 64+16, server_sig )<0 ) ) {
+    return -1;
+  }
+  if( FD_UNLIKELY( fd_snp_v1_noise_sig_verify( conn, server_pubkey, server_sig )<0 ) ) {
+    return -1;
   }
 
-  /* Generate key_share */
-  uchar key_share[32];
-  uchar key_share_private[32];
-  fd_snp_s0_crypto_key_share_generate( key_share_private, key_share );
+  fd_snp_v1_noise_enc_and_hash( conn, 2, conn->_pubkey, 32, out->enc_s1 );
 
-  /* Compute shared_secret */
-  uchar shared_secret_ee[32];
-  fd_x25519_exchange( shared_secret_ee, key_share_private, in->key_share );
+  /* Prepare packet */
+  out->hs.version = fd_snp_hdr_version_type( FD_SNP_V1, FD_SNP_TYPE_HS_CLIENT_FINI );
+  out->hs.session_id = session_id;
+  out->hs.src_session_id = conn->session_id;
 
-  /* FIXME: encrypt identity s */
+  /* Finalize packet and copy to output buffer */
+  memset( pkt_out+FD_SNP_SIZEOF_CLIENT_FINI_PAYLOAD, 0, FD_SNP_SIZEOF_CLIENT_FINI );
+  memcpy( pkt_out, out, FD_SNP_SIZEOF_CLIENT_FINI_PAYLOAD );
 
-  /* FIXME: prepare signature */
-
-  /* assemble response */
-  snp_s0_hs_pkt_client_accept_t * out = (snp_s0_hs_pkt_client_accept_t *)pkt_out;
-  fd_memset( out, 0, FD_SNP_MTU_MIN );
-
-  out->hs.base.version_type = fd_snp_hdr_version_type( FD_SNP_V1, FD_SNP_TYPE_HS_CLIENT_FINI );
-  out->hs.base.session_id = session_id;
-  // out->hs.src_session_id = conn->session_id;
-  fd_memcpy( out->server_key_share, in->key_share, 32 );
-  fd_memcpy( out->server_key_share_enc, in->key_share_enc, 48 );
-  fd_memcpy( out->key_share, key_share, 32 );
-  fd_memcpy( out->identity, client->identity, 32 ); //FIXME
-
-  //FIXME
-  fd_memcpy( extra, shared_secret_ee, 32 );
-
+  /* Update conn state */
   conn->peer_session_id = session_id;
+  memcpy( conn->_peer_pubkey, server_pubkey, 32 );
   conn->state = FD_SNP_TYPE_HS_CLIENT_FINI_SIG;
-  return (int)FD_SNP_MTU_MIN;
+
+  /* Prepare payload to sign */
+  memcpy( extra, fd_snp_conn_noise_hash( conn ), 32 );
+
+  return (int)FD_SNP_SIZEOF_CLIENT_FINI;
 }
 
 int
 fd_snp_v1_server_acpt( fd_snp_config_t const * server,
                        fd_snp_conn_t *         conn,
                        uchar const *           pkt_in,
+                       ulong                   pkt_in_sz,
                        uchar *                 pkt_out,
                        uchar *                 extra ) {
   (void)server;
   (void)extra;
   (void)pkt_out;
 
-  /* Expect client state to be awaiting FD_SNP_TYPE_HS_SERVER_INIT */
+  /* Validate */
   if( FD_UNLIKELY( conn->state != FD_SNP_TYPE_HS_SERVER_FINI ) ) {
     return -1;
   }
 
-  snp_s0_hs_pkt_t const * pkt = (snp_s0_hs_pkt_t const *)pkt_in;
-  if( FD_UNLIKELY( snp_hdr_type( &pkt->hs.base ) != FD_SNP_TYPE_HS_CLIENT_FINI ) ) {
+  if( FD_UNLIKELY( pkt_in_sz != FD_SNP_SIZEOF_CLIENT_FINI ) ) {
     return -1;
   }
 
-  /* Check client token */
-  snp_s0_hs_pkt_server_continue_t * in = (snp_s0_hs_pkt_server_continue_t *)pkt_in;
-  if( FD_UNLIKELY( 0!=memcmp( in->client_token, conn->client_token, SNP_TOKEN_SZ ) ) ) {
-    // return -1; // FIXME
+  /* Prepare data */
+  uchar const * enc_client_pubkey = pkt_in + FD_SNP_PKT_CLIENT_ENC_PUBKEY_OFF;
+  uchar const * enc_client_sig = pkt_in + FD_SNP_PKT_CLIENT_ENC_SIG_OFF;
+  uchar client_pubkey[ 32 ];
+  uchar client_sig   [ 64 ];
+  if( FD_UNLIKELY( fd_snp_v1_noise_dec_and_hash( conn, 2, enc_client_pubkey, 32+16, client_pubkey )<0 ) ) {
+    return -1;
+  }
+  if( FD_UNLIKELY( fd_snp_v1_noise_dec_and_hash( conn, 3, enc_client_sig, 64+16, client_sig )<0 ) ) {
+    return -1;
+  }
+  if( FD_UNLIKELY( fd_snp_v1_noise_sig_verify( conn, client_pubkey, client_sig )<0 ) ) {
+    return -1;
   }
 
+  fd_snp_v1_noise_fini( conn );
   conn->state = FD_SNP_TYPE_HS_DONE;
+  memcpy( conn->_peer_pubkey, client_pubkey, 32 );
   return 0;
 }
 
 int
 fd_snp_v1_server_fini_add_signature( fd_snp_conn_t * conn,
-                                     uchar pkt_out[ FD_SNP_MTU-42 ],
-                                     uchar sig[ 64 ] ) {
-  snp_s0_hs_pkt_server_accept_t * out = (snp_s0_hs_pkt_server_accept_t *)pkt_out;
-  fd_memcpy( out->signature, sig, 64 );
+                                     uchar           pkt_out[ FD_SNP_MTU-42 ],
+                                     uchar const     sig[ 64 ] ) {
+  fd_snp_v1_noise_enc_and_hash( conn, 1, sig, 64, pkt_out+FD_SNP_PKT_SERVER_ENC_SIG_OFF );
   conn->state = FD_SNP_TYPE_HS_SERVER_FINI;
   return 0;
 }
 
 int
 fd_snp_v1_client_fini_add_signature( fd_snp_conn_t * conn,
-                                     uchar pkt_out[ FD_SNP_MTU-42 ],
-                                     uchar sig[ 64 ] ) {
-  snp_s0_hs_pkt_client_accept_t * out = (snp_s0_hs_pkt_client_accept_t *)pkt_out;
-  fd_memcpy( out->signature, sig, 64 );
+                                     uchar           pkt_out[ FD_SNP_MTU-42 ],
+                                     uchar const     sig[ 64 ] ) {
+  fd_snp_v1_noise_enc_and_hash( conn, 3, sig, 64, pkt_out+FD_SNP_PKT_CLIENT_ENC_SIG_OFF );
+  fd_snp_v1_noise_fini( conn );
   conn->state = FD_SNP_TYPE_HS_DONE;
   return 0;
 }

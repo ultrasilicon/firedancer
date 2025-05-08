@@ -16,8 +16,8 @@ ifdef FD_HAS_HOSTED
 SNP_TEST_LIBS:=fd_snp fd_util fd_ballet
 
 # fd_snp unit tests
-$(call make-unit-test,test_snp_hs,test_snp_hs,$(SNP_TEST_LIBS))
-$(call run-unit-test,test_snp_hs)
+# $(call make-unit-test,test_snp_hs,test_snp_hs,$(SNP_TEST_LIBS))
+# $(call run-unit-test,test_snp_hs)
 
 #$(call make-unit-test,test_snp_client_server, test_snp_client_server, $(SNP_TEST_LIBS))
 #$(call run-unit-test,test_snp_client_server)

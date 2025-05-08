@@ -70,10 +70,10 @@ typedef int
 
 /* sign callback.
    This is invoked to sign payload during handshake. */
-   typedef int
-   ( * fd_snp_cb_sign_t )( void const *    ctx,          /* callback context */
-                           ulong           session_id,   /* connection session id */
-                           uchar const     to_sign[ FD_SNP_TO_SIGN_SZ ] ); /* payload to sign */
+typedef int
+( * fd_snp_cb_sign_t )( void const *       ctx,          /* callback context */
+                        ulong              session_id,   /* connection session id */
+                        uchar const        to_sign[ FD_SNP_TO_SIGN_SZ ] ); /* payload to sign */
 
 struct fd_snp_callbacks {
   /* Function pointers to user callbacks */
@@ -106,12 +106,6 @@ struct FD_SNP_ALIGNED fd_snp {
   fd_snp_conn_map_t *   conn_map;
   fd_snp_pkt_t *        pkt_pool;
   fd_snp_pkt_t *        last_pkt_pool;
-
-  // fd_snp_s0_client_params_t client_params; // should go in config?
-  // fd_snp_s0_server_params_t server_params; // should go in config?
-  /* ... private variable-length structures follow ... */
-
-  // fd_snp_state_private_t priv[1];
 };
 typedef struct fd_snp fd_snp_t;
 
@@ -208,9 +202,9 @@ fd_snp_process_packet( fd_snp_t * snp,
                        ulong      packet_sz );
 
 FD_SNP_API int
-fd_snp_process_signature( fd_snp_t * snp,
-                          ulong      session_id,
-                          uchar      signature[ 64 ] );
+fd_snp_process_signature( fd_snp_t *  snp,
+                          ulong       session_id,
+                          uchar const signature[ 64 ] );
 
 
 FD_PROTOTYPES_END
