@@ -1,33 +1,22 @@
 #include "fd_snp_v1.h"
+#include "fd_snp_common.h"
 
 #include "../../util/bits/fd_bits.h"
 #include "../../ballet/aes/fd_aes_gcm.h"
 #include "../../ballet/sha256/fd_sha256.h"
+#include "../../ballet/hmac/fd_hmac.h"
 #include "../../ballet/ed25519/fd_ed25519.h"
 #include "../../ballet/ed25519/fd_x25519.h"
 
-#define FD_SNP_HS_SERVER_CHALLENGE_TIMOUT_MS (2000L)
+static inline uchar *
+fd_snp_conn_tx_key( fd_snp_conn_t * conn ) {
+  return conn->_sensitive_keys;
+}
 
-#define FD_SNP_SIZEOF_CLIENT_INIT_PAYLOAD (52UL)
-#define FD_SNP_SIZEOF_CLIENT_INIT         FD_SNP_MTU_MIN
-#define FD_SNP_SIZEOF_SERVER_INIT_PAYLOAD (36UL)
-#define FD_SNP_SIZEOF_SERVER_INIT         FD_SNP_MTU_MIN
-#define FD_SNP_SIZEOF_CLIENT_CONT_PAYLOAD (68UL)
-#define FD_SNP_SIZEOF_CLIENT_CONT         FD_SNP_MTU_MIN
-#define FD_SNP_SIZEOF_SERVER_FINI_PAYLOAD (196UL)
-#define FD_SNP_SIZEOF_SERVER_FINI         FD_SNP_MTU_MIN
-#define FD_SNP_SIZEOF_CLIENT_FINI_PAYLOAD (148UL)
-#define FD_SNP_SIZEOF_CLIENT_FINI         FD_SNP_MTU_MIN
-
-#define FD_SNP_PKT_SRC_SESSION_ID_OFF     (12UL)
-#define FD_SNP_PKT_CLIENT_EPHEMERAL_OFF   (20UL)
-#define FD_SNP_PKT_CLIENT_CHALLENGE_OFF   (52UL)
-#define FD_SNP_PKT_CLIENT_ENC_PUBKEY_OFF  (20UL)
-#define FD_SNP_PKT_CLIENT_ENC_SIG_OFF     (68UL)
-#define FD_SNP_PKT_SERVER_CHALLENGE_OFF   (20UL)
-#define FD_SNP_PKT_SERVER_EPHEMERAL_OFF   (36UL)
-#define FD_SNP_PKT_SERVER_ENC_PUBKEY_OFF  (68UL)
-#define FD_SNP_PKT_SERVER_ENC_SIG_OFF    (116UL)
+static inline uchar *
+fd_snp_conn_rx_key( fd_snp_conn_t * conn ) {
+  return conn->_sensitive_keys + 32;
+}
 
 static inline uchar *
 fd_snp_conn_ephemeral_private_key( fd_snp_conn_t * conn ) {
@@ -68,10 +57,15 @@ fd_snp_v1_noise_mix_hash( fd_snp_conn_t * conn,
 
 void
 fd_snp_v1_noise_init( fd_snp_conn_t * conn ) {
+  uchar init[32] = {
+    0x5c, 0x25, 0xcd, 0x45, 0x0f, 0x2b, 0x6c, 0x94, 0xbe, 0x23, 0xd8, 0xb2, 0x8a, 0xca, 0x9d, 0x16,
+    0x9b, 0xbd, 0xce, 0xb5, 0x5a, 0x4b, 0x3d, 0x47, 0x3f, 0x8e, 0x58, 0x00, 0xb7, 0xab, 0x3c, 0xcd,
+  };
   uchar * hash = fd_snp_conn_noise_hash( conn );
-  memset( hash, 0, 32 );
-  memcpy( hash, "Noise_XX_25519_AESGCM_SHA256", 28 );
-  fd_snp_v1_noise_mix_hash( conn, NULL, 0 );
+  // memset( hash, 0, 32 );
+  // memcpy( hash, "SNPv1=Noise_XXsig_25519_Ed25519_AESGCM_SHA256", 45 );
+  // fd_snp_v1_noise_mix_hash( conn, NULL, 0 );
+  memcpy( hash, init, 32 );
 }
 
 void
@@ -131,8 +125,17 @@ fd_snp_v1_noise_sig_verify( fd_snp_conn_t * conn,
 
 void
 fd_snp_v1_noise_fini( fd_snp_conn_t * conn ) {
-  //FIXME
-  (void)conn;
+  //FIXME: derive real keys
+
+  if( !conn->is_server ) {
+    /* in-place swap */
+    ulong * key0 = (ulong *)fd_snp_conn_tx_key( conn );
+    ulong * key1 = (ulong *)fd_snp_conn_rx_key( conn );
+    key0[0] ^= key1[0]; key1[0] ^= key0[0]; key0[0] ^= key1[0];
+    key0[1] ^= key1[1]; key1[1] ^= key0[1]; key0[1] ^= key1[1];
+    key0[2] ^= key1[2]; key1[2] ^= key0[2]; key0[2] ^= key1[2];
+    key0[3] ^= key1[3]; key1[3] ^= key0[3]; key0[3] ^= key1[3];
+  }
 }
 
 static inline int
@@ -486,15 +489,36 @@ int
 fd_snp_v1_finalize_packet( fd_snp_conn_t * conn,
                            uchar *         packet,
                            ulong           packet_sz ) {
-  /* SNP */
+  /* SNP header */
   snp_hdr_t * udp_payload = (snp_hdr_t *)packet;
   udp_payload->version_type = fd_snp_hdr_version_type( FD_SNP_V1, FD_SNP_TYPE_PAYLOAD );
   udp_payload->session_id = conn->peer_session_id;
 
-  /* data is already set by fd_snp_app_send */
+  /* Data is already set by fd_snp_app_send */
 
-  /* compute MAC */
-  memset( packet+packet_sz-16, 0x88, 16 );
+  /* Compute MAC */
+  packet[packet_sz-19] = FD_SNP_FRAME_DATAGRAM;
+  packet[packet_sz-18] = 16;
+  packet[packet_sz-17] = 0;
+  uchar * hmac_out = packet+packet_sz-16;
+  fd_hmac_sha256( packet, packet_sz-19, fd_snp_conn_tx_key( conn ), 32, hmac_out );
 
   return (int)packet_sz;
+}
+
+int
+fd_snp_v1_validate_packet( fd_snp_conn_t * conn,
+                           uchar *         packet,
+                           ulong           packet_sz ) {
+  uchar hmac_out[ 32 ];
+  if( FD_LIKELY(
+       ( packet[packet_sz-19] == FD_SNP_FRAME_DATAGRAM )
+    && ( packet[packet_sz-18] == 16 )
+    && ( packet[packet_sz-17] == 0 )
+    && fd_hmac_sha256( packet, packet_sz-19, fd_snp_conn_rx_key( conn ), 32, hmac_out )==hmac_out
+    && fd_memeq( hmac_out, packet+packet_sz-16, 16 )
+  ) ) {
+    return 0;
+  }
+  return -1;
 }

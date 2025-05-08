@@ -352,8 +352,10 @@ fd_snp_verify_snp_and_invoke_rx_cb(
   ulong           packet_sz,
   fd_snp_meta_t   meta
 ) {
-  (void)conn;
-  //TODO: verify MAC
+  int res = fd_snp_v1_validate_packet( conn, packet+sizeof(fd_ip4_udp_hdrs_t), packet_sz-sizeof(fd_ip4_udp_hdrs_t) );
+  if( FD_UNLIKELY( res < 0 ) ) {
+    return -1;
+  }
   return snp->cb.rx( snp->cb.ctx, packet, packet_sz, meta );
 }
 
