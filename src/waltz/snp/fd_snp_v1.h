@@ -2,6 +2,7 @@
 #define HEADER_snp_s0_client_h
 
 #include "fd_snp_proto.h"
+#include "../../ballet/ed25519/fd_x25519.h"
 
 #define FD_SNP_HS_SERVER_CHALLENGE_TIMOUT_MS (2000L)
 
@@ -133,6 +134,47 @@ int
 fd_snp_v1_client_fini_add_signature( fd_snp_conn_t * conn,
                                      uchar out[ FD_SNP_MTU-42 ],
                                      uchar const sig[ 64 ] );
+
+/* Private, for tests */
+
+static inline int
+fd_snp_v1_crypto_key_share_generate( uchar private_key[32], uchar public_key[32] ) {
+  int res = fd_snp_rng( private_key, 32 );
+  if( FD_UNLIKELY( res < 0 ) ) {
+    return -1;
+  }
+  fd_x25519_public( public_key, private_key );
+  return 0;
+}
+
+static inline int
+fd_snp_v1_crypto_enc_state_generate( fd_snp_config_t const * server,
+                                     fd_snp_conn_t const *   conn,
+                                     uchar                   out_challenge[ 16 ] ) {
+  fd_snp_v1_pkt_hs_server_r_t challenge[1] = { 0 };
+  challenge->timestamp_ms = fd_snp_timestamp_ms();
+  challenge->peer_addr = conn->peer_addr;
+  fd_aes_encrypt( (uchar const *)challenge, out_challenge, server->_state_enc_key );
+  return 0;
+}
+
+static inline int
+fd_snp_v1_crypto_enc_state_validate( fd_snp_config_t const * server,
+                                     fd_snp_conn_t const *   conn,
+                                     uchar const             in_challenge[ 16 ] ) {
+  fd_snp_v1_pkt_hs_server_r_t decrypted[1] = { 0 };
+  fd_aes_decrypt( in_challenge, (uchar *)decrypted, server->_state_dec_key );
+
+  long now_ms = fd_snp_timestamp_ms();
+  long min_ms = now_ms - FD_SNP_HS_SERVER_CHALLENGE_TIMOUT_MS;
+  if( FD_LIKELY(
+    ( min_ms <= decrypted->timestamp_ms && decrypted->timestamp_ms <= now_ms )
+    && ( decrypted->peer_addr == conn->peer_addr )
+  ) ) {
+    return 0;
+  }
+  return -1;
+}
 
 FD_PROTOTYPES_END
 

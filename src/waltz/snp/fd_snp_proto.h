@@ -223,7 +223,7 @@ fd_snp_rng( uchar * buf, ulong buf_sz ) {
 
 static inline long
 fd_snp_timestamp_ms( void ) {
-  return fd_log_wallclock() / 1000;
+  return fd_log_wallclock() / 1000000;
 }
 
 /* snp_hdr_{version,type} extract the version and type fields from

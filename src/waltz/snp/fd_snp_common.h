@@ -24,7 +24,7 @@
 #define FD_SNP_FRAME_PADDING  (0x00)
 #define FD_SNP_FRAME_PING     (0x01)
 #define FD_SNP_FRAME_DATAGRAM (0x31)
-#define FD_SNP_FRAME_MAC      (0x32)
+#define FD_SNP_FRAME_MAC      (0x41)
 
 /* TYPES */
 

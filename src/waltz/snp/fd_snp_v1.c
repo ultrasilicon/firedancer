@@ -6,7 +6,6 @@
 #include "../../ballet/sha256/fd_sha256.h"
 #include "../../ballet/hmac/fd_hmac.h"
 #include "../../ballet/ed25519/fd_ed25519.h"
-#include "../../ballet/ed25519/fd_x25519.h"
 
 static inline uchar *
 fd_snp_conn_tx_key( fd_snp_conn_t * conn ) {
@@ -138,45 +137,6 @@ fd_snp_v1_noise_fini( fd_snp_conn_t * conn ) {
   }
 }
 
-static inline int
-fd_snp_v1_crypto_key_share_generate( uchar private_key[32], uchar public_key[32] ) {
-  int res = fd_snp_rng( private_key, 32 );
-  if( FD_UNLIKELY( res < 0 ) ) {
-    return -1;
-  }
-  fd_x25519_public( public_key, private_key );
-  return 0;
-}
-
-static inline int
-fd_snp_v1_crypto_enc_state_generate( fd_snp_config_t const * server,
-                                     fd_snp_conn_t const *   conn,
-                                     uchar                   out_challenge[ 16 ] ) {
-  fd_snp_v1_pkt_hs_server_r_t challenge[1] = { 0 };
-  challenge->timestamp_ms = fd_snp_timestamp_ms();
-  challenge->peer_addr = conn->peer_addr;
-  fd_aes_encrypt( (uchar const *)challenge, out_challenge, server->_state_enc_key );
-  return 0;
-}
-
-static inline int
-fd_snp_v1_crypto_enc_state_validate( fd_snp_config_t const * server,
-                                     fd_snp_conn_t const *   conn,
-                                     uchar const *           pkt_in ) {
-  fd_snp_v1_pkt_hs_server_r_t decrypted[1] = { 0 };
-  fd_aes_decrypt( pkt_in+FD_SNP_PKT_CLIENT_CHALLENGE_OFF, (uchar *)decrypted, server->_state_dec_key );
-
-  long now_ms = fd_snp_timestamp_ms();
-  long min_ms = now_ms - FD_SNP_HS_SERVER_CHALLENGE_TIMOUT_MS;
-  if( FD_LIKELY(
-    ( min_ms <= decrypted->timestamp_ms && decrypted->timestamp_ms <= now_ms )
-    && ( decrypted->peer_addr == conn->peer_addr )
-  ) ) {
-    return 0;
-  }
-  return -1;
-}
-
 int
 fd_snp_v1_client_init( fd_snp_config_t const * client,
                        fd_snp_conn_t *         conn,
@@ -306,7 +266,7 @@ fd_snp_v1_server_fini( fd_snp_config_t const * server,
     return -1;
   }
 
-  if( FD_UNLIKELY( fd_snp_v1_crypto_enc_state_validate( server, conn, pkt_in )<0 ) ) {
+  if( FD_UNLIKELY( fd_snp_v1_crypto_enc_state_validate( server, conn, pkt_in+FD_SNP_PKT_CLIENT_CHALLENGE_OFF )<0 ) ) {
     return -1;
   }
 
@@ -497,10 +457,11 @@ fd_snp_v1_finalize_packet( fd_snp_conn_t * conn,
   /* Data is already set by fd_snp_app_send */
 
   /* Compute MAC */
-  packet[packet_sz-19] = FD_SNP_FRAME_DATAGRAM;
+  packet[packet_sz-19] = FD_SNP_FRAME_MAC;
   packet[packet_sz-18] = 16;
   packet[packet_sz-17] = 0;
   uchar * hmac_out = packet+packet_sz-16;
+  /* this assumes that packet has extra 16 bytes (hmac_out is 32 bytes, truncated to 16) */
   fd_hmac_sha256( packet, packet_sz-19, fd_snp_conn_tx_key( conn ), 32, hmac_out );
 
   return (int)packet_sz;
@@ -512,7 +473,7 @@ fd_snp_v1_validate_packet( fd_snp_conn_t * conn,
                            ulong           packet_sz ) {
   uchar hmac_out[ 32 ];
   if( FD_LIKELY(
-       ( packet[packet_sz-19] == FD_SNP_FRAME_DATAGRAM )
+       ( packet[packet_sz-19] == FD_SNP_FRAME_MAC )
     && ( packet[packet_sz-18] == 16 )
     && ( packet[packet_sz-17] == 0 )
     && fd_hmac_sha256( packet, packet_sz-19, fd_snp_conn_rx_key( conn ), 32, hmac_out )==hmac_out
