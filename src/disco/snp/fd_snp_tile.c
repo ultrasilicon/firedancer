@@ -113,7 +113,7 @@ typedef struct {
   uchar            signature[ FD_ED25519_SIG_SZ ];
 
   /* SNP */
-  uchar            packet[ FD_NET_MTU ];
+  uchar *          packet;
   ulong            packet_sz;
   fd_snp_t *       snp;
 
@@ -235,17 +235,52 @@ during_frag( fd_snp_ctx_t * ctx,
              ulong          ctl FD_PARAM_UNUSED ) {
 
   switch( ctx->in_kind[ in_idx ] ) {
+
     case IN_KIND_SHRED:
-    case IN_KIND_REPAIR:
-    case IN_KIND_NET_SHRED:
-    case IN_KIND_NET_REPAIR: {
-      /* Either net and applications are unreliable channels, we copy the incoming packet
+    case IN_KIND_REPAIR: {
+      /* Applications are unreliable channels, we copy the incoming packet
          and we'll process it in after_frag. */
       uchar const * dcache_entry = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
-      if( FD_UNLIKELY( chunk<ctx->in[ in_idx ].chunk0 || chunk>ctx->in[ in_idx ].wmark || sz>sizeof(ctx->packet) ) )
+      if( FD_UNLIKELY( chunk<ctx->in[ in_idx ].chunk0 || chunk>ctx->in[ in_idx ].wmark || sz>FD_NET_MTU ) )
         FD_LOG_ERR(( "chunk %lu %lu corrupt, not in range [%lu,%lu]", chunk, sz,
               ctx->in[ in_idx ].chunk0, ctx->in[ in_idx ].wmark ));
 
+      ctx->packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
+      memcpy( ctx->packet, dcache_entry, sz );
+      ctx->packet_sz = sz;
+    } break;
+
+    case IN_KIND_NET_SHRED: {
+      /* Net is an unreliable channel, we copy the incoming packet
+         and we'll process it in after_frag. */
+      uchar const * dcache_entry = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
+      if( FD_UNLIKELY( chunk<ctx->in[ in_idx ].chunk0 || chunk>ctx->in[ in_idx ].wmark || sz>FD_NET_MTU ) )
+        FD_LOG_ERR(( "chunk %lu %lu corrupt, not in range [%lu,%lu]", chunk, sz,
+              ctx->in[ in_idx ].chunk0, ctx->in[ in_idx ].wmark ));
+
+      /* TODO improve coding here (fast parsing) */
+      if( *(dcache_entry + 45UL)== 0x1fU ) {
+        ctx->packet = fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk );
+      } else {
+        ctx->packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
+      }
+      memcpy( ctx->packet, dcache_entry, sz );
+      ctx->packet_sz = sz;
+    } break;
+
+    /* TODO once repair and shred are received from net through the same
+       link, additional logic will be needed to differentiate both (most
+       probably via udp port), combining both into "case IN_KIND_NET". */
+
+    case IN_KIND_NET_REPAIR: {
+      /* Net is an unreliable channel, we copy the incoming packet
+         and we'll process it in after_frag. */
+      uchar const * dcache_entry = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
+      if( FD_UNLIKELY( chunk<ctx->in[ in_idx ].chunk0 || chunk>ctx->in[ in_idx ].wmark || sz>FD_NET_MTU ) )
+        FD_LOG_ERR(( "chunk %lu %lu corrupt, not in range [%lu,%lu]", chunk, sz,
+              ctx->in[ in_idx ].chunk0, ctx->in[ in_idx ].wmark ));
+
+      ctx->packet = fd_chunk_to_laddr( ctx->repair_out_mem, ctx->repair_out_chunk );
       memcpy( ctx->packet, dcache_entry, sz );
       ctx->packet_sz = sz;
     } break;
@@ -312,8 +347,7 @@ after_frag( fd_snp_ctx_t *      ctx,
         combine IN_KIND_REPAIR case with IN_KIND_SHRED. */
     case IN_KIND_REPAIR: {
       FD_LOG_NOTICE(( "*** after_frag IN_KIND_REPAIR init ..." ));
-      uchar * dst = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
-      memcpy( dst, ctx->packet, ctx->packet_sz );
+      /* No memcpy needed here - already done in during_frag. */
       fd_mcache_publish( ctx->net_out_mcache, ctx->net_out_depth, ctx->net_out_seq, sig, ctx->net_out_chunk, ctx->packet_sz, 0UL, 0UL /* tsorig */, _tspub );
       ctx->net_out_seq   = fd_seq_inc( ctx->net_out_seq, 1UL );
       ctx->net_out_chunk = fd_dcache_compact_next( ctx->net_out_chunk, ctx->packet_sz, ctx->net_out_chunk0, ctx->net_out_wmark );
@@ -330,8 +364,7 @@ after_frag( fd_snp_ctx_t *      ctx,
         combine IN_KIND_NET_REPAIR case with IN_KIND_NET_SHRED. */
     case IN_KIND_NET_REPAIR: {
       FD_LOG_NOTICE(( "*** after_frag IN_KIND_NET_REPAIR init ..." ));
-      uchar * dst = fd_chunk_to_laddr( ctx->repair_out_mem, ctx->repair_out_chunk );
-      memcpy( dst, ctx->packet, ctx->packet_sz );
+      /* No memcpy needed here - already done in during_frag. */
       fd_mcache_publish( ctx->repair_out_mcache, ctx->repair_out_depth, ctx->repair_out_seq, sig, ctx->repair_out_chunk, ctx->packet_sz, 0UL, 0UL /* tsorig */, _tspub );
       ctx->repair_out_seq   = fd_seq_inc( ctx->repair_out_seq, 1UL );
       ctx->repair_out_chunk = fd_dcache_compact_next( ctx->repair_out_chunk, ctx->packet_sz, ctx->repair_out_chunk0, ctx->repair_out_wmark );
@@ -362,6 +395,8 @@ snp_callback_tx( void const *  _ctx,
                  uchar const * packet,
                  ulong         packet_sz,
                  fd_snp_meta_t meta ) {
+  (void)packet;
+
   fd_snp_ctx_t * ctx = (fd_snp_ctx_t *)_ctx;
   uint dst_ip;
   ushort dst_port;
@@ -374,9 +409,10 @@ snp_callback_tx( void const *  _ctx,
     FD_LOG_HEXDUMP_NOTICE(( "packet", packet, packet_sz ));
   }
 
-  //TODO: remove memcpy, unless ( meta & FD_SNP_META_OPT_BUFFERED ) is set
-  uchar * dst = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
-  memcpy( dst, packet, packet_sz );
+  /* No memcpy needed here - already done in during_frag. */
+  if( FD_UNLIKELY( meta & FD_SNP_META_OPT_BUFFERED ) ) {
+    memcpy( ctx->packet, packet, packet_sz );
+  }
   fd_mcache_publish( ctx->net_out_mcache, ctx->net_out_depth, ctx->net_out_seq, sig, ctx->net_out_chunk, packet_sz, 0UL, 0UL /* tsorig */, tspub );
   ctx->net_out_seq   = fd_seq_inc( ctx->net_out_seq, 1UL );
   ctx->net_out_chunk = fd_dcache_compact_next( ctx->net_out_chunk, packet_sz, ctx->net_out_chunk0, ctx->net_out_wmark );
@@ -390,15 +426,18 @@ snp_callback_rx( void const *  _ctx,
                  uchar const * packet,
                  ulong         packet_sz,
                  fd_snp_meta_t meta ) {
+  (void)packet;
+
   fd_snp_ctx_t * ctx = (fd_snp_ctx_t *)_ctx;
   ulong tspub  = fd_frag_meta_ts_comp( fd_tickcount() );
   ulong sig = (ulong)meta;
 
   //TODO: based on ... (port?) ... we should send it to the correct application, e.g. shred tile
-  //TODO: remove memcpy, unless ( meta & FD_SNP_META_OPT_BUFFERED ) is set
 
-  uchar * dst = fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk );
-  memcpy( dst, packet, packet_sz );
+  /* No memcpy needed here - already done in during_frag. */
+  if( FD_UNLIKELY( meta & FD_SNP_META_OPT_BUFFERED ) ) {
+    memcpy( ctx->packet, packet, packet_sz );
+  }
   fd_mcache_publish( ctx->shred_out_mcache, ctx->shred_out_depth, ctx->shred_out_seq, sig, ctx->shred_out_chunk, packet_sz, 0UL, 0UL /* tsorig */, tspub );
   ctx->shred_out_seq   = fd_seq_inc( ctx->shred_out_seq, 1UL );
   ctx->shred_out_chunk = fd_dcache_compact_next( ctx->shred_out_chunk, packet_sz, ctx->shred_out_chunk0, ctx->shred_out_wmark );
@@ -578,6 +617,8 @@ unprivileged_init( fd_topo_t *      topo,
   }
 
   ctx->shred_cnt = 0UL;
+
+  ctx->packet = NULL;
 
   fd_histf_join( fd_histf_new( ctx->metrics->contact_info_cnt,     FD_MHIST_MIN(         SHRED, CLUSTER_CONTACT_INFO_CNT   ),
                                                                    FD_MHIST_MAX(         SHRED, CLUSTER_CONTACT_INFO_CNT   ) ) );
