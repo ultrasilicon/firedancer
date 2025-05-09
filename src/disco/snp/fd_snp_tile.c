@@ -494,6 +494,7 @@ unprivileged_init( fd_topo_t *      topo,
   snp->apps_cnt = 1;
   snp->apps[0].port = 8003;
   FD_TEST( fd_snp_init( snp ) );
+  fd_memcpy( snp->config.identity, ctx->identity_key, sizeof(fd_pubkey_t) );
 
   ctx->keyswitch = fd_keyswitch_join( fd_topo_obj_laddr( topo, tile->keyswitch_obj_id ) );
   FD_TEST( ctx->keyswitch );
