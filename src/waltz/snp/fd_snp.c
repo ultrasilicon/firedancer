@@ -278,6 +278,26 @@ err:
   return NULL;
 }
 
+static inline int
+fd_snp_conn_delete( fd_snp_t * snp,
+                    fd_snp_conn_t * conn ) {
+  fd_snp_pkt_pool_ele_release( snp->last_pkt_pool, conn->last_pkt );
+
+  fd_snp_conn_map_t sentinel = { 0 };
+  fd_snp_conn_map_t * entry0 = fd_snp_conn_map_query( snp->conn_map, conn->peer_addr, &sentinel );
+  if( entry0->val && entry0->val->session_id==conn->session_id ) {
+    fd_snp_conn_map_remove( snp->conn_map, entry0 );
+  }
+  fd_snp_conn_map_t * entry1 = fd_snp_conn_map_query( snp->conn_map, conn->session_id, &sentinel );
+  if( entry1->val ) {
+    fd_snp_conn_map_remove( snp->conn_map, entry1 );
+  }
+
+  conn->session_id = 0UL;
+  fd_snp_conn_pool_ele_release( snp->conn_pool, conn );
+  return 0;
+}
+
 static inline fd_snp_conn_t *
 fd_snp_conn_query( fd_snp_t * snp,
                    ulong      session_id ) {
@@ -321,11 +341,11 @@ fd_snp_finalize_udp_and_invoke_tx_cb(
   fd_ip4_hdr_t * ip4 = hdr->ip4;
   ip4->daddr  = dst_ip;
   ip4->net_id = fd_ushort_bswap( snp->apps[ snp_app_id ].net_id++ );
-  ip4->check  = 0U;
   ip4->check  = fd_ip4_hdr_check_fast( ip4 );
   hdr->udp->net_dport  = fd_ushort_bswap( dst_port );
   hdr->udp->net_len    = fd_ushort_bswap( (ushort)( packet_sz - sizeof(fd_ip4_udp_hdrs_t) + sizeof(fd_udp_hdr_t) ) );
 
+  // FD_LOG_NOTICE(( "fd_snp_finalize_udp_and_invoke_tx_cb meta=%016lx", meta ));
   return snp->cb.tx ? snp->cb.tx( snp->cb.ctx, packet, packet_sz, meta ) : (int)packet_sz;
 }
 
@@ -341,7 +361,7 @@ fd_snp_finalize_snp_and_invoke_tx_cb(
     return 0;
   }
   fd_snp_v1_finalize_packet( conn, packet+sizeof(fd_ip4_udp_hdrs_t), packet_sz-sizeof(fd_ip4_udp_hdrs_t) );
-  return fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, packet_sz, meta );
+  return fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, packet_sz, meta & (~FD_SNP_META_OPT_HANDSHAKE) );
 }
 
 static inline int
@@ -368,11 +388,39 @@ fd_snp_cache_packet_and_invoke_sign_cb(
   uchar *         to_sign
 ) {
   if( FD_LIKELY( packet_snp_sz > 0 ) ) {
+    conn->last_sent_ts = fd_snp_timestamp_ms();
+    conn->retry_cnt = 0;
     conn->last_pkt->data_sz = (ushort)((ulong)packet_snp_sz+sizeof(fd_ip4_udp_hdrs_t));
     memcpy( conn->last_pkt->data, packet, conn->last_pkt->data_sz );
     return snp->cb.sign( snp->cb.ctx, conn->session_id, to_sign );
   }
   return packet_snp_sz;
+}
+
+int
+fd_snp_cache_packet_for_retry( fd_snp_conn_t * conn,
+                               uchar const *   packet,
+                               ulong           packet_sz,
+                               fd_snp_meta_t   meta ) {
+  if( conn==NULL ) {
+    return -1;
+  }
+  conn->last_sent_ts = fd_snp_timestamp_ms();
+  conn->retry_cnt = 0;
+  memcpy( conn->last_pkt->data, packet, packet_sz );
+  conn->last_pkt->data_sz = (ushort)packet_sz;
+  conn->last_pkt->meta = meta;
+  return 0;
+}
+
+int
+fd_snp_retry_cached_packet( fd_snp_t *      snp,
+                            fd_snp_conn_t * conn ) {
+  uchar * packet = conn->last_pkt->data;
+  ulong   packet_sz = conn->last_pkt->data_sz;
+  fd_snp_meta_t meta = conn->last_pkt->meta;
+  conn->last_sent_ts = fd_snp_timestamp_ms();
+  return fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, packet_sz, meta | FD_SNP_META_OPT_BUFFERED );
 }
 
 static inline void
@@ -396,7 +444,7 @@ fd_snp_pkt_pool_process(
   fd_snp_conn_t * conn,
   fd_snp_meta_t   meta
 ) {
-  ulong meta_buffered = meta | FD_SNP_META_OPT_BUFFERED;
+  ulong meta_buffered = ( meta | FD_SNP_META_OPT_BUFFERED );
   ulong max  = fd_snp_pkt_pool_max( snp->pkt_pool );
   ulong used = fd_snp_pkt_pool_used( snp->pkt_pool );
   ulong idx = 0;
@@ -455,6 +503,7 @@ fd_snp_send( fd_snp_t *    snp,
 
   /* 3. Query connection by peer (meta) */
   ulong peer_addr = meta & FD_SNP_META_PEER_MASK;
+  FD_LOG_NOTICE(( "fd_snp_conn_query_by_peer peer_addr=%016lx", peer_addr ));
   fd_snp_conn_t * conn = fd_snp_conn_query_by_peer( snp, peer_addr );
 
   /* 4. (likely case) If we have an established connection, send packet and return */
@@ -465,6 +514,7 @@ fd_snp_send( fd_snp_t *    snp,
 
   /* 5. If we don't have a connection, create a new connection */
   if( conn==NULL ) {
+    FD_LOG_NOTICE(( "client fd_snp_conn_create peer_addr=%016lx", peer_addr ));
     conn = fd_snp_conn_create( snp, peer_addr );
     if( conn==NULL ) {
       return -1;
@@ -496,7 +546,9 @@ fd_snp_send( fd_snp_t *    snp,
 
   /* 9. Send client_initial */
   FD_LOG_INFO(( "[SNP] SNP send hs1 session_id=%016lx", conn->session_id ));
-  return fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, (ulong)sz + sizeof(fd_ip4_udp_hdrs_t), meta );
+  packet_sz = (ulong)sz + sizeof(fd_ip4_udp_hdrs_t);
+  fd_snp_cache_packet_for_retry( conn, packet, packet_sz, meta | FD_SNP_META_OPT_HANDSHAKE );
+  return fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, packet_sz, meta | FD_SNP_META_OPT_HANDSHAKE );
 }
 
 /* Workflow:
@@ -608,7 +660,7 @@ fd_snp_process_packet( fd_snp_t * snp,
     /* HS1. Server receives client_init and sends server_init */
     case FD_SNP_TYPE_HS_CLIENT_INIT: {
       //TODO: handle both peers sending client_init
-      fd_snp_conn_t _conn[1]; _conn->peer_addr = peer_addr;
+      fd_snp_conn_t _conn[1] = { 0 }; _conn->peer_addr = peer_addr;
       sz = fd_snp_v1_server_init( &snp->config, _conn, pkt, pkt_sz, pkt, NULL );
     } break;
 
@@ -623,6 +675,7 @@ fd_snp_process_packet( fd_snp_t * snp,
       if( conn==NULL ) {
         return -1;
       }
+      FD_LOG_NOTICE(( "server fd_snp_conn_create peer_addr=%016lx session_id=%016lx", peer_addr, conn->session_id ));
       conn->is_server = 1;
       sz = fd_snp_v1_server_fini( &snp->config, conn, pkt, pkt_sz, pkt, to_sign );
       return fd_snp_cache_packet_and_invoke_sign_cb( snp, conn, packet, sz, to_sign );
@@ -630,8 +683,12 @@ fd_snp_process_packet( fd_snp_t * snp,
 
     /* HS4. Client receives server_fini and sends client_fini */
     case FD_SNP_TYPE_HS_SERVER_FINI: {
-      sz = fd_snp_v1_client_fini( &snp->config, conn, pkt, pkt_sz, pkt, to_sign );
-      return fd_snp_cache_packet_and_invoke_sign_cb( snp, conn, packet, sz, to_sign );
+      if( FD_LIKELY( conn->state == FD_SNP_TYPE_HS_CLIENT_CONT ) ) {
+        sz = fd_snp_v1_client_fini( &snp->config, conn, pkt, pkt_sz, pkt, to_sign );
+        return fd_snp_cache_packet_and_invoke_sign_cb( snp, conn, packet, sz, to_sign );
+      } else if( conn->state==FD_SNP_TYPE_HS_DONE ) {
+        fd_snp_retry_cached_packet( snp, conn );
+      }
     } break;
 
     /* HS5. Server receives client_fini and accepts */
@@ -652,7 +709,9 @@ fd_snp_process_packet( fd_snp_t * snp,
   }
   if( FD_LIKELY( sz > 0 ) ) {
     FD_LOG_INFO(( "[SNP] send (unbuffered)" ));
-    sz = fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, (ulong)sz+sizeof(fd_ip4_udp_hdrs_t), meta );
+    packet_sz = (ulong)sz + sizeof(fd_ip4_udp_hdrs_t);
+    fd_snp_cache_packet_for_retry( conn, packet, packet_sz, meta | FD_SNP_META_OPT_HANDSHAKE );
+    sz = fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, packet_sz, meta | FD_SNP_META_OPT_HANDSHAKE );
   }
 
   /* 8. If connection is established, send/recv cached packets */
@@ -673,13 +732,17 @@ fd_snp_process_signature( fd_snp_t *  snp,
     return -1;
   }
 
-  fd_snp_meta_t meta = conn->peer_addr | FD_SNP_META_PROTO_V1 | FD_SNP_META_OPT_BUFFERED;
+  fd_snp_meta_t meta = conn->peer_addr | FD_SNP_META_PROTO_V1 | FD_SNP_META_OPT_BUFFERED | FD_SNP_META_OPT_HANDSHAKE;
 
   int sz;
   switch( conn->state ) {
     /* HS3. Server receives client_cont and sends server_fini */
     case FD_SNP_TYPE_HS_SERVER_FINI_SIG: {
       fd_snp_v1_server_fini_add_signature( conn, conn->last_pkt->data+sizeof(fd_ip4_udp_hdrs_t), signature );
+      conn->last_sent_ts = fd_snp_timestamp_ms();
+      conn->retry_cnt = 0;
+      conn->last_pkt->meta = meta;
+      FD_LOG_NOTICE(( "fd_snp_v1_server_fini_add_signature session_id=%016lx", conn->session_id ));
       return fd_snp_finalize_udp_and_invoke_tx_cb( snp, conn->last_pkt->data, conn->last_pkt->data_sz, meta );
     } break;
 
@@ -695,4 +758,31 @@ fd_snp_process_signature( fd_snp_t *  snp,
     } break;
   }
   return -1;
+}
+
+int
+fd_snp_housekeeping( fd_snp_t * snp ) {
+  ulong max  = fd_snp_conn_pool_max( snp->conn_pool );
+  ulong used = fd_snp_conn_pool_used( snp->conn_pool );
+  ulong idx = 0;
+  ulong used_ele = 0;
+  fd_snp_conn_t * conn = snp->conn_pool;
+
+  long now = fd_snp_timestamp_ms();
+  for( ; idx<max; idx++, conn++ ) {
+    if( conn->session_id == 0 ) continue;
+    if( FD_SNP_STATE_INVALID < conn->state && conn->state < FD_SNP_TYPE_HS_DONE ) {
+      if( now > conn->last_sent_ts + 5000 && ++conn->retry_cnt < 5 ) {
+        FD_LOG_NOTICE(( "[%ld] retry %d session_id=%016lx", now, conn->retry_cnt, conn->session_id ));
+        fd_snp_retry_cached_packet( snp, conn );
+      }
+      if( conn->retry_cnt == 5 ) {
+        FD_LOG_NOTICE(( "[%ld] retry expired - deleting session_id=%016lx", now, conn->session_id ));
+        fd_snp_conn_delete( snp, conn );
+      }
+    }
+    if( ++used_ele>=used ) break;
+  }
+
+  return (int)used;
 }

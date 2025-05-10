@@ -13,8 +13,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-static
-void external_generate_keypair( uchar private_key[32], uchar public_key[32] ) {
+static void
+external_generate_keypair( uchar private_key[32], uchar public_key[32] ) {
   fd_sha512_t sha512[1];
   FD_TEST( fd_sha512_join( fd_sha512_new( sha512 ) ) );
   FD_TEST( fd_rng_secure( private_key, 32 )!=NULL );

@@ -101,6 +101,9 @@ typedef struct fd_snp_config fd_snp_config_t;
 struct FD_SNP_ALIGNED fd_snp_pkt {
   ulong next; // fd_pool
 
+  /* only used by last sent packets */
+  ulong meta;
+
   /* only used by packets cache */
   ulong  session_id;
   uchar  send; // send or recv
@@ -109,7 +112,7 @@ struct FD_SNP_ALIGNED fd_snp_pkt {
   ushort data_sz;
   uchar  data[ FD_SNP_MTU ];
 
-  uchar _padding[ 490 ]; /* force sizeof(fd_snp_pkt_t)==2048 for feng shui (cf fd_pool.c) */
+  uchar _padding[ 490-128 ]; /* force sizeof(fd_snp_pkt_t)==2048 for feng shui (cf fd_pool.c) */
 };
 typedef struct fd_snp_pkt fd_snp_pkt_t;
 FD_STATIC_ASSERT( sizeof(fd_snp_pkt_t)==2048UL, fd_snp_pkt_t );
@@ -145,8 +148,8 @@ struct FD_SNP_ALIGNED fd_snp_conn {
 
   fd_snp_pkt_t * last_pkt;
 
-
-  long last_sent_ts;
+  long  last_sent_ts;
+  uchar retry_cnt;
 
   /* public key. Access via: fd_snp_conn_pubkey() */
   uchar * _pubkey;

@@ -22,7 +22,7 @@ typedef struct fd_snp_app_limits fd_snp_app_limits_t;
    the wire (or to a different process). */
 typedef int
 ( * fd_snp_app_cb_tx_t )( void const *  ctx,          /* callback context */
-                          uchar const * packet,       /* packet to send */
+                          uchar *       packet,       /* packet to send */
                           ulong         packet_sz,    /* size of packet to send */
                           fd_snp_meta_t meta );       /* connection metadata */
 

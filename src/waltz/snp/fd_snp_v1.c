@@ -222,7 +222,8 @@ fd_snp_v1_client_cont( fd_snp_config_t const * client,
   fd_snp_v1_pkt_hs_client_t out[1] = { 0 };
 
   /* Validate */
-  if( FD_UNLIKELY( conn->state != FD_SNP_TYPE_HS_CLIENT_INIT ) ) {
+  if( FD_UNLIKELY( conn->state != FD_SNP_TYPE_HS_CLIENT_INIT
+                && conn->state != FD_SNP_TYPE_HS_CLIENT_CONT ) ) {
     return -1;
   }
 
@@ -462,7 +463,7 @@ fd_snp_v1_finalize_packet( fd_snp_conn_t * conn,
   packet[packet_sz-17] = 0;
   uchar * hmac_out = packet+packet_sz-16;
   /* this assumes that packet has extra 16 bytes (hmac_out is 32 bytes, truncated to 16) */
-  fd_hmac_sha256( packet, packet_sz-19, fd_snp_conn_tx_key( conn ), 32, hmac_out );
+  fd_hmac_sha256( packet, packet_sz-16, fd_snp_conn_tx_key( conn ), 32, hmac_out );
 
   return (int)packet_sz;
 }
@@ -476,7 +477,7 @@ fd_snp_v1_validate_packet( fd_snp_conn_t * conn,
        ( packet[packet_sz-19] == FD_SNP_FRAME_MAC )
     && ( packet[packet_sz-18] == 16 )
     && ( packet[packet_sz-17] == 0 )
-    && fd_hmac_sha256( packet, packet_sz-19, fd_snp_conn_rx_key( conn ), 32, hmac_out )==hmac_out
+    && fd_hmac_sha256( packet, packet_sz-16, fd_snp_conn_rx_key( conn ), 32, hmac_out )==hmac_out
     && fd_memeq( hmac_out, packet+packet_sz-16, 16 )
   ) ) {
     return 0;

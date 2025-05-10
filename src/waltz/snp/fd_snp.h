@@ -206,6 +206,8 @@ fd_snp_process_signature( fd_snp_t *  snp,
                           ulong       session_id,
                           uchar const signature[ 64 ] );
 
+FD_SNP_API int
+fd_snp_housekeeping( fd_snp_t * snp );
 
 FD_PROTOTYPES_END
 

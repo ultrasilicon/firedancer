@@ -591,7 +591,7 @@ send_shred( fd_shred_ctx_t                 * ctx,
 
 static int
 snp_callback_tx( void const *  _ctx,
-                 uchar const * packet,
+                 uchar *       packet,
                  ulong         packet_sz,
                  fd_snp_meta_t meta ) {
   // TODO: convert back packet -> ctx->net_out_chunk. The conversion is implicit right now.

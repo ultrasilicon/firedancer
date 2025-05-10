@@ -4,7 +4,7 @@
 #include "fd_snp_proto.h"
 #include "../../ballet/ed25519/fd_x25519.h"
 
-#define FD_SNP_HS_SERVER_CHALLENGE_TIMOUT_MS (2000L)
+#define FD_SNP_HS_SERVER_CHALLENGE_TIMOUT_MS (30000L)
 
 #define FD_SNP_SIZEOF_CLIENT_INIT_PAYLOAD (52UL)
 #define FD_SNP_SIZEOF_CLIENT_INIT         FD_SNP_MTU_MIN

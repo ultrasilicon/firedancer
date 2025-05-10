@@ -11,27 +11,25 @@
 #include <fcntl.h>
 #include <poll.h>
 
+#include "fd_snp_app.h"
 #include "fd_snp.h"
+#include "../../ballet/ed25519/fd_ed25519.h"
 
 #define BUFFER_SIZE 2048
 
-struct pollfd fds[2];
-
-static int sock_fd = -1;
-static struct sockaddr_in server_addr;
-static int running = 1;
-static int is_server = 0;
-
-// Forward declarations
-static void cleanup(void);
-static void tx_callback(fd_snp_t* snp, snp_net_ctx_t* dst, const uchar* data, ulong data_sz);
-static void rx_callback(fd_snp_t* snp, snp_net_ctx_t* src, const uchar* data, ulong data_sz);
+static void
+external_generate_keypair( uchar private_key[32], uchar public_key[32] ) {
+  fd_sha512_t sha512[1];
+  FD_TEST( fd_sha512_join( fd_sha512_new( sha512 ) ) );
+  FD_TEST( fd_rng_secure( private_key, 32 )!=NULL );
+  fd_ed25519_public_from_private( public_key, private_key, sha512 );
+}
 
 // Create UDP socket and bind if server
-static int create_udp_socket(const char* ip, ushort port) {
+int create_udp_socket( uint ip, ushort port ) {
   int fd = socket(AF_INET, SOCK_DGRAM, 0);
   if (fd < 0) {
-    perror("socket creation failed");
+    perror("error: socket create failed");
     return -1;
   }
 
@@ -39,183 +37,187 @@ static int create_udp_socket(const char* ip, ushort port) {
   int flags = fcntl(fd, F_GETFL, 0);
   fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
-  struct sockaddr_in addr;
-  memset(&addr, 0, sizeof(addr));
+  struct sockaddr_in addr = { 0 };
   addr.sin_family = AF_INET;
+  addr.sin_port = htons(port);
+  addr.sin_addr.s_addr = ip;
 
-  if (is_server) {
-    // Server binds to specified port and address
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = inet_addr(ip);
-  } else {
-    // Client binds to any address and lets kernel assign port
-    addr.sin_port = 0;  // Let kernel assign ephemeral port
-    addr.sin_addr.s_addr = INADDR_ANY;
-  }
-
-  if (bind(fd, (void*)&addr, sizeof(addr)) < 0) {
-    perror("bind failed");
+  if( bind( fd, (void*)&addr, sizeof(addr) )<0 ) {
+    perror("error: socket bind failed");
     close(fd);
     return -1;
-  }
-
-  if (is_server) {
-    printf("Server listening on %s:%d\n", ip, port);
-  } else {
-    // Get the assigned port number
-    socklen_t len = sizeof(addr);
-    if (getsockname(fd, (void*)&addr, &len) < 0) {
-      perror("getsockname failed");
-      close(fd);
-      return -1;
-    }
-    printf("Client bound to port %d\n", ntohs(addr.sin_port));
   }
 
   return fd;
 }
 
 // Clean up resources
-static void cleanup(void) {
+static void cleanup( int sock_fd ) {
+  printf("Cleanup done\n");
   if (sock_fd >= 0) {
     close(sock_fd);
     sock_fd = -1;
   }
 }
 
-// TX callback for SNP - sends UDP packet
-static void tx_callback(fd_snp_t* snp, snp_net_ctx_t* dst, const uchar* data, ulong data_sz) {
-  (void)snp;
+/* Callbacks */
+struct test_cb_ctx {
+  fd_snp_app_t * snp_app;
+  fd_snp_t *     snp;
+  ulong          ack;
+  int            sock_fd;
+  uint           ip;
+  ushort         sport;
+  uchar          done;
+  uchar          private_key[ 32 ];
+  uchar          packet[ BUFFER_SIZE ];
+};
+typedef struct test_cb_ctx test_cb_ctx_t;
+
+static int
+test_cb_snp_tx( void const *  _ctx,
+                uchar const * packet,
+                ulong         packet_sz,
+                fd_snp_meta_t meta ) {
+  test_cb_ctx_t * ctx = (test_cb_ctx_t *)_ctx;
+
+  uint ip;
+  ushort port;
+  fd_snp_meta_into_parts( NULL, NULL, &ip, &port, meta );
+
+  if( meta & FD_SNP_META_OPT_HANDSHAKE ) {
+    FD_LOG_NOTICE(( "sending handshake %x dport=%hx session_id=%016lx...", packet[45], port, *((ulong *)(packet+46)) ));
+  }
 
   struct sockaddr_in dest_addr;
   dest_addr.sin_family = AF_INET;
-  dest_addr.sin_port = htons(dst->parts.port);
-  dest_addr.sin_addr.s_addr = dst->parts.ip4;
+  dest_addr.sin_port = htons(port);
+  dest_addr.sin_addr.s_addr = ip;
 
-  ssize_t sent = sendto(sock_fd, data, data_sz, 0,
-                  (void*)&dest_addr, sizeof(dest_addr));
-
+  *((uint *)(packet + 14 + 12)) = ip;
+  // FD_LOG_NOTICE(( " >> test_cb_snp_tx: sendto %016lx", meta ));
+  ssize_t sent = sendto( ctx->sock_fd, packet, packet_sz, 0, (void*)&dest_addr, sizeof(dest_addr) );
   if (sent < 0) {
-    perror("sendto failed");
+    FD_LOG_WARNING(( "sendto failed: %x dport=%hx session_id=%016lx", packet[45], port, *((ulong *)(packet+46)) ));
   }
+
+  return (int)packet_sz;
 }
 
-// RX callback for SNP - processes received data
-static void rx_callback(fd_snp_t* snp, snp_net_ctx_t* src, const uchar* data, ulong data_sz) {
-  (void)snp; // Unused parameter
+static int
+test_cb_snp_rx( void const *  _ctx,
+                uchar const * packet,
+                ulong         packet_sz,
+                fd_snp_meta_t meta ) {
+  test_cb_ctx_t * ctx = (test_cb_ctx_t *)_ctx;
+  // FD_LOG_NOTICE(( " >> test_cb_snp_rx: fd_snp_app_recv" ));
+  return fd_snp_app_recv( ctx->snp_app, packet, packet_sz, meta );
+}
 
-  char ip_str[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &(src->parts.ip4), ip_str, INET_ADDRSTRLEN);
+static int
+test_cb_snp_sign( void const *  _ctx,
+                  ulong         session_id,
+                  uchar const   to_sign[ FD_SNP_TO_SIGN_SZ ] ) {
+  test_cb_ctx_t * ctx = (test_cb_ctx_t *)_ctx;
+  fd_sha512_t sha512[1];
+  uchar signature[ 64 ];
+  fd_ed25519_sign( signature, to_sign, 32, ctx->snp->config.identity, ctx->private_key, sha512 );
+  FD_LOG_NOTICE(( "test_cb_snp_sign" ));
+  return fd_snp_process_signature( ctx->snp, session_id, signature );
+}
 
-  printf("Received %lu bytes from %s:%d\n", data_sz, ip_str, src->parts.port);
-  printf("Data: ");
+int
+test_cb_app_tx( void const *  _ctx,
+                uchar *       packet,
+                ulong         packet_sz,
+                fd_snp_meta_t meta ) {
+  test_cb_ctx_t * ctx = (test_cb_ctx_t *)_ctx;
+  // FD_LOG_NOTICE(( " >> test_cb_app_tx: fd_snp_send" ));
+  printf("Sending to %016lx...\n", meta);
+  return fd_snp_send( ctx->snp, packet, packet_sz, meta );
+}
 
-  // Print the data as a string if it's printable, otherwise as hex
-  int printable = 1;
-  for (ulong i = 0; i < data_sz; i++) {
-    if (data[i] < 32 || data[i] > 126) {
-      printable = 0;
-      break;
-    }
-  }
-
-  if (printable) {
-    printf("%.*s\n", (int)data_sz, (char*)data);
+int
+test_cb_app_rx( void const *  _ctx,
+                fd_snp_peer_t peer,
+                uchar const * data,
+                ulong         data_sz,
+                fd_snp_meta_t meta ) {
+  (void)peer;
+  test_cb_ctx_t * ctx = (test_cb_ctx_t *)_ctx;
+  printf("Received from %016lx: %s\n", meta, data);
+  if( strncmp( (char *)data, "ACK", fd_min( data_sz, 4 ) )==0 ) {
+    // ctx->done = 1;
   } else {
-    for (ulong i = 0; i < data_sz; i++) {
-      printf("%02x ", data[i]);
-    }
-    printf("\n");
+    ctx->ack = meta | ctx->ip;
+    // fd_snp_app_send( ctx->snp_app, ctx->packet, sizeof(ctx->packet), "ACK", 4, meta | ctx->ip );
   }
+  return (int)data_sz;
 }
+
 
 int main(int argc, char *argv[]) {
-  if (argc != 4) {
-    fprintf(stderr, "Usage: %s <server|client> <ip> <port>\n", argv[0]);
+  fd_boot( &argc, &argv );
+  fd_wksp_t * wksp = fd_wksp_new_anonymous( FD_SHMEM_NORMAL_PAGE_SZ, 1UL << 15, fd_shmem_cpu_idx( 0 ), "wksp", 0UL );
+  FD_TEST( wksp );
+
+  /* Parse command line arguments */
+  if( argc < 2 ) {
+    fprintf(stderr, "Usage: %s <listen-port> [<connect-port>...]\n", argv[0]);
     return 1;
   }
+  const char * ip_str = "127.0.0.1";
+  uint ip = inet_addr(ip_str);
+  ushort port = (ushort)atoi(argv[1]);
 
-  // Parse command line arguments
-  is_server = (strcmp(argv[1], "server") == 0);
-  const char* ip = argv[2];
-  ushort port = (ushort)atoi(argv[3]);
+  /* Setup SNP */
+  fd_snp_limits_t limits = {
+    .conn_cnt = 256,
+  };
+  void * _snp = fd_wksp_alloc_laddr( wksp, fd_snp_align(), fd_snp_footprint( &limits ), 1UL );
+  fd_snp_t * snp = fd_snp_join( fd_snp_new( _snp, &limits ) );
+  fd_snp_app_t snp_app[1] = { 0 };
+  test_cb_ctx_t ctx[1] = { 0 };
 
-  // Create UDP socket
-  sock_fd = create_udp_socket(ip, port);
+  snp->apps_cnt = 1;
+  snp->apps[0].port = port;
+  FD_TEST( fd_snp_init( snp ) );
+  external_generate_keypair( ctx->private_key, snp->config.identity );
+
+  snp_app->cb.ctx = ctx;
+  snp_app->cb.rx = test_cb_app_rx;
+  snp_app->cb.tx = test_cb_app_tx;
+
+  snp->cb.ctx = ctx;
+  snp->cb.rx = test_cb_snp_rx;
+  snp->cb.tx = test_cb_snp_tx;
+  snp->cb.sign = test_cb_snp_sign;
+
+  /* Create UDP socket */
+  int sock_fd = create_udp_socket(ip, port);
   if (sock_fd < 0) {
     return 1;
   }
+  ctx->snp = snp;
+  ctx->snp_app = snp_app;
+  ctx->sock_fd = sock_fd;
+  ctx->ip = ip;
+  printf("Listening on %s:%d...\n", ip_str, port);
 
-  if (!is_server) {
-    // Set up server address for client mode
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
-      perror("Invalid address");
-      cleanup();
-      return 1;
-    }
-  }
-
-  // Initialize SNP
-  fd_snp_limits_t limits = {
-    .conn_cnt = 16
-  };
-
-  // Allocate memory for SNP
-  uchar buf[1<<15];
-  void* snp_mem = (void*)fd_ulong_align_up((ulong)buf, fd_snp_align());
-  if (!snp_mem) {
-      perror("Failed to allocate memory for SNP");
-      cleanup();
-      return 1;
-  }
-
-  // Create and initialize SNP
-  fd_snp_t* snp = fd_snp_new(snp_mem, &limits);
-  if (!snp) {
-      fprintf(stderr, "Failed to initialize SNP\n");
-      cleanup();
-      return 1;
-  }
-
-  // Set up callbacks
-  snp->cb.tx = tx_callback;
-  snp->cb.rx = rx_callback;
-
-  if (is_server) {
-    // Initialize server parameters
-    fd_snp_s0_server_params_t server_params;
-    memset(&server_params, 0, sizeof(server_params));
-    snp->server_params = server_params;
-  } else {
-    // Initialize client parameters
-    fd_snp_s0_client_params_t client_params;
-    memset(&client_params, 0, sizeof(client_params));
-    snp->client_params = client_params;
-
-    printf("SNP client initialized. Connecting to %s:%d\n", ip, port);
-  }
-
-  // Create network context for the server (used in client mode)
-  snp_net_ctx_t server_ctx;
-  if (!is_server) {
-    server_ctx.parts.ip4 = server_addr.sin_addr.s_addr;
-    server_ctx.parts.port = port;
-  }
-
-  /* setup poll fds */
+  /* Setup poll fds */
+  struct pollfd fds[2];
   fds[0].fd = STDIN_FILENO;
   fds[0].events = POLLIN;
   fds[1].fd = sock_fd;
   fds[1].events = POLLIN;
 
-  // Main loop
+  /* Main loop */
+  uchar packet[BUFFER_SIZE];
   uchar recv_buffer[BUFFER_SIZE];
-
+  int running = 1;
+  int j = 0;
   while (running) {
-    int ret = poll(fds, 2, 1000);
+    int ret = poll(fds, 2, 300);
     if (ret == -1) {
       perror("poll");
       break;
@@ -225,37 +227,53 @@ int main(int argc, char *argv[]) {
     if (fds[1].revents & POLLIN) {
       struct sockaddr_in src_addr;
       socklen_t src_len = sizeof(src_addr);
-      long recv_len = recvfrom(sock_fd, recv_buffer, BUFFER_SIZE, 0,
-                              (void*)&src_addr, &src_len);
-      if (recv_len > 0) {
-        // Process the packet with SNP
-        fd_snp_process_packet(snp, recv_buffer, (ulong)recv_len,
-                            src_addr.sin_addr.s_addr, ntohs(src_addr.sin_port));
+      long recv_len = recvfrom(sock_fd, recv_buffer, BUFFER_SIZE, 0, (void*)&src_addr, &src_len);
+      if (recv_len > 46) {
+        /* drop 30% packets */
+        if( (double)rand() / (double)RAND_MAX > 0.7 || recv_buffer[45]==0x1F ) {
+          fd_snp_process_packet( snp, recv_buffer, (ulong)recv_len );
+        }
       }
     }
 
     // Check for user input (client mode only sends on input)
     if (fds[0].revents & POLLIN) {
       char c;
-      if (scanf(" %c", &c) != 1) {
+      if (scanf("%c", &c) != 1) {
         printf("Error reading input\n");
         break;
       }
       while (getchar() != '\n');  // Clear input buffer
 
-      if (c == 'q') break;
-
-      if (!is_server) {
-        char msg[16];
-        snprintf(msg, sizeof(msg), "FD_SNP_%c", c);
-        FD_LOG_NOTICE(("Sending message: %s\n", msg));
-        fd_snp_send(snp, &server_ctx, msg, strlen(msg));
+      if (c == 'q') {
+        running=0;
       }
+
+      if (c == 's') {
+        ctx->done = 1;
+      }
+    }
+
+    if( ctx->done==1 ) {
+      ctx->done = 0;
+      for( int j=2; j<argc; j++ ) {
+        ushort dport = (ushort)atoi(argv[j]);
+        fd_snp_meta_t meta = fd_snp_meta_from_parts( FD_SNP_META_PROTO_V1, 0, ip, dport );
+        fd_snp_app_send( snp_app, packet, sizeof(packet), "hack the planet", 16, meta );
+      }
+    }
+
+    if( ctx->ack ) {
+      fd_snp_app_send( ctx->snp_app, packet, sizeof(packet), "ACK", 4, ctx->ack );
+      ctx->ack = 0;
+    }
+
+    if( (++j % 1) == 0 ) {
+      fd_snp_housekeeping( snp );
     }
   }
 
-  // Clean up
-  cleanup();
-
+  cleanup( sock_fd );
+  fd_wksp_delete_anonymous( wksp );
   return 0;
 }
