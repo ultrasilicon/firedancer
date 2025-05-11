@@ -4,7 +4,7 @@
 #include "fd_snp_proto.h"
 #include "../../ballet/ed25519/fd_x25519.h"
 
-#define FD_SNP_HS_SERVER_CHALLENGE_TIMOUT_MS (30000L)
+#define FD_SNP_HS_SERVER_CHALLENGE_TIMOUT_MS (60000L)
 
 #define FD_SNP_SIZEOF_CLIENT_INIT_PAYLOAD (52UL)
 #define FD_SNP_SIZEOF_CLIENT_INIT         FD_SNP_MTU_MIN
@@ -135,6 +135,13 @@ fd_snp_v1_client_fini_add_signature( fd_snp_conn_t * conn,
                                      uchar out[ FD_SNP_MTU-42 ],
                                      uchar const sig[ 64 ] );
 
+int
+fd_snp_v1_server_fini_precheck( fd_snp_config_t const * server,
+                                fd_snp_conn_t *         conn,
+                                uchar const *           pkt_in,
+                                ulong                   pkt_in_sz,
+                                uchar *                 pkt_out,
+                                uchar *                 extra );
 /* Private, for tests */
 
 static inline int

@@ -88,6 +88,11 @@ test_v1_handshake( void ) {
   pkt_sz = fd_snp_v1_server_acpt( server, server_conn, pkt, (ulong)pkt_sz, pkt, NULL );
   FD_TEST_CUSTOM( pkt_sz==0, "fd_snp_v1_server_acpt failed" );
 
+  FD_TEST( client_conn->state==FD_SNP_TYPE_HS_DONE );
+  FD_TEST( fd_memeq( client_conn->_peer_pubkey, server->identity, 32 ) );
+  FD_TEST( server_conn->state==FD_SNP_TYPE_HS_DONE );
+  FD_TEST( fd_memeq( server_conn->_peer_pubkey, client->identity, 32 ) );
+
   FD_LOG_NOTICE(( "Test v1 handshake: ok" ));
 
   /* Bench */

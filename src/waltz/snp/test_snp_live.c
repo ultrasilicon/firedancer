@@ -230,8 +230,11 @@ int main(int argc, char *argv[]) {
       long recv_len = recvfrom(sock_fd, recv_buffer, BUFFER_SIZE, 0, (void*)&src_addr, &src_len);
       if (recv_len > 46) {
         /* drop 30% packets */
-        if( (double)rand() / (double)RAND_MAX > 0.7 || recv_buffer[45]==0x1F ) {
+        if( (double)rand() / (double)RAND_MAX > -0.1 || recv_buffer[45]==0x1F ) {
+          FD_LOG_NOTICE(( "received packet %x dport=%hx session_id=%016lx...", recv_buffer[45], src_addr.sin_port, *((ulong *)(recv_buffer+46)) ));
           fd_snp_process_packet( snp, recv_buffer, (ulong)recv_len );
+        } else {
+          FD_LOG_NOTICE(( "dropped packet %x dport=%hx session_id=%016lx...", recv_buffer[45], src_addr.sin_port, *((ulong *)(recv_buffer+46)) ));
         }
       }
     }

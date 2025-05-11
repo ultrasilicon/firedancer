@@ -18,31 +18,36 @@ fd_snp_conn_rx_key( fd_snp_conn_t * conn ) {
 }
 
 static inline uchar *
-fd_snp_conn_ephemeral_private_key( fd_snp_conn_t * conn ) {
-  return conn->_sensitive_keys;
-}
-
-static inline uchar *
-fd_snp_conn_ephemeral_public_key( fd_snp_conn_t * conn ) {
-  return conn->_sensitive_keys + 32;
-}
-
-static inline uchar *
 fd_snp_conn_noise_hash( fd_snp_conn_t * conn ) {
-  return conn->_sensitive_keys;
+  return conn->_peer_pubkey; /* SymmetricState.h */
 }
 
 static inline uchar *
-fd_snp_conn_noise_key( fd_snp_conn_t * conn ) {
-  return conn->_sensitive_keys + 32;
+fd_snp_conn_noise_chaining_key( fd_snp_conn_t * conn ) {
+  return conn->_sensitive_keys; /* SymmetricState.ck */
+}
+
+static inline uchar *
+fd_snp_conn_noise_cipher_key( fd_snp_conn_t * conn ) {
+  return conn->_sensitive_keys + 32; /* CipherState.k */
 }
 
 static inline uchar *
 fd_snp_conn_noise_shared_secret( fd_snp_conn_t * conn ) {
-  return fd_snp_conn_noise_key( conn );
+  return fd_snp_conn_noise_cipher_key( conn );
 }
 
-void
+static inline uchar *
+fd_snp_conn_ephemeral_private_key( fd_snp_conn_t * conn ) {
+  return fd_snp_conn_noise_cipher_key( conn );
+}
+
+static inline uchar *
+fd_snp_conn_ephemeral_public_key( fd_snp_conn_t * conn ) {
+  return fd_snp_conn_noise_hash( conn );
+}
+
+static inline void
 fd_snp_v1_noise_mix_hash( fd_snp_conn_t * conn,
                           uchar const *   data,
                           ulong           data_sz ) {
@@ -54,7 +59,7 @@ fd_snp_v1_noise_mix_hash( fd_snp_conn_t * conn,
   fd_sha256_fini( sha, fd_snp_conn_noise_hash( conn ) );
 }
 
-void
+static inline void
 fd_snp_v1_noise_init( fd_snp_conn_t * conn ) {
   uchar init[32] = {
     0x5c, 0x25, 0xcd, 0x45, 0x0f, 0x2b, 0x6c, 0x94, 0xbe, 0x23, 0xd8, 0xb2, 0x8a, 0xca, 0x9d, 0x16,
@@ -65,17 +70,43 @@ fd_snp_v1_noise_init( fd_snp_conn_t * conn ) {
   // memcpy( hash, "SNPv1=Noise_XXsig_25519_Ed25519_AESGCM_SHA256", 45 );
   // fd_snp_v1_noise_mix_hash( conn, NULL, 0 );
   memcpy( hash, init, 32 );
+  memcpy( fd_snp_conn_noise_chaining_key( conn ), hash, 32 );
 }
 
-void
+void FD_FN_SENSITIVE
+fd_snp_v1_noise_hkdf( fd_snp_conn_t * conn,
+                      uchar const *   data,
+                      ulong           data_sz,
+                      uchar *         key0,
+                      uchar *         key1 ) {
+  uchar temp_key[32];
+  uchar temp_data[33];
+
+  fd_hmac_sha256( data, data_sz, fd_snp_conn_noise_chaining_key( conn ), 32, temp_key );
+
+  temp_data[0] = 1;
+  fd_hmac_sha256( temp_data, 1, temp_key, 32, key0 );
+
+  memcpy( temp_data, key0, 32 );
+  temp_data[32] = 2;
+  fd_hmac_sha256( temp_data, 33, temp_key, 32, key1 );
+
+  /* clean up sensitive variables */
+  fd_memset_explicit( temp_key, 0, 32 );
+  fd_memset_explicit( temp_data, 0, 33 );
+}
+
+static inline void
 fd_snp_v1_noise_mix_key( fd_snp_conn_t * conn,
                          uchar const *   data,
                          ulong           data_sz ) {
-  //FIXME
-  memcpy( fd_snp_conn_noise_key( conn ), data, data_sz );
+  fd_snp_v1_noise_hkdf( conn, data, data_sz,
+    fd_snp_conn_noise_chaining_key( conn ),
+    fd_snp_conn_noise_cipher_key( conn )
+  );
 }
 
-void
+void FD_FN_SENSITIVE
 fd_snp_v1_noise_enc_and_hash( fd_snp_conn_t * conn,
                               uchar           nonce,
                               uchar const *   data,
@@ -86,12 +117,12 @@ fd_snp_v1_noise_enc_and_hash( fd_snp_conn_t * conn,
   uchar * hash = fd_snp_conn_noise_hash( conn );
 
   iv[0] = nonce;
-  fd_aes_128_gcm_init( aes, fd_snp_conn_noise_key( conn ), iv );
+  fd_aes_128_gcm_init( aes, fd_snp_conn_noise_cipher_key( conn ), iv );
   fd_aes_gcm_encrypt( aes, out, data, data_sz, hash, 32, out+data_sz );
   fd_snp_v1_noise_mix_key( conn, out, data_sz+16 );
 }
 
-int
+int FD_FN_SENSITIVE
 fd_snp_v1_noise_dec_and_hash( fd_snp_conn_t * conn,
                               uchar           nonce,
                               uchar const *   data,
@@ -102,7 +133,7 @@ fd_snp_v1_noise_dec_and_hash( fd_snp_conn_t * conn,
   uchar * hash = fd_snp_conn_noise_hash( conn );
 
   iv[0] = nonce;
-  fd_aes_128_gcm_init( aes, fd_snp_conn_noise_key( conn ), iv );
+  fd_aes_128_gcm_init( aes, fd_snp_conn_noise_cipher_key( conn ), iv );
   if( FD_LIKELY( fd_aes_gcm_decrypt( aes, data, out, data_sz-16, hash, 32, data+data_sz-16 )==1 ) ) {
     fd_snp_v1_noise_mix_key( conn, data, data_sz );
     return 0;
@@ -124,16 +155,11 @@ fd_snp_v1_noise_sig_verify( fd_snp_conn_t * conn,
 
 void
 fd_snp_v1_noise_fini( fd_snp_conn_t * conn ) {
-  //FIXME: derive real keys
-
-  if( !conn->is_server ) {
-    /* in-place swap */
-    ulong * key0 = (ulong *)fd_snp_conn_tx_key( conn );
-    ulong * key1 = (ulong *)fd_snp_conn_rx_key( conn );
-    key0[0] ^= key1[0]; key1[0] ^= key0[0]; key0[0] ^= key1[0];
-    key0[1] ^= key1[1]; key1[1] ^= key0[1]; key0[1] ^= key1[1];
-    key0[2] ^= key1[2]; key1[2] ^= key0[2]; key0[2] ^= key1[2];
-    key0[3] ^= key1[3]; key1[3] ^= key0[3]; key0[3] ^= key1[3];
+  /* For server, key0 is rx key, key1 is tx key. For client it's vice versa. */
+  if( conn->is_server ) {
+    fd_snp_v1_noise_hkdf( conn, NULL, 0, fd_snp_conn_rx_key( conn ), fd_snp_conn_tx_key( conn ) );
+  } else {
+    fd_snp_v1_noise_hkdf( conn, NULL, 0, fd_snp_conn_tx_key( conn ), fd_snp_conn_rx_key( conn ) );
   }
 }
 
@@ -245,6 +271,28 @@ fd_snp_v1_client_cont( fd_snp_config_t const * client,
   conn->state = FD_SNP_TYPE_HS_CLIENT_CONT;
 
   return (int)FD_SNP_SIZEOF_CLIENT_CONT;
+}
+
+int
+fd_snp_v1_server_fini_precheck( fd_snp_config_t const * server,
+                                fd_snp_conn_t *         conn,
+                                uchar const *           pkt_in,
+                                ulong                   pkt_in_sz,
+                                uchar *                 pkt_out,
+                                uchar *                 extra ) {
+  (void)pkt_out;
+  (void)extra;
+
+  /* Validate */
+  if( FD_UNLIKELY( pkt_in_sz != FD_SNP_SIZEOF_CLIENT_CONT ) ) {
+    return -1;
+  }
+
+  if( FD_UNLIKELY( fd_snp_v1_crypto_enc_state_validate( server, conn, pkt_in+FD_SNP_PKT_CLIENT_CHALLENGE_OFF )<0 ) ) {
+    return -1;
+  }
+
+  return 0;
 }
 
 int
@@ -375,13 +423,16 @@ fd_snp_v1_client_fini( fd_snp_config_t const * client,
   memset( pkt_out+FD_SNP_SIZEOF_CLIENT_FINI_PAYLOAD, 0, FD_SNP_SIZEOF_CLIENT_FINI );
   memcpy( pkt_out, out, FD_SNP_SIZEOF_CLIENT_FINI_PAYLOAD );
 
-  /* Update conn state */
-  conn->peer_session_id = session_id;
-  memcpy( conn->_peer_pubkey, server_pubkey, 32 );
-  conn->state = FD_SNP_TYPE_HS_CLIENT_FINI_SIG;
-
   /* Prepare payload to sign */
   memcpy( extra, fd_snp_conn_noise_hash( conn ), 32 );
+
+  /* Update conn state */
+  conn->peer_session_id = session_id;
+  conn->state = FD_SNP_TYPE_HS_CLIENT_FINI_SIG;
+
+  /* We need to temp store server_pubkey, so that we finalize it after
+     the async signature. We store it at the end of the packet. */
+  memcpy( pkt_out+FD_SNP_SIZEOF_CLIENT_FINI, server_pubkey, 32 );
 
   return (int)FD_SNP_SIZEOF_CLIENT_FINI;
 }
@@ -422,8 +473,8 @@ fd_snp_v1_server_acpt( fd_snp_config_t const * server,
   }
 
   fd_snp_v1_noise_fini( conn );
-  conn->state = FD_SNP_TYPE_HS_DONE;
   memcpy( conn->_peer_pubkey, client_pubkey, 32 );
+  conn->state = FD_SNP_TYPE_HS_DONE;
   return 0;
 }
 
@@ -442,6 +493,10 @@ fd_snp_v1_client_fini_add_signature( fd_snp_conn_t * conn,
                                      uchar const     sig[ 64 ] ) {
   fd_snp_v1_noise_enc_and_hash( conn, 3, sig, 64, pkt_out+FD_SNP_PKT_CLIENT_ENC_SIG_OFF );
   fd_snp_v1_noise_fini( conn );
+
+  /* Set _peer_pubkey as server_pubkey, that was temp stored at the end of the packet */
+  memcpy( conn->_peer_pubkey, pkt_out+FD_SNP_SIZEOF_CLIENT_FINI, 32 );
+
   conn->state = FD_SNP_TYPE_HS_DONE;
   return 0;
 }
