@@ -156,8 +156,8 @@ during_housekeeping( fd_snp_ctx_t * ctx ) {
     fd_keyswitch_state( ctx->keyswitch, FD_KEYSWITCH_STATE_COMPLETED );
   }
 
-  /* TODO pending usage - leaving here as a reference */
-  // fd_keyguard_client_sign( ctx->keyguard_client, signature, sign_data, 40UL /*sign_data_len*/, FD_KEYGUARD_SIGN_TYPE_ED25519 );
+  /* SNP housekeeping */
+  fd_snp_housekeeping( ctx->snp );
 }
 
 static inline void

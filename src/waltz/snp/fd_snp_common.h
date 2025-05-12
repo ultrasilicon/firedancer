@@ -22,10 +22,13 @@
 #define FD_SNP_SUCCESS ( 0)
 #define FD_SNP_FAILURE (-1)
 
-#define FD_SNP_FRAME_PADDING  (0x00)
-#define FD_SNP_FRAME_PING     (0x01)
-#define FD_SNP_FRAME_DATAGRAM (0x31)
-#define FD_SNP_FRAME_MAC      (0x41)
+#define FD_SNP_FRAME_PING        (0x01)
+#define FD_SNP_FRAME_DATAGRAM    (0x31)
+#define FD_SNP_FRAME_AUTH        (0x41)
+#define FD_SNP_FRAME_MAX_DATA    (0x10)
+#define FD_SNP_FRAME_CONN_CLOSE  (0x1D)
+#define FD_SNP_FRAME_MC_ANNOUNCE (0x51)
+#define FD_SNP_FRAME_MC_STATE    (0x52)
 
 /* TYPES */
 

@@ -334,8 +334,10 @@ fd_snp_v1_server_fini( fd_snp_config_t const * server,
   fd_x25519_exchange( shared_secret_ee, server_ephemeral_private, client_ephemeral );
 
   fd_snp_v1_noise_init( conn );
+  fd_snp_v1_noise_mix_hash( conn, (void *)&session_id, 8 ); /* client session_id */
   fd_snp_v1_noise_mix_hash( conn, client_ephemeral, 32 );
   fd_snp_v1_noise_mix_hash( conn, challenge, 16 );
+  fd_snp_v1_noise_mix_hash( conn, (void *)&conn->session_id, 8 ); /* server session_id */
   fd_snp_v1_noise_mix_hash( conn, server_ephemeral, 32 );
   fd_snp_v1_noise_mix_key( conn, shared_secret_ee, 32 );
   fd_snp_v1_noise_enc_and_hash( conn, 0, conn->_pubkey, 32, out->enc_s1 );
@@ -395,8 +397,10 @@ fd_snp_v1_client_fini( fd_snp_config_t const * client,
   fd_x25519_exchange( shared_secret_ee, client_ephemeral_private, server_ephemeral );
 
   fd_snp_v1_noise_init( conn );
+  fd_snp_v1_noise_mix_hash( conn, (void *)&conn->session_id, 8 ); /* client session_id */
   fd_snp_v1_noise_mix_hash( conn, client_ephemeral, 32 );
   fd_snp_v1_noise_mix_hash( conn, challenge, 16 );
+  fd_snp_v1_noise_mix_hash( conn, (void *)&session_id, 8 ); /* server session_id */
   fd_snp_v1_noise_mix_hash( conn, server_ephemeral, 32 );
   fd_snp_v1_noise_mix_key( conn, shared_secret_ee, 32 );
 
@@ -513,7 +517,7 @@ fd_snp_v1_finalize_packet( fd_snp_conn_t * conn,
   /* Data is already set by fd_snp_app_send */
 
   /* Compute MAC */
-  packet[packet_sz-19] = FD_SNP_FRAME_MAC;
+  packet[packet_sz-19] = FD_SNP_FRAME_AUTH;
   packet[packet_sz-18] = 16;
   packet[packet_sz-17] = 0;
   uchar * hmac_out = packet+packet_sz-16;
@@ -529,7 +533,7 @@ fd_snp_v1_validate_packet( fd_snp_conn_t * conn,
                            ulong           packet_sz ) {
   uchar hmac_out[ 32 ];
   if( FD_LIKELY(
-       ( packet[packet_sz-19] == FD_SNP_FRAME_MAC )
+       ( packet[packet_sz-19] == FD_SNP_FRAME_AUTH )
     && ( packet[packet_sz-18] == 16 )
     && ( packet[packet_sz-17] == 0 )
     && fd_hmac_sha256( packet, packet_sz-16, fd_snp_conn_rx_key( conn ), 32, hmac_out )==hmac_out
