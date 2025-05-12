@@ -193,6 +193,7 @@ typedef struct {
   ulong       net_out_chunk0;
   ulong       net_out_wmark;
   ulong       net_out_chunk;
+  ulong       net_out_chunkP;
 
   fd_wksp_t * store_out_mem;
   ulong       store_out_chunk0;
@@ -574,13 +575,15 @@ during_frag( fd_shred_ctx_t * ctx,
 static inline void
 send_shred( fd_shred_ctx_t                 * ctx,
             fd_shred_t const               * shred,
-            fd_shred_dest_weighted_t const * dest ) {
+            fd_shred_dest_weighted_t const * dest,
+            ulong                            reuse_prev_pkt ) {
   if( FD_UNLIKELY( !dest->ip4 ) ) return;
 
   int is_data = fd_shred_is_data( fd_shred_type( shred->variant ) );
   ulong shred_sz = fd_ulong_if( is_data, FD_SHRED_MIN_SZ, FD_SHRED_MAX_SZ );
 
-  uchar * packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
+  uchar * packet = NULL;
+  if( FD_UNLIKELY( !reuse_prev_pkt ) ) packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
   fd_snp_meta_t meta = fd_snp_meta_from_parts( FD_SNP_META_PROTO_V1, /* app_id */ 0, dest->ip4, dest->port );
   FD_LOG_NOTICE(( "[shred] sending shred %lu:%u:%u", shred->slot, shred->fec_set_idx, shred->idx ));
   int res = fd_snp_app_send( ctx->snp, packet, FD_NET_MTU, shred, shred_sz, meta );
@@ -595,15 +598,17 @@ snp_callback_tx( void const *  _ctx,
                  ulong         packet_sz,
                  fd_snp_meta_t meta ) {
   // TODO: convert back packet -> ctx->net_out_chunk. The conversion is implicit right now.
-  (void)packet;
 
   fd_shred_ctx_t * ctx = (fd_shred_ctx_t *)_ctx;
   ulong tspub  = fd_frag_meta_ts_comp( fd_tickcount() );
   ulong sig = (ulong)meta;
 
-  fd_mcache_publish( ctx->net_out_mcache, ctx->net_out_depth, ctx->net_out_seq, sig, ctx->net_out_chunk, packet_sz, 0UL, ctx->tsorig, tspub );
+  if( FD_LIKELY( packet!=NULL ) ) {
+    ctx->net_out_chunkP = ctx->net_out_chunk;
+    ctx->net_out_chunk  = fd_dcache_compact_next( ctx->net_out_chunk, packet_sz, ctx->net_out_chunk0, ctx->net_out_wmark );
+  }
+  fd_mcache_publish( ctx->net_out_mcache, ctx->net_out_depth, ctx->net_out_seq, sig, ctx->net_out_chunkP, packet_sz, 0UL, ctx->tsorig, tspub );
   ctx->net_out_seq   = fd_seq_inc( ctx->net_out_seq, 1UL );
-  ctx->net_out_chunk = fd_dcache_compact_next( ctx->net_out_chunk, packet_sz, ctx->net_out_chunk0, ctx->net_out_wmark );
 
   FD_LOG_NOTICE(( "[shred] publish to snp %lu", packet_sz ));
 
@@ -795,8 +800,8 @@ after_frag( fd_shred_ctx_t *    ctx,
           fd_shred_dest_idx_t * dests = fd_shred_dest_compute_children( sdest, &shred, 1UL, ctx->scratchpad_dests, 1UL, fanout, fanout, max_dest_cnt );
           if( FD_UNLIKELY( !dests ) ) break;
 
-          send_shred( ctx, *out_shred, ctx->adtl_dest );
-          for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, *out_shred, fd_shred_dest_idx_to_dest( sdest, dests[ j ]) );
+          send_shred( ctx, *out_shred, ctx->adtl_dest, 0UL/*reuse_prev_pkt*/ );
+          for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, *out_shred, fd_shred_dest_idx_to_dest( sdest, dests[ j ]), fd_ulong_if( !j, 0UL, 1UL )/*reuse_prev_pkt*/ );
         } while( 0 );
       }
 
@@ -936,8 +941,8 @@ after_frag( fd_shred_ctx_t *    ctx,
 
   /* Send only the ones we didn't receive. */
   for( ulong i=0UL; i<k; i++ ) {
-    send_shred( ctx, new_shreds[ i ], ctx->adtl_dest );
-    for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, new_shreds[ i ], fd_shred_dest_idx_to_dest( sdest, dests[ j*out_stride+i ]) );
+    send_shred( ctx, new_shreds[ i ], ctx->adtl_dest, 0UL/*reuse_prev_pkt*/ );
+    for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, new_shreds[ i ], fd_shred_dest_idx_to_dest( sdest, dests[ j*out_stride+i ]), fd_ulong_if( !j, 0UL, 1UL )/*reuse_prev_pkt*/ );
   }
 }
 
@@ -1125,6 +1130,7 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->net_out_mem    = topo->workspaces[ topo->objs[ net_out->dcache_obj_id ].wksp_id ].wksp;
   ctx->net_out_wmark  = fd_dcache_compact_wmark ( ctx->net_out_mem, net_out->dcache, net_out->mtu );
   ctx->net_out_chunk  = ctx->net_out_chunk0;
+  ctx->net_out_chunkP = ctx->net_out_chunk0;
 
   fd_topo_link_t * store_out = &topo->links[ tile->out_link_id[ STORE_OUT_IDX ] ];
 

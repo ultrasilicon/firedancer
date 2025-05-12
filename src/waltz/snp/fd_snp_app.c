@@ -84,9 +84,11 @@ fd_snp_app_send( fd_snp_app_t const * ctx,          /* snp_app context */
     case FD_SNP_META_PROTO_V1:
       data_offset = sizeof(fd_ip4_udp_hdrs_t) + 12;  //TODO: 12 is for SNP header
 
-      packet[data_offset] = FD_SNP_FRAME_DATAGRAM;
-      ushort data_sz_h = (ushort)data_sz;
-      memcpy( packet+data_offset+1, &data_sz_h, 2 );
+      if( FD_LIKELY( packet!=NULL ) ) {
+        packet[data_offset] = FD_SNP_FRAME_DATAGRAM;
+        ushort data_sz_h = (ushort)data_sz;
+        memcpy( packet+data_offset+1, &data_sz_h, 2 );
+      }
       data_offset += 3;
 
       actual_packet_sz = data_sz + data_offset + 19; //TODO: 19 is for final MAC
@@ -98,7 +100,8 @@ fd_snp_app_send( fd_snp_app_t const * ctx,          /* snp_app context */
   if( FD_UNLIKELY( packet_sz < actual_packet_sz ) ) {
     return FD_SNP_FAILURE;
   }
-  memcpy( packet + data_offset, data, data_sz );
+  if( FD_LIKELY( packet!=NULL ) ) memcpy( packet + data_offset, data, data_sz );
+
   return ctx->cb.tx ? ctx->cb.tx( ctx->cb.ctx, packet, actual_packet_sz, meta ) : (int)actual_packet_sz;
 }
 
