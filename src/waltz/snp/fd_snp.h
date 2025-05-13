@@ -209,6 +209,10 @@ fd_snp_process_signature( fd_snp_t *  snp,
 FD_SNP_API int
 fd_snp_housekeeping( fd_snp_t * snp );
 
+int
+fd_snp_conn_delete( fd_snp_t * snp,
+                    fd_snp_conn_t * conn );
+
 FD_PROTOTYPES_END
 
 

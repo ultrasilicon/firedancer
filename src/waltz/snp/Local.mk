@@ -15,7 +15,6 @@ $(call add-objs,fd_snp_v1,fd_snp)
 ifdef FD_HAS_HOSTED
 SNP_TEST_LIBS:=fd_snp fd_util fd_ballet
 
-# fd_snp unit tests
 $(call make-unit-test,test_snp_v1,test_snp_v1,$(SNP_TEST_LIBS))
 $(call run-unit-test,test_snp_v1)
 

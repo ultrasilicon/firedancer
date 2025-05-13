@@ -280,7 +280,7 @@ err:
   return NULL;
 }
 
-static inline int
+int
 fd_snp_conn_delete( fd_snp_t * snp,
                     fd_snp_conn_t * conn ) {
   fd_snp_pkt_pool_ele_release( snp->last_pkt_pool, conn->last_pkt );
@@ -505,7 +505,7 @@ fd_snp_send( fd_snp_t *    snp,
 
   /* 3. Query connection by peer (meta) */
   ulong peer_addr = meta & FD_SNP_META_PEER_MASK;
-  FD_LOG_NOTICE(( "fd_snp_conn_query_by_peer peer_addr=%016lx", peer_addr ));
+  // FD_LOG_NOTICE(( "fd_snp_conn_query_by_peer peer_addr=%016lx", peer_addr ));
   fd_snp_conn_t * conn = fd_snp_conn_query_by_peer( snp, peer_addr );
 
   /* 4. (likely case) If we have an established connection, send packet and return */
@@ -516,7 +516,7 @@ fd_snp_send( fd_snp_t *    snp,
 
   /* 5. If we don't have a connection, create a new connection */
   if( conn==NULL ) {
-    FD_LOG_NOTICE(( "client fd_snp_conn_create peer_addr=%016lx", peer_addr ));
+    // FD_LOG_NOTICE(( "client fd_snp_conn_create peer_addr=%016lx", peer_addr ));
     conn = fd_snp_conn_create( snp, peer_addr, /* is_server */ 0 );
     if( conn==NULL ) {
       return -1;
@@ -598,7 +598,7 @@ fd_snp_process_packet( fd_snp_t * snp,
   }
   if( FD_UNLIKELY( snp_app_id>=snp->apps_cnt ) ) {
     /* The packet is not for SNP, ignore */
-    FD_LOG_WARNING(( "[SNP] app not found for dst_port=%u", dst_port ));
+    // FD_LOG_WARNING(( "[SNP] app not found for dst_port=%u", dst_port ));
     return -1;
   }
 
@@ -608,7 +608,7 @@ fd_snp_process_packet( fd_snp_t * snp,
   //TODO: proper fd_snp_parse()
   if( FD_LIKELY( packet_sz >= sizeof(fd_ip4_udp_hdrs_t) + 4 ) ) {
     uchar const * magic = packet + sizeof(fd_ip4_udp_hdrs_t);
-    if( (*magic)=='S' && (*(magic+1))=='O' && (*(magic+2))=='L' ) {
+    if( (*magic)=='S' && (*(magic+1))=='N' && (*(magic+2))=='P' ) {
       proto = FD_SNP_META_PROTO_V1;
     }
   }
@@ -643,7 +643,7 @@ fd_snp_process_packet( fd_snp_t * snp,
 
     /* R4. state==4 or 5, cache packet */
     if( FD_LIKELY( conn->state==FD_SNP_TYPE_HS_SERVER_FINI || conn->state==FD_SNP_TYPE_HS_CLIENT_FINI ) ) {
-      FD_LOG_INFO(( "caching packet packet_sz=%lu", packet_sz ));
+      // FD_LOG_INFO(( "caching packet packet_sz=%lu", packet_sz ));
       fd_snp_pkt_pool_store( snp, conn, packet, packet_sz, /* recv */ 0 );
       return 0;
     }
@@ -683,13 +683,13 @@ fd_snp_process_packet( fd_snp_t * snp,
          and the handshake proceeds as expected. */
       if( FD_LIKELY( conn==NULL || conn->state==FD_SNP_TYPE_HS_DONE ) ) {
         conn = fd_snp_conn_create( snp, peer_addr, /* is_server */ 1 );
-        FD_LOG_NOTICE(( "server fd_snp_conn_create peer_addr=%016lx session_id=%016lx", peer_addr, conn->session_id ));
+        // FD_LOG_NOTICE(( "server fd_snp_conn_create peer_addr=%016lx session_id=%016lx", peer_addr, conn->session_id ));
       }
       if( conn==NULL ) {
         return -1;
       }
       if( conn->state==FD_SNP_TYPE_HS_SERVER_FINI ) {
-        FD_LOG_NOTICE(( "server retry immediately" ));
+        // FD_LOG_NOTICE(( "server retry immediately" ));
         /* This immediate retry is not necessary, but it accelerates the handshake. */
         return fd_snp_retry_cached_packet( snp, conn );
       }
@@ -702,7 +702,6 @@ fd_snp_process_packet( fd_snp_t * snp,
 
     /* HS4. Client receives server_fini and sends client_fini */
     case FD_SNP_TYPE_HS_SERVER_FINI: {
-      FD_LOG_NOTICE(( "client recv SF. state=%u", conn->state ));
       if( FD_LIKELY( conn->state == FD_SNP_TYPE_HS_CLIENT_CONT ) ) {
         sz = fd_snp_v1_client_fini( &snp->config, conn, pkt, pkt_sz, pkt, to_sign );
         return fd_snp_cache_packet_and_invoke_sign_cb( snp, conn, packet, sz, to_sign );
@@ -711,7 +710,7 @@ fd_snp_process_packet( fd_snp_t * snp,
            the handshake is completeled, and thus housekeeping wouldn't be retrying.
            But if the server re-sends server_fini, it means it didn't receive
            client_fini, and so we have to retry. */
-        FD_LOG_NOTICE(( "client retry immediately" ));
+        // FD_LOG_NOTICE(( "client retry immediately" ));
         return fd_snp_retry_cached_packet( snp, conn );
       }
     } break;
@@ -736,11 +735,11 @@ fd_snp_process_packet( fd_snp_t * snp,
 
   /* 7. Send handshake packet (if any) */
   if( FD_UNLIKELY( sz < 0 ) ) {
-    FD_LOG_WARNING(("SNP handle handshake packet failed"));
+    // FD_LOG_WARNING(("SNP handle handshake packet failed"));
     return -1;
   }
   if( FD_LIKELY( sz > 0 ) ) {
-    FD_LOG_INFO(( "[SNP] send (unbuffered)" ));
+    // FD_LOG_INFO(( "[SNP] send (unbuffered)" ));
     packet_sz = (ulong)sz + sizeof(fd_ip4_udp_hdrs_t);
     fd_snp_cache_packet_for_retry( conn, packet, packet_sz, meta | FD_SNP_META_OPT_HANDSHAKE );
     sz = fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, packet_sz, meta | FD_SNP_META_OPT_HANDSHAKE );
@@ -774,7 +773,7 @@ fd_snp_process_signature( fd_snp_t *  snp,
       conn->last_sent_ts = fd_snp_timestamp_ms();
       conn->retry_cnt = 0;
       conn->last_pkt->meta = meta;
-      FD_LOG_NOTICE(( "fd_snp_v1_server_fini_add_signature session_id=%016lx", conn->session_id ));
+      // FD_LOG_NOTICE(( "fd_snp_v1_server_fini_add_signature session_id=%016lx", conn->session_id ));
       return fd_snp_finalize_udp_and_invoke_tx_cb( snp, conn->last_pkt->data, conn->last_pkt->data_sz, meta );
     } break;
 
@@ -800,7 +799,7 @@ fd_snp_housekeeping( fd_snp_t * snp ) {
   ulong used_ele = 0;
   fd_snp_conn_t * conn = snp->conn_pool;
 
-#define FD_SNP_HANDSHAKE_RETRY_MAX (10U)
+#define FD_SNP_HANDSHAKE_RETRY_MAX (5U)
 #define FD_SNP_HANDSHAKE_RETRY_MS  (500L)
 
   long now = fd_snp_timestamp_ms();
