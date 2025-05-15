@@ -18,6 +18,7 @@
 #include "../../disco/topo/fd_pod_format.h"
 #include "../../choreo/fd_choreo_base.h"
 #include "../../util/net/fd_net_headers.h"
+#include "../../waltz/snp/fd_snp_app.h"
 
 #include "../forest/fd_forest.h"
 #include "fd_fec_repair.h"
@@ -177,6 +178,8 @@ struct fd_repair_tile_ctx {
   fd_blockstore_t * blockstore;
 
   fd_keyguard_client_t keyguard_client[1];
+
+  fd_snp_app_t * snp;
 };
 typedef struct fd_repair_tile_ctx fd_repair_tile_ctx_t;
 
@@ -193,6 +196,8 @@ loose_footprint( fd_topo_tile_t const * tile FD_PARAM_UNUSED ) {
 FD_FN_PURE static inline ulong
 scratch_footprint( fd_topo_tile_t const * tile FD_PARAM_UNUSED) {
 
+  fd_snp_app_limits_t limits = { 0 };
+
   ulong l = FD_LAYOUT_INIT;
   l = FD_LAYOUT_APPEND( l, alignof(fd_repair_tile_ctx_t), sizeof(fd_repair_tile_ctx_t)             );
   l = FD_LAYOUT_APPEND( l, fd_repair_align(),             fd_repair_footprint()                    );
@@ -205,6 +210,7 @@ scratch_footprint( fd_topo_tile_t const * tile FD_PARAM_UNUSED) {
   l = FD_LAYOUT_APPEND( l, fd_scratch_smem_align(),       fd_scratch_smem_footprint( FD_REPAIR_SCRATCH_MAX ) );
   l = FD_LAYOUT_APPEND( l, fd_scratch_fmem_align(),       fd_scratch_fmem_footprint( FD_REPAIR_SCRATCH_DEPTH ) );
   l = FD_LAYOUT_APPEND( l, fd_stake_ci_align(),           fd_stake_ci_footprint() );
+  l = FD_LAYOUT_APPEND( l, fd_snp_app_align(),            fd_snp_app_footprint( &limits )         );
   return FD_LAYOUT_FINI( l, scratch_align() );
 }
 
@@ -548,6 +554,68 @@ fd_repair_send_requests( fd_repair_tile_ctx_t * repair_tile_ctx, fd_repair_t * g
   glob->current_nonce = n;
   if( k )
     FD_LOG_DEBUG(("checked %lu nonces, sent %lu packets, total %lu", k, j, fd_needed_table_key_cnt( glob->needed )));
+}
+
+static int
+snp_callback_tx( void const *  _ctx,
+                 uchar *       packet,
+                 ulong         packet_sz,
+                 fd_snp_meta_t meta ) {
+  (void)_ctx;
+  (void)packet;
+  (void)packet_sz;
+  (void)meta;
+  // TODO: convert back packet -> ctx->net_out_chunk. The conversion is implicit right now.
+
+  // fd_shred_ctx_t * ctx = (fd_shred_ctx_t *)_ctx;
+  // ulong tspub  = fd_frag_meta_ts_comp( fd_tickcount() );
+  // ulong sig = (ulong)meta;
+
+  // if( FD_LIKELY( packet!=NULL ) ) {
+  //   ctx->net_out_chunkP = ctx->net_out_chunk;
+  //   ctx->net_out_chunk  = fd_dcache_compact_next( ctx->net_out_chunk, packet_sz, ctx->net_out_chunk0, ctx->net_out_wmark );
+  // }
+  // fd_mcache_publish( ctx->net_out_mcache, ctx->net_out_depth, ctx->net_out_seq, sig, ctx->net_out_chunkP, packet_sz, 0UL, ctx->tsorig, tspub );
+  // ctx->net_out_seq   = fd_seq_inc( ctx->net_out_seq, 1UL );
+
+  // FD_LOG_NOTICE(( "[shred] publish to snp %lu", packet_sz ));
+
+  return FD_SNP_SUCCESS;
+}
+
+static int
+snp_callback_rx( void const *  _ctx,
+                 fd_snp_peer_t peer,
+                 uchar const * data,
+                 ulong         data_sz,
+                 fd_snp_meta_t meta ) {
+  (void)peer;
+  (void)meta;
+
+  (void)_ctx;
+  (void)data;
+  (void)data_sz;
+  // FD_LOG_NOTICE(( "[shred] snp_callback_rx data_sz=%lu meta=%016lx", data_sz, meta ));
+
+  // fd_shred_ctx_t * ctx = (fd_shred_ctx_t *)_ctx;
+  // fd_shred_t const * shred = fd_shred_parse( data, (ulong)data_sz );
+  // if( FD_UNLIKELY( !shred ) ) {
+  //   ctx->skip_frag = 1;
+  //   return FD_SNP_SUCCESS;
+  // };
+  // /* all shreds in the same FEC set will have the same signature
+  //    so we can round-robin shreds between the shred tiles based on
+  //    just the signature without splitting individual FEC sets. */
+  // ulong sig = fd_ulong_load_8( shred->signature );
+  // if( FD_LIKELY( sig%ctx->round_robin_cnt!=ctx->round_robin_id ) ) {
+  //   ctx->skip_frag = 1;
+  //   return FD_SNP_SUCCESS;
+  // }
+  // fd_memcpy( ctx->shred_buffer, data, data_sz );
+  // ctx->shred_buffer_sz = data_sz;
+
+  // FD_LOG_NOTICE(( "[shred] shred received %lu:%u:%u", shred->slot, shred->fec_set_idx, shred->idx ));
+  return FD_SNP_SUCCESS;
 }
 
 static inline int
@@ -1343,14 +1411,22 @@ unprivileged_init( fd_topo_t *      topo,
 
   /* Scratch mem setup */
 
+  fd_snp_app_limits_t limits = { 0 };
+
   ctx->blockstore = &ctx->blockstore_ljoin;
   ctx->repair     = FD_SCRATCH_ALLOC_APPEND( l, fd_repair_align(), fd_repair_footprint() );
   ctx->forest = FD_SCRATCH_ALLOC_APPEND( l, fd_forest_align(), fd_forest_footprint( FD_FOREST_ELE_MAX ) );
   ctx->fec_sigs = FD_SCRATCH_ALLOC_APPEND( l, fd_fec_sig_align(), fd_fec_sig_footprint( 20 ) );
   ctx->recent = FD_SCRATCH_ALLOC_APPEND( l, fd_recent_align(), fd_recent_footprint( 20 ) );
   ctx->reasm = FD_SCRATCH_ALLOC_APPEND( l, fd_reasm_align(), fd_reasm_footprint( 20 ) );
+  void * _snp      = FD_SCRATCH_ALLOC_APPEND( l, fd_snp_app_align(),      fd_snp_app_footprint( &limits )  );
   // ctx->fec_repair = FD_SCRATCH_ALLOC_APPEND( l, fd_fec_repair_align(), fd_fec_repair_footprint(  ( 1<<20 ), tile->repair.shred_tile_cnt ) );
   /* Look at fec_repair.h for an explanation of this fec_max. */
+
+  fd_snp_app_t * snp = fd_snp_app_join( fd_snp_app_new( _snp, &limits ) );
+  snp->cb.ctx = ctx;
+  snp->cb.rx = snp_callback_rx;
+  snp->cb.tx = snp_callback_tx;
 
   ctx->fec_chainer = FD_SCRATCH_ALLOC_APPEND( l, fd_fec_chainer_align(), fd_fec_chainer_footprint( 1 << 20 ) );
 
@@ -1410,6 +1486,7 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->recent = fd_recent_join( fd_recent_new( ctx->recent, 20 ) );
   ctx->reasm = fd_reasm_join( fd_reasm_new( ctx->reasm, 20 ) );
   ctx->fec_chainer = fd_fec_chainer_join( fd_fec_chainer_new( ctx->fec_chainer, 1 << 20, 0 ) );
+  ctx->snp      = snp;
 
   /**********************************************************************/
   /* turbine_slot fseq                                                  */
