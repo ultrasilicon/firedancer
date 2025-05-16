@@ -36,7 +36,7 @@ rx_pull_request( fd_gossip_t *                    gossip,
   if( FD_UNLIKELY( contact_info->wallclock<clamp_wallclock_lower_nanos || contact_info->wallclock>clamp_wallclock_upper_nanos ) ) return FD_GOSSIP_RX_ERR_PULL_REQUEST_WALLCLOCK;
 
   ulong packet_sz = 0UL;
-  uchar packet[ 1232UL; ];
+  uchar packet[ 1232UL ];
 
   for( fd_crds_iter_t it=fd_crds_mask_iter_init( gossip->crds, mask, mask_bits ); !fd_crds_mask_iter_done( it ); it=fd_crds_mask_iter_next(it) ) {
     fd_crds_value_t * candidate = fd_crds_mask_iter_value( it );
