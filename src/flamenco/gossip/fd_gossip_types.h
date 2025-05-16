@@ -67,21 +67,17 @@ struct fd_gossip_push {
 
 typedef struct fd_gossip_push fd_gossip_push_t;
 
-struct fd_gossip_message_ping {
+struct fd_gossip_message_ping_pong {
   uchar from[ 32UL ];
-  uchar token[ 32UL ];
+  union{
+    uchar hash[ 32UL ]; /* Hash of the last ping */
+    uchar token[ 32UL ]; /* Token to be used in the pong */
+  };
   uchar signature[ 64UL ];
 };
 
-typedef struct fd_gossip_message_ping fd_gossip_ping_t;
+typedef struct fd_gossip_message_ping_pong fd_gossip_ping_pong_t;
 
-struct fd_gossip_message_pong {
-  uchar from[ 32UL ];
-  uchar hash[ 32UL ];
-  uchar signature[ 64UL ];
-};
-
-typedef struct fd_gossip_message_pong fd_gossip_pong_t;
 struct fd_gossip_message_prune {
   uchar from[ 32UL ];
   ulong prunes_len;

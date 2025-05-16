@@ -35,8 +35,7 @@ struct fd_gossip_message {
     fd_gossip_pull_response_t pull_response[ 1 ]; /* CRDS Composite Type */
     fd_gossip_push_t          push[ 1 ];          /* CRDS Composite Type */
     fd_gossip_prune_t         prune[ 1 ];
-    fd_gossip_ping_t          ping[ 1 ];
-    fd_gossip_pong_t          pong[ 1 ];
+    fd_gossip_ping_pong_t     piong[ 1 ];
   };
 
   /* Begin parsed gossip message metadata
