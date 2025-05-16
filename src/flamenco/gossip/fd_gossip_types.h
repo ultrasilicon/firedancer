@@ -8,6 +8,7 @@
 #define FD_GOSSIP_MESSAGE_PRUNE         (3)
 #define FD_GOSSIP_MESSAGE_PING          (4)
 #define FD_GOSSIP_MESSAGE_PONG          (5)
+#define FD_GOSSIP_MESSAGE_END           (6)
 
 #define FD_GOSSIP_VALUE_VOTE                          ( 1)
 #define FD_GOSSIP_VALUE_LOWEST_SLOT                   ( 2)

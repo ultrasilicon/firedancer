@@ -4,6 +4,8 @@
 #include "fd_gossip_types.h"
 #include "fd_crds_value.h"
 
+
+#define FD_GOSSIP_MSG_MTU (1232UL) /* Maximum size of a gossip message */
 /* Deriving maximum number of CRDS values a message can hold:
   - Maximum bytes the CRDS array can hold is 
     1232(MTU)-4(msg disc)-32(pubkey)-8(crds len)=1188b
@@ -28,12 +30,12 @@ typedef struct fd_crds_key fd_crds_key_t;
 
 struct fd_gossip_message {
 
-  /* Decoded form of payload */
+  /* (partially) Decoded form of payload */
   uchar tag; // uint in rust bincode
   union {
     fd_gossip_pull_request_t  pull_request[ 1 ];
-    fd_gossip_pull_response_t pull_response[ 1 ];
-    fd_gossip_push_t          push[ 1 ];
+    fd_gossip_pull_response_t pull_response[ 1 ]; /* CRDS Composite Type */
+    fd_gossip_push_t          push[ 1 ];          /* CRDS Composite Type */
     fd_gossip_prune_t         prune[ 1 ];
     fd_gossip_ping_t          ping[ 1 ];
     fd_gossip_pong_t          pong[ 1 ];
@@ -43,6 +45,8 @@ struct fd_gossip_message {
      TODO: in CRDS composite types (pullresp and push), "signable" region
      lies within each CRDS data. */
   struct{
+    uchar   has_signable_data; /* 0 for CRDS composite type */
+
     /* Should these be offsets in payload instead? */
     uchar   pubkey[32UL];
     uchar   signature[64UL]; 
@@ -64,7 +68,7 @@ struct fd_gossip_message {
     fd_crds_key_t tag;
 
 
-    uchar signature[64UL]; // signable data is always offset + sizeof(signature)
+    uchar signature[64UL]; // signable data is always offset + sizeof(signature); signable_sz = sz - sizeof(signature)
     long wallclock_nanos;
 
     union {
@@ -78,7 +82,7 @@ struct fd_gossip_message {
 typedef struct fd_gossip_message fd_gossip_message_t;
 
 
-int
+ulong
 fd_gossip_msg_parse( fd_gossip_message_t * msg,
                      uchar const *         payload,
                      ulong                 payload_sz,
