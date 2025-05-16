@@ -31,8 +31,7 @@
 static ulong
 fd_gossip_msg_ping_parse( fd_gossip_message_t * msg,
                           uchar const *         payload,
-                          ulong                 payload_sz,
-                          ulong *               payload_sz_opt ) {
+                          ulong                 payload_sz ) {
   CHECK_INIT( payload, payload_sz      );
   fd_gossip_ping_t * ping = msg->ping;
   CHECK_LEFT( 32UL                     ); memcpy( ping->from,      payload+i, 32UL ); i+=32UL;  /* Pubkey */
@@ -54,8 +53,7 @@ fd_gossip_msg_ping_parse( fd_gossip_message_t * msg,
 static ulong
 fd_gossip_msg_pong_parse( fd_gossip_message_t * msg,
                           uchar const *         payload,
-                          ulong                 payload_sz,
-                          ulong *               payload_sz_opt ) {
+                          ulong                 payload_sz ) {
   CHECK_INIT( payload, payload_sz );
   fd_gossip_pong_t * pong = msg->pong;
   CHECK_LEFT( 32UL                ); memcpy( pong->from,      payload+i, 32UL ); i+=32UL; /* Pubkey */
@@ -76,8 +74,7 @@ fd_gossip_msg_pong_parse( fd_gossip_message_t * msg,
 ulong
 fd_gossip_msg_parse( fd_gossip_message_t * msg,
                      uchar const *         payload,
-                     ulong                 payload_sz,
-                     ulong *               payload_sz_opt ) {
+                     ulong                 payload_sz ) {
   CHECK_INIT( payload, payload_sz            );
   CHECK(      payload_sz<=FD_GOSSIP_MSG_MTU  );
 
@@ -90,19 +87,17 @@ fd_gossip_msg_parse( fd_gossip_message_t * msg,
   ulong inner_decoded_sz = 0UL;
   switch( msg->tag ){
     case FD_GOSSIP_MESSAGE_PULL_REQUEST:
-      break;
     case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
-      break;
     case FD_GOSSIP_MESSAGE_PUSH:
-      break;
     case FD_GOSSIP_MESSAGE_PRUNE:
+      FD_LOG_ERR(( "Gossip message type %d parser not implemented", msg->tag ));
       break;
     case FD_GOSSIP_MESSAGE_PING:
-      inner_decoded_sz = fd_gossip_msg_ping_parse( msg, payload+i, payload_sz-i, payload_sz_opt );
+      inner_decoded_sz = fd_gossip_msg_ping_parse( msg, payload+i, payload_sz-i );
       CHECK( inner_decoded_sz==payload_sz-i );
       break;
     case FD_GOSSIP_MESSAGE_PONG:
-      inner_decoded_sz = fd_gossip_msg_pong_parse( msg, payload+i, payload_sz-i, payload_sz_opt );
+      inner_decoded_sz = fd_gossip_msg_pong_parse( msg, payload+i, payload_sz-i );
       CHECK( inner_decoded_sz==payload_sz-i );
       break;
     default:
@@ -111,9 +106,16 @@ fd_gossip_msg_parse( fd_gossip_message_t * msg,
   i += inner_decoded_sz;
   CHECK( i<=payload_sz );
 
-  /* Need to increment inner offsets by 4b to account for tag */
+  /* Need to increment inner offsets by 4b to account for tag
+     TODO: make this less error prone (at this point message is technically validated) */
   msg->signable_data_offset += 4UL;
   for( ulong j=0; j<msg->crds_cnt; j++ ) {
     msg->crds[j].offset += 4UL;
   }
+  return i;
+}
+
+void
+fd_gossip_msg_init( fd_gossip_message_t * msg ) {
+  fd_memset( msg, 0, sizeof(fd_gossip_message_t) );
 }

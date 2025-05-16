@@ -1,6 +1,8 @@
+#ifndef HEADER_fd_src_flamenco_gossip_fd_gossip_types_h
+#define HEADER_fd_src_flamenco_gossip_fd_gossip_types_h
+
 #include "fd_gossip.h"
 #include "fd_crds_value.h"
-#
 
 #define FD_GOSSIP_MESSAGE_PULL_REQUEST  (0)
 #define FD_GOSSIP_MESSAGE_PULL_RESPONSE (1)
@@ -82,11 +84,13 @@ struct fd_gossip_message_pong {
 typedef struct fd_gossip_message_pong fd_gossip_pong_t;
 struct fd_gossip_message_prune {
   uchar from[ 32UL ];
-  ulong prune_len;
-  uchar prunes[ 34UL ][ 32UL ]; /* 33 pubkeys fit in MTU (rounded down) */
+  ulong prunes_len;
+  uchar prunes[ 33UL ][ 32UL ]; /* 33 pubkeys fit in MTU (rounded down) */
   uchar signature[ 64UL ];
   uchar destination[ 32UL ];
   ulong wallclock;
 
 };
 typedef struct fd_gossip_message_prune fd_gossip_prune_t;
+
+#endif /* HEADER_fd_src_flamenco_gossip_fd_gossip_types_h */

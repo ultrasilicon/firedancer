@@ -14,7 +14,7 @@
   - So, maximum number of CRDS values is 1188/(64+4+48) ~= 10
   - TODO: We might want to use a more conservative estimate that only includes
     the size of the signature and discriminant. */
-#define FD_GOSSIP_MSG_MAX_CRDS (10UL) 
+#define FD_GOSSIP_MSG_MAX_CRDS (10UL)
 
 /* FIXME: This should be imported from fd_crds instead. */
 struct fd_crds_key {
@@ -29,8 +29,6 @@ struct fd_crds_key {
 typedef struct fd_crds_key fd_crds_key_t;
 
 struct fd_gossip_message {
-
-  /* (partially) Decoded form of payload */
   uchar tag; // uint in rust bincode
   union {
     fd_gossip_pull_request_t  pull_request[ 1 ];
@@ -41,9 +39,22 @@ struct fd_gossip_message {
     fd_gossip_pong_t          pong[ 1 ];
   };
 
-  /* Signature related metadata, analagous to Agave's Signable trait
-     TODO: in CRDS composite types (pullresp and push), "signable" region
-     lies within each CRDS data. */
+  /* Begin parsed gossip message metadata
+
+     FIXME: These are strictly to operate on a parsed
+     gossip message that is received in encoded form. The structure
+     is a little awkward, especially if using this same struct to encode
+     a message. Crux of the problem is half the fd_gossip_message fields function as metadata
+     for the encoded message/payload, and the other half owns the data it parses
+     (namely the inner message types defined above) via memcpys. We can:
+      - Split this into two structs, one for metadata and one for the
+        inner message types. This would be a little cleaner, but also a little
+        more work to maintain.
+      - Leave it as is, and just document the structure. This isn't as clean
+        but is less work to maintain. */
+
+  /* Signature related metadata, analagous to Agave's Signable trait (at least on the rx side) 
+     FIXME: Prune does not define signable data as a contiguous region, which is really annoying */
   struct{
     uchar   has_signable_data; /* 0 for CRDS composite type */
 
@@ -63,9 +74,9 @@ struct fd_gossip_message {
   ulong crds_cnt; /* number of CRDS values in the message, if any */
   struct {
     ulong offset; /* offset to start of CRDS value in payload */
-    ulong sz;     /* size of CRDS value */
+    ulong sz;     /* size of CRDS value in payload */
   
-    fd_crds_key_t tag;
+    fd_crds_key_t key;
 
 
     uchar signature[64UL]; // signable data is always offset + sizeof(signature); signable_sz = sz - sizeof(signature)
@@ -81,13 +92,17 @@ struct fd_gossip_message {
 
 typedef struct fd_gossip_message fd_gossip_message_t;
 
+void
+fd_gossip_msg_init( fd_gossip_message_t * msg );
 
 ulong
 fd_gossip_msg_parse( fd_gossip_message_t * msg,
                      uchar const *         payload,
-                     ulong                 payload_sz,
-                     ulong *               payload_sz_opt );
+                     ulong                 payload_sz );
 
-
+ulong
+fd_gossip_msg_serialize( fd_gossip_message_t const * msg,
+                         uchar *                  payload,
+                         ulong                    payload_sz );
 
 #endif /* HEADER_fd_src_flamenco_gossip_fd_gossip_msg_h */
