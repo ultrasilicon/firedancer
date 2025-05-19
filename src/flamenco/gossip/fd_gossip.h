@@ -7,11 +7,10 @@
 #define FD_GOSSIP_RX_OK                         (0)
 
 #define FD_GOSSIP_RX_PARSE_ERR                  (1)
-#define FD_GOSSIP_RX_ERR_NETWORK_HDRS           (2)
 
 #define FD_GOSSIP_RX_VERIFY_NO_SIGNABLE_DATA    (1)
 
-#define FD_GOSSIP_RX_PRUNE_ERR_TIMEOUT          (1)
+#define FD_GOSSIP_RX_PRUNE_ERR_STALE            (1)
 #define FD_GOSSIP_RX_PRUNE_ERR_DESTINATION      (2)
 
 /* TODO: When we get a pull request, respond with ContactInfos first if

@@ -21,35 +21,31 @@ parse_message( uchar const *         data,
 
 static int
 verify_signatures( fd_gossip_message_t const *  message,
-                   uchar const *                payload ) {
-  if( FD_UNLIKELY( !( !!message->has_signable_data || !!message->crds_cnt ) ) )
-    return FD_GOSSIP_RX_VERIFY_NO_SIGNABLE_DATA;
-  
-  fd_sha512_t sha[1];
-
+                   uchar const *                payload,
+                   fd_sha512_t *                sha ) {
   int err = 0;
   /* Optimize for CRDS composites (push/pull) that don't have an outer signable
      data */
   if( FD_UNLIKELY( message->has_signable_data ) ) {
     /* TODO: Special case for prune */
-    err = fd_ed25519_verify( payload + message->signable_data_offset,
+    err = fd_ed25519_verify( payload+message->signable_data_offset,
                              message->signable_sz,
                              message->signature,
                              message->pubkey,
                              sha );
   }
-  if( FD_UNLIKELY( err != FD_ED25519_SUCCESS ) ) return err;
+  if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err;
 
   /* Verify CRDS entries */
   for( ulong i=0UL; i<message->crds_cnt; i++ ) {
-    err = fd_ed25519_verify( payload + message->crds[i].offset + 64UL,
-                             message->crds[i].sz - 64UL,
+    err = fd_ed25519_verify( payload + message->crds[i].offset+64UL,
+                             message->crds[i].sz-64UL,
                              message->crds[i].signature,
                              message->pubkey,
                              sha );
 
     /* Full message must be dropped if any one value fails verify */
-    if( FD_UNLIKELY( err != FD_ED25519_SUCCESS ) ) return err; 
+    if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err; 
   }
 
   return FD_GOSSIP_RX_OK;
@@ -173,7 +169,7 @@ static int
 rx_prune( fd_gossip_t *             gossip,
           fd_gossip_prune_t const * prune,
           long                      now ) {
-  if( FD_UNLIKELY( now-500L*1000L*1000L>(long)prune->wallclock ) ) return FD_GOSSIP_RX_PRUNE_ERR_TIMEOUT;
+  if( FD_UNLIKELY( now-500L*1000L*1000L>(long)prune->wallclock ) ) return FD_GOSSIP_RX_PRUNE_ERR_STALE;
   else if( FD_UNLIKELY( !!memcmp( gossip->identity_pubkey, prune->destination, 32UL ) ) ) return FD_GOSSIP_RX_PRUNE_ERR_DESTINATION;
 
   ulong identity_stake = 0UL; /* FIXME */
@@ -200,7 +196,7 @@ rx_ping( fd_gossip_t *           gossip,
 
   message->tag = FD_GOSSIP_MESSAGE_PONG;
   fd_memcpy( message->piong->from, gossip->identity_pubkey, 32UL );
-  fd_ping_tracker_hash_ping_token( ping->token, message->piong->hash );
+  fd_ping_tracker_response_hash( ping->token, message->piong->hash );
   gossip->sign_fn( gossip->sign_ctx, message->piong->hash, 32UL, message->piong->signature );
 
   fd_ping_tracker_track( gossip->ping_tracker,
@@ -228,7 +224,7 @@ rx_pong( fd_gossip_t *           gossip,
   return 0;
 }
 
-/* FIXME: This feels like it should be higher up the rx processing stack */
+/* FIXME: This feels like it should be higher up the rx processing stack (i.e., tile level)*/
 static int
 strip_network_hdrs( uchar const *   data,
                     ulong           data_sz,
@@ -239,11 +235,14 @@ strip_network_hdrs( uchar const *   data,
   fd_ip4_hdr_t const * ip4 = (fd_ip4_hdr_t const *)( (ulong)eth + sizeof(fd_eth_hdr_t) );
   fd_udp_hdr_t const * udp = (fd_udp_hdr_t const *)( (ulong)ip4 + FD_IP4_GET_LEN( *ip4 ) );
 
-  if( FD_UNLIKELY( (ulong)udp+sizeof(fd_udp_hdr_t) > (ulong)eth+data_sz ) ) return FD_GOSSIP_RX_ERR_NETWORK_HDRS;
+  if( FD_UNLIKELY( (ulong)udp+sizeof(fd_udp_hdr_t) > (ulong)eth+data_sz ) ) 
+    FD_LOG_ERR(( "Malformed UDP header" ));
   ulong udp_sz = fd_ushort_bswap( udp->net_len );
-  if( FD_UNLIKELY( udp_sz<sizeof(fd_udp_hdr_t) ) ) return FD_GOSSIP_RX_ERR_NETWORK_HDRS;
+  if( FD_UNLIKELY( udp_sz<sizeof(fd_udp_hdr_t) ) ) 
+    FD_LOG_ERR(( "Malformed UDP header" ));
   ulong payload_sz_ = udp_sz-sizeof(fd_udp_hdr_t);
-  if( FD_UNLIKELY( (ulong)payload+payload_sz_ > (ulong)eth+data_sz ) ) return FD_GOSSIP_RX_ERR_NETWORK_HDRS;
+  if( FD_UNLIKELY( (ulong)payload+payload_sz_>(ulong)eth+data_sz ) ) 
+    FD_LOG_ERR(( "Malformed UDP payload" ));
 
   *payload     = (uchar *)( (ulong)udp + sizeof(fd_udp_hdr_t) );
   *payload_sz  = payload_sz_;
@@ -259,22 +258,22 @@ fd_gossip_rx( fd_gossip_t * gossip,
               ulong         data_sz,
               long          now ) {
 
-  uchar * gossip_payload;
-  ulong   gossip_payload_sz;
-  fd_ip4_port_t peer_address;
+  uchar *       gossip_payload;
+  ulong         gossip_payload_sz;
+  fd_ip4_port_t peer_address[1];
 
   int error = strip_network_hdrs( data, 
                                   data_sz, 
                                   &gossip_payload,
                                   &gossip_payload_sz, 
-                                  &peer_address );
+                                  peer_address );
   if( FD_UNLIKELY( error ) ) return error;
 
   fd_gossip_message_t message[ 1 ];
   ulong decode_sz = fd_gossip_msg_parse( message, gossip_payload, gossip_payload_sz );
   if( FD_UNLIKELY( !!decode_sz ) ) return FD_GOSSIP_RX_PARSE_ERR;
 
-  error = verify_signatures( message, data );
+  error = verify_signatures( message, data, gossip->sha512 );
   if( FD_UNLIKELY( error ) ) return error;
 
   // error = filter_shred_version( gossip, message );
@@ -303,10 +302,10 @@ fd_gossip_rx( fd_gossip_t * gossip,
       error = rx_prune( gossip, message->prune, now );
       break;
     case FD_GOSSIP_MESSAGE_PING:
-      error = rx_ping( gossip, message->piong, &peer_address, now );
+      error = rx_ping( gossip, message->piong, peer_address, now );
       break;
     case FD_GOSSIP_MESSAGE_PONG:
-      error = rx_pong( gossip, message->piong, &peer_address, now );
+      error = rx_pong( gossip, message->piong, peer_address, now );
       break;
     default:
       FD_LOG_CRIT(( "Unknown gossip message type %d", message->tag ));

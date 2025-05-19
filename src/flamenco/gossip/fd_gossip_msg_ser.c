@@ -36,7 +36,7 @@ fd_gossip_msg_serialize( fd_gossip_message_t const * msg,
                          uchar *                  payload,
                          ulong                    payload_sz ) {
   /* Serialize tag */
-  if( FD_UNLIKELY( msg->tag>=FD_GOSSIP_MESSAGE_END ) ) {
+  if( FD_UNLIKELY( msg->tag>FD_GOSSIP_MESSAGE_LAST ) ) {
     FD_LOG_ERR(( "Invalid message tag %d", msg->tag ));
     return 0;
   }
@@ -48,16 +48,16 @@ fd_gossip_msg_serialize( fd_gossip_message_t const * msg,
   ulong inner_payload_sz = 0UL;
   switch( msg->tag ) {
     case FD_GOSSIP_MESSAGE_PULL_REQUEST:
-      FD_LOG_ERR(( "Gossip message type %d serializer not implemented", msg->tag ));
+      FD_LOG_ERR(( "Gossip pull request message serializer not implemented" ));
       break;
     case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
-      FD_LOG_ERR(( "Gossip message type %d serializer not implemented", msg->tag ));
+      FD_LOG_ERR(( "Gossip pull response message serializer not implemented" ));
       break;
     case FD_GOSSIP_MESSAGE_PUSH:
-      FD_LOG_ERR(( "Gossip message type %d serializer not implemented", msg->tag ));
+      FD_LOG_ERR(( "Gossip push message serializer not implemented" ));
       break;
     case FD_GOSSIP_MESSAGE_PRUNE:
-      FD_LOG_ERR(( "Gossip message type %d serializer not implemented", msg->tag ));
+      FD_LOG_ERR(( "Gossip prune message serializer not implemented" ));
       break;
     case FD_GOSSIP_MESSAGE_PING:
     case FD_GOSSIP_MESSAGE_PONG:

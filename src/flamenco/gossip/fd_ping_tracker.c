@@ -201,9 +201,9 @@ fd_ping_tracker_join( void * shpt ) {
   return ping_tracker;
 }
 
-static void
+static inline void
 hash_ping_token( uchar const *         ping_token,
-                 uchar *               expected_pong_token,
+                 uchar                 expected_pong_token[ static 32UL ],
                  fd_sha256_t * sha ) {
   fd_sha256_init( sha );
   fd_sha256_append( sha, "SOLANA_PING_PONG", 16UL );

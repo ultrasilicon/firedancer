@@ -6,6 +6,7 @@
 #include "fd_crds.h"
 #include "fd_gossip_msg.h"
 #include "fd_ping_tracker.h"
+#include "../../ballet/sha512/fd_sha512.h"
 
 typedef void (*fd_gossip_send_fn)( void *                 ctx,
                                    uchar const *          data,
@@ -25,6 +26,8 @@ struct fd_gossip_private {
   fd_ping_tracker_t * ping_tracker;
 
   fd_gossip_message_t outgoing[ 1 ]; /* Not sure how to use this exactly */
+
+  fd_sha512_t         sha512[1];
 
   /* Callbacks */
   fd_gossip_sign_fn sign_fn;

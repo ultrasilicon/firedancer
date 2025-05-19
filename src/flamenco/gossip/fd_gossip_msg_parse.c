@@ -1,5 +1,6 @@
 #include "fd_gossip_msg.h"
 // #include "../../ballet/txn/fd_compact_u16.h"
+#include "../../disco/fd_disco_base.h"
 
 
 /* Adapted from fd_txn_parse.c */
@@ -54,12 +55,12 @@ fd_gossip_msg_parse( fd_gossip_message_t * msg,
                      uchar const *         payload,
                      ulong                 payload_sz ) {
   CHECK_INIT( payload, payload_sz            );
-  CHECK(      payload_sz<=FD_GOSSIP_MSG_MTU  );
+  CHECK(      payload_sz<=FD_GOSSIP_MTU  );
 
   /* Extract enum discriminant/tag (4b encoded) */
   uint tag = 0;
   CHECK_LEFT( 4UL                            );   tag = payload[ i ];     i+=4;
-  CHECK(      tag<FD_GOSSIP_MESSAGE_END      );
+  CHECK(      tag<=FD_GOSSIP_MESSAGE_LAST     );
   msg->tag = (uchar)tag;
 
   ulong inner_decoded_sz = 0UL;

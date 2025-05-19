@@ -10,7 +10,9 @@
 #define FD_GOSSIP_MESSAGE_PRUNE         (3)
 #define FD_GOSSIP_MESSAGE_PING          (4)
 #define FD_GOSSIP_MESSAGE_PONG          (5)
-#define FD_GOSSIP_MESSAGE_END           (6)
+
+/* Gossip message tag can never exceed this. */
+#define FD_GOSSIP_MESSAGE_LAST          (5)
 
 #define FD_GOSSIP_VALUE_VOTE                          ( 1)
 #define FD_GOSSIP_VALUE_LOWEST_SLOT                   ( 2)
@@ -81,7 +83,14 @@ typedef struct fd_gossip_message_ping_pong fd_gossip_ping_pong_t;
 struct fd_gossip_message_prune {
   uchar from[ 32UL ];
   ulong prunes_len;
-  uchar prunes[ 33UL ][ 32UL ]; /* 33 pubkeys fit in MTU (rounded down) */
+  /* 33 pubkeys fit in MTU (rounded down):
+       1232b                      (MTU)
+     - 4b                         (discriminant in gossip message)
+     - 32b + 8b + 64b + 32b + 8b  (other fields in prune message) 
+     = 1084b                      (remaining for prunes arr) 
+     
+    1084b/32 ~= 33 */
+  uchar prunes[ 33UL ][ 32UL ];
   uchar signature[ 64UL ];
   uchar destination[ 32UL ];
   ulong wallclock;

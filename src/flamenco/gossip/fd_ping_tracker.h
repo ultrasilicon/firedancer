@@ -120,14 +120,14 @@ fd_ping_tracker_pop_request( fd_ping_tracker_t *    ping_tracker,
                              fd_ip4_port_t const ** out_peer_address,
                              uchar const **         out_token );
 
-/* fd_ping_tracker_hash_ping_token generates a hash of a ping token, to be
+/* fd_ping_tracker_response_hash generates a hash of a ping token, to be
    embedded in a corresponding pong message that is then verified by the ping
    sender. 
    
    Assumes both token and hash are the starting address of a 32byte region of
    memory */
 void
-fd_ping_tracker_hash_ping_token( uchar const * token,
+fd_ping_tracker_response_hash( uchar const * token,
                                  uchar *        hash );
 
 #endif /* HEADER_fd_src_flamenco_gossip_fd_ping_tracker_h */

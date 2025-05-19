@@ -4,8 +4,6 @@
 #include "fd_gossip_types.h"
 #include "fd_crds_value.h"
 
-
-#define FD_GOSSIP_MSG_MTU (1232UL) /* Maximum size of a gossip message */
 /* Deriving maximum number of CRDS values a message can hold:
   - Maximum bytes the CRDS array can hold is 
     1232(MTU)-4(msg disc)-32(pubkey)-8(crds len)=1188b
