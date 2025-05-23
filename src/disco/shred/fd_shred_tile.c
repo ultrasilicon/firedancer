@@ -17,6 +17,8 @@
 
 #include <linux/unistd.h>
 
+#define DEV_DROP_SHREDS (1)
+
 /* The shred tile handles shreds from two data sources: shreds
    generated from microblocks from the banking tile, and shreds
    retransmitted from the network.
@@ -639,6 +641,16 @@ snp_callback_rx( void const *  _ctx,
     ctx->skip_frag = 1;
     return FD_SNP_SUCCESS;
   }
+
+  if( DEV_DROP_SHREDS ) {
+    uchar app_id;
+    fd_snp_meta_into_parts( NULL, &app_id, NULL, NULL, meta );
+    if( app_id==0 && shred->slot%2==0 && ( fd_shred_is_data( fd_shred_type( shred->variant ) ) || shred->idx==0 ) ) {
+      FD_LOG_NOTICE(( "[shred] shred SKIPPED (should trigger repair) %lu:%u:%u", shred->slot, shred->fec_set_idx, shred->idx ));
+      return FD_SNP_SUCCESS;
+    }
+  }
+
   fd_memcpy( ctx->shred_buffer, data, data_sz );
   ctx->shred_buffer_sz = data_sz;
 
@@ -1067,7 +1079,7 @@ unprivileged_init( fd_topo_t *      topo,
   }
 
   if( FD_UNLIKELY( expected_shred_version > USHORT_MAX ) ) FD_LOG_ERR(( "invalid shred version %lu", expected_shred_version ));
-  FD_LOG_INFO(( "Using shred version %hu", (ushort)expected_shred_version ));
+  FD_LOG_NOTICE(( "Using shred version %hu", (ushort)expected_shred_version ));
 
   ctx->keyswitch = fd_keyswitch_join( fd_topo_obj_laddr( topo, tile->keyswitch_obj_id ) );
   FD_TEST( ctx->keyswitch );

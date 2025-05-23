@@ -117,9 +117,6 @@ typedef struct {
   ulong            packet_sz;
   fd_snp_t *       snp;
 
-  ushort            net_id;
-  fd_ip4_udp_hdrs_t net_hdr[1];
-
   /* App-specific */
   ulong            shred_cnt;
 
@@ -218,7 +215,7 @@ before_frag( fd_snp_ctx_t * ctx,
   /* TODO: load balance using sig */
   if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_SHRED ) )    return 0;
   else if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_REPAIR ) ) return 0;
-  else if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET_SHRED ) ) return fd_disco_netmux_sig_proto( sig )!=DST_PROTO_SHRED; /* TODO change DST_PROTO_SHRED name? */
+  else if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET_SHRED ) ) return 0; // can be DST_PROTO_SHRED or DST_PROTO_REPAIR
   else if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET_REPAIR ) ) return fd_disco_netmux_sig_proto( sig )!=DST_PROTO_REPAIR;
   else if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_CRDS ) ) return 0;
 
@@ -258,12 +255,15 @@ during_frag( fd_snp_ctx_t * ctx,
         FD_LOG_ERR(( "chunk %lu %lu corrupt, not in range [%lu,%lu]", chunk, sz,
               ctx->in[ in_idx ].chunk0, ctx->in[ in_idx ].wmark ));
 
+      /* on the shred channel we receive both packets from shred and repair */
       /* TODO improve coding here (fast parsing) */
-      if( *(dcache_entry + 45UL)== 0x1fU ) {
+      if( ( fd_disco_netmux_sig_proto( sig )==DST_PROTO_SHRED && *(dcache_entry + 45UL)==0x1F )
+        ||( fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR ) ) {
         ctx->packet = fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk );
       } else {
         ctx->packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
       }
+
       memcpy( ctx->packet, dcache_entry, sz );
       ctx->packet_sz = sz;
     } break;
@@ -405,10 +405,6 @@ snp_callback_tx( void const *  _ctx,
   ulong tspub  = fd_frag_meta_ts_comp( fd_tickcount() );
   ulong sig = fd_disco_netmux_sig( dst_ip, dst_port, dst_ip, DST_PROTO_OUTGOING, FD_NETMUX_SIG_MIN_HDR_SZ );
 
-  if( ctx->net_id++ == 0 ) {
-    FD_LOG_HEXDUMP_NOTICE(( "packet", packet, packet_sz ));
-  }
-
   /* No memcpy needed here - already done in during_frag. */
   if( FD_UNLIKELY( meta & FD_SNP_META_OPT_BUFFERED ) ) {
     memcpy( ctx->packet, packet, packet_sz );
@@ -537,14 +533,6 @@ unprivileged_init( fd_topo_t *      topo,
 
   ctx->keyswitch = fd_keyswitch_join( fd_topo_obj_laddr( topo, tile->keyswitch_obj_id ) );
   FD_TEST( ctx->keyswitch );
-
-#define NONNULL( x ) (__extension__({                                        \
-      __typeof__((x)) __x = (x);                                             \
-      if( FD_UNLIKELY( !__x ) ) FD_LOG_ERR(( #x " was unexpectedly NULL" )); \
-      __x; }))
-
-  ctx->net_id   = (ushort)0;
-  fd_ip4_udp_hdr_init( ctx->net_hdr, 0, 0, 8003 ); //FIXME: remove / configure by app
 
   /* Channels */
   for( ulong i=0UL; i<tile->in_cnt; i++ ) {

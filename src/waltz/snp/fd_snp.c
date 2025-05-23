@@ -598,8 +598,9 @@ fd_snp_process_packet( fd_snp_t * snp,
   }
   if( FD_UNLIKELY( snp_app_id>=snp->apps_cnt ) ) {
     /* The packet is not for SNP, ignore */
-    // FD_LOG_WARNING(( "[SNP] app not found for dst_port=%u", dst_port ));
-    return -1;
+    FD_LOG_WARNING(( "[SNP] app not found for dst_port=%u", dst_port ));
+    fd_snp_meta_t meta = fd_snp_meta_from_parts( FD_SNP_META_PROTO_UDP, snp_app_id, src_ip, src_port );
+    return snp->cb.rx( snp->cb.ctx, packet, packet_sz, meta );
   }
 
   /* 2. Parse SNP: derive proto and meta */
