@@ -27,6 +27,9 @@ snp_limits( fd_topo_tile_t const * tile ) {
 }
 
 #define FD_SNP_TILE_SCRATCH_ALIGN (128UL)
+#define SNP_APP_SHRED       (0U)
+#define SNP_APP_REPAIR      (1U)
+#define SNP_APP_CNT         (2U)
 
 #define IN_KIND_NET_SHRED   (0UL)
 #define IN_KIND_SHRED       (1UL)
@@ -79,26 +82,19 @@ typedef struct {
   ulong            net_out_wmark;
   ulong            net_out_chunk;
 
-  fd_frag_meta_t * shred_out_mcache;
-  ulong *          shred_out_sync;
-  ulong            shred_out_depth;
-  ulong            shred_out_seq;
+  struct {
+    fd_frag_meta_t * out_mcache;
+    ulong *          out_sync;
+    ulong            out_depth;
+    ulong            out_seq;
 
-  fd_wksp_t *      shred_out_mem;
-  ulong            shred_out_chunk0;
-  ulong            shred_out_wmark;
-  ulong            shred_out_chunk;
+    fd_wksp_t *      out_mem;
+    ulong            out_chunk0;
+    ulong            out_wmark;
+    ulong            out_chunk;
+  } apps[SNP_APP_CNT];
 
-  fd_frag_meta_t * repair_out_mcache;
-  ulong *          repair_out_sync;
-  ulong            repair_out_depth;
-  ulong            repair_out_seq;
-
-  fd_wksp_t *      repair_out_mem;
-  ulong            repair_out_chunk0;
-  ulong            repair_out_wmark;
-  ulong            repair_out_chunk;
-  ulong            repair_out_idx;
+  ulong       repair_out_idx;
 
   fd_frag_meta_t * sign_out_mcache;
   ulong *          sign_out_sync;
@@ -116,9 +112,6 @@ typedef struct {
   uchar *          packet;
   ulong            packet_sz;
   fd_snp_t *       snp;
-
-  ushort            net_id;
-  fd_ip4_udp_hdrs_t net_hdr[1];
 
   /* App-specific */
   ulong            shred_cnt;
@@ -234,22 +227,16 @@ during_frag( fd_snp_ctx_t * ctx,
              ulong          sz,
              ulong          ctl FD_PARAM_UNUSED ) {
 
+  /* See switch/cases with FD_FALLTHRU.
+     This needs to be init to the last of the cases. The other cases will
+     override and fall through. */
+  fd_wksp_t * out_mem = ctx->apps[SNP_APP_SHRED].out_mem;
+  ulong       out_chunk = ctx->apps[SNP_APP_SHRED].out_chunk;
+
   switch( ctx->in_kind[ in_idx ] ) {
 
-    case IN_KIND_SHRED:
-    case IN_KIND_REPAIR: {
-      /* Applications are unreliable channels, we copy the incoming packet
-         and we'll process it in after_frag. */
-      uchar const * dcache_entry = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
-      if( FD_UNLIKELY( chunk<ctx->in[ in_idx ].chunk0 || chunk>ctx->in[ in_idx ].wmark || sz>FD_NET_MTU ) )
-        FD_LOG_ERR(( "chunk %lu %lu corrupt, not in range [%lu,%lu]", chunk, sz,
-              ctx->in[ in_idx ].chunk0, ctx->in[ in_idx ].wmark ));
-
-      ctx->packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
-      memcpy( ctx->packet, dcache_entry, sz );
-      ctx->packet_sz = sz;
-    } break;
-
+    case IN_KIND_NET_REPAIR:
+      out_mem = ctx->apps[SNP_APP_REPAIR].out_mem; out_chunk = ctx->apps[SNP_APP_REPAIR].out_chunk; FD_FALLTHRU;
     case IN_KIND_NET_SHRED: {
       /* Net is an unreliable channel, we copy the incoming packet
          and we'll process it in after_frag. */
@@ -260,7 +247,7 @@ during_frag( fd_snp_ctx_t * ctx,
 
       /* TODO improve coding here (fast parsing) */
       if( *(dcache_entry + 45UL)== 0x1fU ) {
-        ctx->packet = fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk );
+        ctx->packet = fd_chunk_to_laddr( out_mem, out_chunk );
       } else {
         ctx->packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
       }
@@ -268,19 +255,16 @@ during_frag( fd_snp_ctx_t * ctx,
       ctx->packet_sz = sz;
     } break;
 
-    /* TODO once repair and shred are received from net through the same
-       link, additional logic will be needed to differentiate both (most
-       probably via udp port), combining both into "case IN_KIND_NET". */
-
-    case IN_KIND_NET_REPAIR: {
-      /* Net is an unreliable channel, we copy the incoming packet
+    case IN_KIND_REPAIR:
+    case IN_KIND_SHRED: {
+      /* Applications are unreliable channels, we copy the incoming packet
          and we'll process it in after_frag. */
       uchar const * dcache_entry = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
       if( FD_UNLIKELY( chunk<ctx->in[ in_idx ].chunk0 || chunk>ctx->in[ in_idx ].wmark || sz>FD_NET_MTU ) )
         FD_LOG_ERR(( "chunk %lu %lu corrupt, not in range [%lu,%lu]", chunk, sz,
               ctx->in[ in_idx ].chunk0, ctx->in[ in_idx ].wmark ));
 
-      ctx->packet = fd_chunk_to_laddr( ctx->repair_out_mem, ctx->repair_out_chunk );
+      ctx->packet = fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk );
       memcpy( ctx->packet, dcache_entry, sz );
       ctx->packet_sz = sz;
     } break;
@@ -336,39 +320,24 @@ after_frag( fd_snp_ctx_t *      ctx,
   (void) _tspub;
   (void) stem;
 
+  ulong allow_multicast = 1;
+
   switch( ctx->in_kind[ in_idx ] ) {
+    case IN_KIND_REPAIR:
+      /* Repair should not use multicast */
+      allow_multicast = 0; FD_FALLTHRU;
     case IN_KIND_SHRED: {
-      /* Process all applications (with multicast) */
+      /* Process all applications (with/without multicast) */
+      (void)allow_multicast; //FIXME
       fd_snp_meta_t meta = (fd_snp_meta_t)sig;
       fd_snp_send( ctx->snp, ctx->packet, ctx->packet_sz, meta );
     } break;
 
-    /* TODO temporary - once the repair tile has support for snp,
-        combine IN_KIND_REPAIR case with IN_KIND_SHRED. */
-    case IN_KIND_REPAIR: {
-      FD_LOG_NOTICE(( "*** after_frag IN_KIND_REPAIR init ..." ));
-      /* No memcpy needed here - already done in during_frag. */
-      fd_mcache_publish( ctx->net_out_mcache, ctx->net_out_depth, ctx->net_out_seq, sig, ctx->net_out_chunk, ctx->packet_sz, 0UL, 0UL /* tsorig */, _tspub );
-      ctx->net_out_seq   = fd_seq_inc( ctx->net_out_seq, 1UL );
-      ctx->net_out_chunk = fd_dcache_compact_next( ctx->net_out_chunk, ctx->packet_sz, ctx->net_out_chunk0, ctx->net_out_wmark );
-      FD_LOG_NOTICE(( "*** after_frag IN_KIND_REPAIR done!" ));
-    } break;
-
+    case IN_KIND_NET_REPAIR:
     case IN_KIND_NET_SHRED: {
       /* Process incoming network packets */
       FD_LOG_NOTICE(( "[snp] received from net %lu, processing", ctx->packet_sz ));
       fd_snp_process_packet( ctx->snp, ctx->packet, ctx->packet_sz );
-    } break;
-
-    /* TODO temporary - once the repair tile has support for snp,
-        combine IN_KIND_NET_REPAIR case with IN_KIND_NET_SHRED. */
-    case IN_KIND_NET_REPAIR: {
-      FD_LOG_NOTICE(( "*** after_frag IN_KIND_NET_REPAIR init ..." ));
-      /* No memcpy needed here - already done in during_frag. */
-      fd_mcache_publish( ctx->repair_out_mcache, ctx->repair_out_depth, ctx->repair_out_seq, sig, ctx->repair_out_chunk, ctx->packet_sz, 0UL, 0UL /* tsorig */, _tspub );
-      ctx->repair_out_seq   = fd_seq_inc( ctx->repair_out_seq, 1UL );
-      ctx->repair_out_chunk = fd_dcache_compact_next( ctx->repair_out_chunk, ctx->packet_sz, ctx->repair_out_chunk0, ctx->repair_out_wmark );
-      FD_LOG_NOTICE(( "*** after_frag IN_KIND_NET_REPAIR done!" ));
     } break;
 
     case IN_KIND_GOSSIP:
@@ -405,10 +374,6 @@ snp_callback_tx( void const *  _ctx,
   ulong tspub  = fd_frag_meta_ts_comp( fd_tickcount() );
   ulong sig = fd_disco_netmux_sig( dst_ip, dst_port, dst_ip, DST_PROTO_OUTGOING, FD_NETMUX_SIG_MIN_HDR_SZ );
 
-  if( ctx->net_id++ == 0 ) {
-    FD_LOG_HEXDUMP_NOTICE(( "packet", packet, packet_sz ));
-  }
-
   /* No memcpy needed here - already done in during_frag. */
   if( FD_UNLIKELY( meta & FD_SNP_META_OPT_BUFFERED ) ) {
     memcpy( ctx->packet, packet, packet_sz );
@@ -431,18 +396,20 @@ snp_callback_rx( void const *  _ctx,
   fd_snp_ctx_t * ctx = (fd_snp_ctx_t *)_ctx;
   ulong tspub  = fd_frag_meta_ts_comp( fd_tickcount() );
   ulong sig = (ulong)meta;
+  uchar app_id;
+  fd_snp_meta_into_parts( NULL, &app_id, NULL, NULL, meta );
+  FD_TEST( app_id<SNP_APP_CNT );
 
-  //TODO: based on ... (port?) ... we should send it to the correct application, e.g. shred tile
-
-  /* No memcpy needed here - already done in during_frag. */
+  /* In the likely case, memcpy was done during_frag.
+     For buffered packets we need to memcpy. */
   if( FD_UNLIKELY( meta & FD_SNP_META_OPT_BUFFERED ) ) {
     memcpy( ctx->packet, packet, packet_sz );
   }
-  fd_mcache_publish( ctx->shred_out_mcache, ctx->shred_out_depth, ctx->shred_out_seq, sig, ctx->shred_out_chunk, packet_sz, 0UL, 0UL /* tsorig */, tspub );
-  ctx->shred_out_seq   = fd_seq_inc( ctx->shred_out_seq, 1UL );
-  ctx->shred_out_chunk = fd_dcache_compact_next( ctx->shred_out_chunk, packet_sz, ctx->shred_out_chunk0, ctx->shred_out_wmark );
+  fd_mcache_publish( ctx->apps[app_id].out_mcache, ctx->apps[app_id].out_depth, ctx->apps[app_id].out_seq, sig, ctx->apps[app_id].out_chunk, packet_sz, 0UL, 0UL /* tsorig */, tspub );
+  ctx->apps[app_id].out_seq   = fd_seq_inc( ctx->apps[app_id].out_seq, 1UL );
+  ctx->apps[app_id].out_chunk = fd_dcache_compact_next( ctx->apps[app_id].out_chunk, packet_sz, ctx->apps[app_id].out_chunk0, ctx->apps[app_id].out_wmark );
 
-  FD_LOG_NOTICE(( "[snp] publish to shred %lu meta=%016lx", packet_sz, sig ));
+  FD_LOG_NOTICE(( "[snp] publish to app[%lu] %lu meta=%016lx", app_id, packet_sz, sig ));
   return FD_SNP_SUCCESS;
 }
 
@@ -530,21 +497,14 @@ unprivileged_init( fd_topo_t *      topo,
   snp->cb.rx = snp_callback_rx;
   snp->cb.tx = snp_callback_tx;
   snp->cb.sign = snp_callback_sign;
-  snp->apps_cnt = 1;
-  snp->apps[0].port = 8003;
+  snp->apps_cnt = SNP_APP_CNT;
+  snp->apps[SNP_APP_SHRED].port = 8003;
+  snp->apps[SNP_APP_REPAIR].port = 8701;
   FD_TEST( fd_snp_init( snp ) );
   fd_memcpy( snp->config.identity, ctx->identity_key, sizeof(fd_pubkey_t) );
 
   ctx->keyswitch = fd_keyswitch_join( fd_topo_obj_laddr( topo, tile->keyswitch_obj_id ) );
   FD_TEST( ctx->keyswitch );
-
-#define NONNULL( x ) (__extension__({                                        \
-      __typeof__((x)) __x = (x);                                             \
-      if( FD_UNLIKELY( !__x ) ) FD_LOG_ERR(( #x " was unexpectedly NULL" )); \
-      __x; }))
-
-  ctx->net_id   = (ushort)0;
-  fd_ip4_udp_hdr_init( ctx->net_hdr, 0, 0, 8003 ); //FIXME: remove / configure by app
 
   /* Channels */
   for( ulong i=0UL; i<tile->in_cnt; i++ ) {
@@ -579,14 +539,14 @@ unprivileged_init( fd_topo_t *      topo,
 
   fd_topo_link_t * shred_out = &topo->links[ tile->out_link_id[ SHRED_OUT_IDX ] ];
 
-  ctx->shred_out_mcache = shred_out->mcache;
-  ctx->shred_out_sync   = fd_mcache_seq_laddr( ctx->shred_out_mcache );
-  ctx->shred_out_depth  = fd_mcache_depth( ctx->shred_out_mcache );
-  ctx->shred_out_seq    = fd_mcache_seq_query( ctx->shred_out_sync );
-  ctx->shred_out_chunk0 = fd_dcache_compact_chunk0( fd_wksp_containing( shred_out->dcache ), shred_out->dcache );
-  ctx->shred_out_mem    = topo->workspaces[ topo->objs[ shred_out->dcache_obj_id ].wksp_id ].wksp;
-  ctx->shred_out_wmark  = fd_dcache_compact_wmark ( ctx->shred_out_mem, shred_out->dcache, shred_out->mtu );
-  ctx->shred_out_chunk  = ctx->shred_out_chunk0;
+  ctx->apps[SNP_APP_SHRED].out_mcache = shred_out->mcache;
+  ctx->apps[SNP_APP_SHRED].out_sync   = fd_mcache_seq_laddr( ctx->apps[SNP_APP_SHRED].out_mcache );
+  ctx->apps[SNP_APP_SHRED].out_depth  = fd_mcache_depth( ctx->apps[SNP_APP_SHRED].out_mcache );
+  ctx->apps[SNP_APP_SHRED].out_seq    = fd_mcache_seq_query( ctx->apps[SNP_APP_SHRED].out_sync );
+  ctx->apps[SNP_APP_SHRED].out_chunk0 = fd_dcache_compact_chunk0( fd_wksp_containing( shred_out->dcache ), shred_out->dcache );
+  ctx->apps[SNP_APP_SHRED].out_mem    = topo->workspaces[ topo->objs[ shred_out->dcache_obj_id ].wksp_id ].wksp;
+  ctx->apps[SNP_APP_SHRED].out_wmark  = fd_dcache_compact_wmark ( ctx->apps[SNP_APP_SHRED].out_mem, shred_out->dcache, shred_out->mtu );
+  ctx->apps[SNP_APP_SHRED].out_chunk  = ctx->apps[SNP_APP_SHRED].out_chunk0;
 
   fd_topo_link_t * sign_out = &topo->links[ tile->out_link_id[ SIGN_OUT_IDX ] ];
 
@@ -604,16 +564,16 @@ unprivileged_init( fd_topo_t *      topo,
 
     fd_topo_link_t * repair_out = &topo->links[ tile->out_link_id[ ctx->repair_out_idx ] ];
 
-    ctx->repair_out_mcache = repair_out->mcache;
-    ctx->repair_out_sync   = fd_mcache_seq_laddr( ctx->repair_out_mcache );
-    ctx->repair_out_depth  = fd_mcache_depth( ctx->repair_out_mcache );
-    ctx->repair_out_seq    = fd_mcache_seq_query( ctx->repair_out_sync );
-    ctx->repair_out_chunk0 = fd_dcache_compact_chunk0( fd_wksp_containing( repair_out->dcache ), repair_out->dcache );
-    ctx->repair_out_mem    = topo->workspaces[ topo->objs[ repair_out->dcache_obj_id ].wksp_id ].wksp;
-    ctx->repair_out_wmark  = fd_dcache_compact_wmark ( ctx->repair_out_mem, repair_out->dcache, repair_out->mtu );
-    ctx->repair_out_chunk  = ctx->repair_out_chunk0;
+    ctx->apps[SNP_APP_REPAIR].out_mcache = repair_out->mcache;
+    ctx->apps[SNP_APP_REPAIR].out_sync   = fd_mcache_seq_laddr( ctx->apps[SNP_APP_REPAIR].out_mcache );
+    ctx->apps[SNP_APP_REPAIR].out_depth  = fd_mcache_depth( ctx->apps[SNP_APP_REPAIR].out_mcache );
+    ctx->apps[SNP_APP_REPAIR].out_seq    = fd_mcache_seq_query( ctx->apps[SNP_APP_REPAIR].out_sync );
+    ctx->apps[SNP_APP_REPAIR].out_chunk0 = fd_dcache_compact_chunk0( fd_wksp_containing( repair_out->dcache ), repair_out->dcache );
+    ctx->apps[SNP_APP_REPAIR].out_mem    = topo->workspaces[ topo->objs[ repair_out->dcache_obj_id ].wksp_id ].wksp;
+    ctx->apps[SNP_APP_REPAIR].out_wmark  = fd_dcache_compact_wmark ( ctx->apps[SNP_APP_REPAIR].out_mem, repair_out->dcache, repair_out->mtu );
+    ctx->apps[SNP_APP_REPAIR].out_chunk  = ctx->apps[SNP_APP_REPAIR].out_chunk0;
 
-    FD_TEST( fd_dcache_compact_is_safe( ctx->repair_out_mem, repair_out->dcache, repair_out->mtu, repair_out->depth ) );
+    FD_TEST( fd_dcache_compact_is_safe( ctx->apps[SNP_APP_REPAIR].out_mem, repair_out->dcache, repair_out->mtu, repair_out->depth ) );
   }
 
   ctx->shred_cnt = 0UL;

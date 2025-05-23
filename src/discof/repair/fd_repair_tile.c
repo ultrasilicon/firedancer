@@ -619,12 +619,12 @@ snp_callback_rx( void const *  _ctx,
 }
 
 static inline int
-before_frag( fd_repair_tile_ctx_t * ctx,
-             ulong                  in_idx,
+before_frag( fd_repair_tile_ctx_t * ctx FD_PARAM_UNUSED,
+             ulong                  in_idx FD_PARAM_UNUSED,
              ulong                  seq FD_PARAM_UNUSED,
-             ulong                  sig ) {
-  uint in_kind = ctx->in_kind[ in_idx ];
-  if( FD_LIKELY( in_kind==IN_KIND_SNP ) ) return fd_disco_netmux_sig_proto( sig )!=DST_PROTO_REPAIR;
+             ulong                  sig FD_PARAM_UNUSED ) {
+  // uint in_kind = ctx->in_kind[ in_idx ];
+  // if( FD_LIKELY( in_kind==IN_KIND_NET ) ) return fd_disco_netmux_sig_proto( sig )!=DST_PROTO_REPAIR;
   return 0;
 }
 
