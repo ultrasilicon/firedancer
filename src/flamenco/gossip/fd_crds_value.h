@@ -54,7 +54,7 @@ struct fd_gossip_crds_contact_info {
     /* WARNING: in gossip contact info message,
        ports are encoded in host form. The parser will
        perform the conversion */
-    fd_ip4_port_t addr; 
+    fd_ip4_port_t addr;
   } sockets[ 13UL ];
 };
 

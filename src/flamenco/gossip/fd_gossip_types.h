@@ -86,9 +86,9 @@ struct fd_gossip_message_prune {
   /* 33 pubkeys fit in MTU (rounded down):
        1232b                      (MTU)
      - 4b                         (discriminant in gossip message)
-     - 32b + 8b + 64b + 32b + 8b  (other fields in prune message) 
-     = 1084b                      (remaining for prunes arr) 
-     
+     - 32b + 8b + 64b + 32b + 8b  (other fields in prune message)
+     = 1084b                      (remaining for prunes arr)
+
     1084b/32 ~= 33 */
   uchar prunes[ 33UL ][ 32UL ];
   uchar signature[ 64UL ];

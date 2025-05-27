@@ -31,7 +31,7 @@ struct fd_crds_value_private {
 
      So we have a ContactInfo message for example.  If a validator sends
      us a new ContactInfo message, we want to replace the old one.  This
-     lookup is serviced by a hash table, keyed by the public key of the 
+     lookup is serviced by a hash table, keyed by the public key of the
      originator, and in a few special cases an additional field.  For
      example, votes are (originator_key, vote_index), since we need to
      know about more than one vote from a given originator.
@@ -50,7 +50,7 @@ struct fd_crds_value_private {
   /* The CRDS needs to perform a variety of actions on the message table
      quickly, so there are various indexes woven through them values to
      support these actions.  They are ...
-     
+
      lookup is used to enable the core map<key, value> functionality
      described for upserts above. */
   struct {
@@ -348,7 +348,7 @@ fd_crds_expire( fd_crds_t * crds,
     fd_crds_value_t const * head = staked_expire_dlist_ele_peek_head_const( crds->expire_dlist crds->pool );
 
     if( FD_LIKELY( head->expire.wallclock_nanos<now-STAKED_EXPIRE_DURATION_NANOS ) ) break;
-    
+
     staked_expire_dlist_ele_pop_head( crds->staked_expire_dlist, crds->pool );
     hash_treap_ele_remove( crds->hash_treap, head, crds->pool );
     lookup_map_ele_remove( crds->lookup_map, head, crds->pool );

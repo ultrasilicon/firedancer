@@ -42,7 +42,7 @@ fd_crds_join( void * shcrds );
    store.  CRDS values from staked nodes expire roughly an epoch after
    they are created, and values from non-staked nodes expire after 15
    seconds.
-   
+
    There is one exception, when the node is first bootstrapping, and
    has not yet seen any staked nodes, values do not expire at all. */
 
@@ -61,7 +61,7 @@ fd_crds_expire( fd_crds_t * crds,
    are also excluded from the sampling.  Peers with a different shred
    version than us, or with an invalid gossip socket address are also
    excluded from the sampling.
-   
+
    If no valid peer can be found, the returned fd_ip4_port_t will be
    zeroed out.  The caller should check for this case and handle it
    appropriately.  On success, the returned fd_ip4_port_t is a socket

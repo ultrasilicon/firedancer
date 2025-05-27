@@ -260,7 +260,7 @@ fd_ping_tracker_track( fd_ping_tracker_t *   ping_tracker,
       pool_ele_release( ping_tracker->pool, peer );
       return;
     }
-    
+
     if( FD_UNLIKELY( peer_address->addr!=peer->address.addr || peer_address->port!=peer->address.port ) ) {
       /* Node changed address, update the address.  Any existing pongs
          are no longer valid. */
@@ -344,7 +344,7 @@ fd_ping_tracker_pop_request( fd_ping_tracker_t *    ping_tracker,
     else if( FD_LIKELY( peer_invalid->next_ping_nanos<peer_refreshing->next_ping_nanos && peer_invalid->next_ping_nanos<peer_waiting->next_ping_nanos ) ) next = peer_invalid;
     else if( FD_LIKELY( peer_refreshing->next_ping_nanos<peer_waiting->next_ping_nanos && peer_refreshing->next_ping_nanos<peer_invalid->next_ping_nanos ) ) next = peer_refreshing;
     else next = peer_waiting;
-  
+
     if( FD_UNLIKELY( next->last_rx_nanos<now-20L*1000L*1000L*1000L ) ) {
       /* The peer is no longer sending us contact information, no need
          to ping it and instead remove it from the table. */
@@ -377,7 +377,7 @@ fd_ping_tracker_pop_request( fd_ping_tracker_t *    ping_tracker,
 }
 
 void
-fd_ping_tracker_hash_ping_token( uchar *       hash, 
+fd_ping_tracker_hash_ping_token( uchar *       hash,
                                  uchar const * token ) {
   fd_sha256_t sha[1];
   hash_ping_token( token, hash, sha );

@@ -45,7 +45,7 @@ verify_signatures( fd_gossip_message_t const *  message,
                              sha );
 
     /* Full message must be dropped if any one value fails verify */
-    if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err; 
+    if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err;
   }
 
   return FD_GOSSIP_RX_OK;
@@ -229,13 +229,13 @@ strip_network_hdrs( uchar const *   data,
   fd_ip4_hdr_t const * ip4 = (fd_ip4_hdr_t const *)( (ulong)eth + sizeof(fd_eth_hdr_t) );
   fd_udp_hdr_t const * udp = (fd_udp_hdr_t const *)( (ulong)ip4 + FD_IP4_GET_LEN( *ip4 ) );
 
-  if( FD_UNLIKELY( (ulong)udp+sizeof(fd_udp_hdr_t) > (ulong)eth+data_sz ) ) 
+  if( FD_UNLIKELY( (ulong)udp+sizeof(fd_udp_hdr_t) > (ulong)eth+data_sz ) )
     FD_LOG_ERR(( "Malformed UDP header" ));
   ulong udp_sz = fd_ushort_bswap( udp->net_len );
-  if( FD_UNLIKELY( udp_sz<sizeof(fd_udp_hdr_t) ) ) 
+  if( FD_UNLIKELY( udp_sz<sizeof(fd_udp_hdr_t) ) )
     FD_LOG_ERR(( "Malformed UDP header" ));
   ulong payload_sz_ = udp_sz-sizeof(fd_udp_hdr_t);
-  if( FD_UNLIKELY( (ulong)payload+payload_sz_>(ulong)eth+data_sz ) ) 
+  if( FD_UNLIKELY( (ulong)payload+payload_sz_>(ulong)eth+data_sz ) )
     FD_LOG_ERR(( "Malformed UDP payload" ));
 
   *payload     = (uchar *)( (ulong)udp + sizeof(fd_udp_hdr_t) );
@@ -256,10 +256,10 @@ fd_gossip_rx( fd_gossip_t * gossip,
   ulong         gossip_payload_sz;
   fd_ip4_port_t peer_address[1];
 
-  int error = strip_network_hdrs( data, 
-                                  data_sz, 
+  int error = strip_network_hdrs( data,
+                                  data_sz,
                                   &gossip_payload,
-                                  &gossip_payload_sz, 
+                                  &gossip_payload_sz,
                                   peer_address );
   if( FD_UNLIKELY( error ) ) return error;
 
@@ -328,12 +328,12 @@ tx_ping( fd_gossip_t * gossip,
   uchar const * peer_pubkey;
   uchar const * ping_token;
   fd_ip4_port_t const * peer_address;
-  while( fd_ping_tracker_pop_request( gossip->ping_tracker, 
-                                      now, 
+  while( fd_ping_tracker_pop_request( gossip->ping_tracker,
+                                      now,
                                       &peer_pubkey,
                                       &peer_address,
                                       &ping_token ) ) {
-    
+
     /* Construct and send ping message */
     uchar payload[ 1232UL ];
     ulong i = fd_gossip_init_msg_payload( payload, 1232UL, FD_GOSSIP_MESSAGE_PING );

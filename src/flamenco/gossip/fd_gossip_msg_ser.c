@@ -12,7 +12,7 @@
   if( FD_UNLIKELY( !(cond) ) ) {        \
     return 0;                           \
   }                                     \
-} while( 0 ) 
+} while( 0 )
 
 #define CHECK_LEFT( n ) CHECK( (n)<=(_payload_sz-i) )
 

@@ -59,11 +59,11 @@ fd_gossip_msg_ping_pong_parse( fd_gossip_message_t * msg,
   /* metadata */
   fd_memcpy( msg->pubkey, piong->from, 32UL );
   fd_memcpy( msg->signature, piong->signature, 64UL );
-  
+
   msg->has_non_crds_signable_data    = 1;
   msg->signable_data_offset = 32UL;
   msg->signable_sz          = 32UL;
-  
+
   return i;
 }
 
@@ -74,7 +74,7 @@ fd_gossip_pull_req_parse( fd_gossip_message_t * msg,
   CHECK_INIT( payload, payload_sz );
   fd_gossip_pull_request_t * pull_request = msg->pull_request;
 
-  /* Parse filter 
+  /* Parse filter
      FIXME: can we avoid memcpy and just pass offsets here? */
   fd_gossip_crds_filter_t * filter = pull_request->filter;
   /* parse bloom */
@@ -95,7 +95,7 @@ fd_gossip_pull_req_parse( fd_gossip_message_t * msg,
 
   CHECK_LEFT( 8UL                 ); filter->mask       = FD_LOAD( ulong, payload+i );         i+=8UL;
   CHECK_LEFT( 4UL                 ); filter->mask_bits  = FD_LOAD( uint, payload+i );          i+=4UL;
-  
+
   /* Parse contact info */
   i+=fd_gossip_msg_crds_arr_parse( msg, payload+i, payload_sz-i, 1UL );
 

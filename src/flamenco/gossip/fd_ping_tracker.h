@@ -87,7 +87,7 @@ fd_ping_tracker_register( fd_ping_tracker_t *   ping_tracker,
 /* fd_ping_tracker_active returns 1 if a peer is actively responding to
    pings at the provided address, and we can send data to them, or zero
    otherwise.
-   
+
    This should be called before sending any kind of gossip data to a
    peer (except ping messages themselves).  This does not send out new
    pings or update the ping tracker. */
@@ -122,8 +122,8 @@ fd_ping_tracker_pop_request( fd_ping_tracker_t *    ping_tracker,
 
 /* fd_ping_tracker_response_hash generates a hash of a ping token, to be
    embedded in a corresponding pong message that is then verified by the ping
-   sender. 
-   
+   sender.
+
    Assumes both token and hash are the starting address of a 32byte region of
    memory */
 void

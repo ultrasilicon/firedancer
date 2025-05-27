@@ -5,9 +5,9 @@
 #include "fd_crds_value.h"
 
 /* Deriving maximum number of CRDS values a message can hold:
-  - Maximum bytes the CRDS array can hold is 
+  - Maximum bytes the CRDS array can hold is
     1232(MTU)-4(msg disc)-32(pubkey)-8(crds len)=1188b
-  - Smallest CRDS value is 64+4+48=116b 
+  - Smallest CRDS value is 64+4+48=116b
     (64b signature + 4b discriminant + 48b slot hashes)
   - So, maximum number of CRDS values is 1188/(64+4+48) ~= 10
   - TODO: We might want to use a more conservative estimate that only includes
@@ -15,7 +15,7 @@
 #define FD_GOSSIP_MSG_MAX_CRDS (10UL)
 
 
-/* Gossip messages encode wallclock in millis, while we 
+/* Gossip messages encode wallclock in millis, while we
    parse them into nanoseconds for internal use. */
 #define FD_NANOSEC_TO_MILLI(_ts_) ((long)(_ts_/1000000))
 #define FD_MILLI_TO_NANOSEC(_ts_) ((long)(_ts_*1000000))
@@ -46,14 +46,14 @@ struct fd_gossip_message {
       - Leave it as is, and just document the structure. This isn't as clean
         but is less work to maintain. */
 
-  /* Signature related metadata, analagous to Agave's Signable trait (at least on the rx side) 
+  /* Signature related metadata, analagous to Agave's Signable trait (at least on the rx side)
      FIXME: Prune does not define signable data as a contiguous region, which is really annoying */
   struct{
     uchar   has_non_crds_signable_data;
 
     /* Should these be offsets in payload instead? */
     uchar   pubkey[32UL];
-    uchar   signature[64UL]; 
+    uchar   signature[64UL];
 
     ulong   signable_data_offset; /* offset to start of signable region in payload */
     ulong   signable_sz;
@@ -68,7 +68,7 @@ struct fd_gossip_message {
   struct {
     ulong offset; /* offset to start of CRDS value in payload */
     ulong sz;     /* size of CRDS value in payload */
-  
+
     fd_gossip_crds_value_t crd_val;
   } crds[ FD_GOSSIP_MSG_MAX_CRDS ];
 
@@ -85,7 +85,7 @@ fd_gossip_msg_parse( fd_gossip_message_t * msg,
                      ulong                 payload_sz );
 
 /* Initializes a payload buffer for a gossip message with tag encoded.
-   Returns offset into the buffer after tag, where the inner message 
+   Returns offset into the buffer after tag, where the inner message
    should begin. */
 ulong
 fd_gossip_init_msg_payload( uchar * payload,

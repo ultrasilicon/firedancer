@@ -100,7 +100,7 @@ gossip_send_fn( void * ctx,
   /* IP Checksum calculation */
   ip4->check = fd_ip4_hdr_check_fast( ip4 );
   /* TODO: ip4 net_id? */
-  
+
   /* Inject payload */
   fd_memcpy( packet + sizeof(fd_ip4_udp_hdrs_t), payload, payload_sz );
 
@@ -110,7 +110,7 @@ gossip_send_fn( void * ctx,
   fd_stem_publish( gossip_ctx->stem, 0UL, 0UL, gossip_ctx->net_out->chunk, packet_sz, sig, tsorig, tspub );
 
 
-  
+
 }
 
 static void
@@ -238,7 +238,7 @@ static void
 unprivileged_init( fd_topo_t *      topo,
                    fd_topo_tile_t * tile ) {
   void * scratch = fd_topo_obj_laddr( topo, tile->tile_obj_id );
-  
+
   FD_SCRATCH_ALLOC_INIT( l, scratch );
   fd_gossip_tile_ctx_t * ctx = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_gossip_tile_ctx_t), sizeof(fd_gossip_tile_ctx_t) );
   void * gossip              = FD_SCRATCH_ALLOC_APPEND( l, fd_gossip_align(),             fd_gossip_footprint( tile->gossip.max_entries ) );
@@ -267,7 +267,7 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->ticks_per_ns   = fd_tempo_tick_per_ns( NULL );
   ctx->last_wallclock = fd_log_wallclock();
   ctx->last_tickcount = fd_tickcount();
-  
+
   ulong sign_in_tile_idx = ULONG_MAX;
   for( ulong i=0UL; i<tile->in_cnt; i++ ) {
     fd_topo_link_t * link = &topo->links[ tile->in_link_id[ i ] ];
@@ -300,14 +300,14 @@ unprivileged_init( fd_topo_t *      topo,
   fd_topo_link_t * sign_out = &topo->links[ tile->out_link_id[ ctx->sign_out->idx ] ];
 
   if( fd_keyguard_client_join( fd_keyguard_client_new( ctx->keyguard_client,
-                                                       sign_out->mcache, 
-                                                       sign_out->dcache, 
+                                                       sign_out->mcache,
+                                                       sign_out->dcache,
                                                        sign_in->mcache,
                                                        sign_in->dcache ) ) ) {
     FD_LOG_ERR(( "failed to join keyguard client" ));
 }
 
-  fd_ip4_udp_hdr_init( ctx->net_out_hdr, 
+  fd_ip4_udp_hdr_init( ctx->net_out_hdr,
                        FD_GOSSIP_MTU,
                        tile->gossip.ip_addr,
                        tile->gossip.listen_port );
