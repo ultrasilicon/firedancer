@@ -127,7 +127,7 @@ fd_ping_tracker_pop_request( fd_ping_tracker_t *    ping_tracker,
    Assumes both token and hash are the starting address of a 32byte region of
    memory */
 void
-fd_ping_tracker_response_hash( uchar const * token,
-                                 uchar *        hash );
+fd_ping_tracker_hash_ping_token( uchar *       hash,
+                                 uchar const * token );
 
 #endif /* HEADER_fd_src_flamenco_gossip_fd_ping_tracker_h */

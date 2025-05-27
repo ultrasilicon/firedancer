@@ -192,21 +192,21 @@ rx_ping( fd_gossip_t *           gossip,
          fd_gossip_ping_pong_t * ping,
          fd_ip4_port_t *         peer_address,
          long now ) {
-  fd_gossip_message_t * message = new_outgoing( gossip );
-
-  message->tag = FD_GOSSIP_MESSAGE_PONG;
-  fd_memcpy( message->piong->from, gossip->identity_pubkey, 32UL );
-  fd_ping_tracker_response_hash( ping->token, message->piong->hash );
-  gossip->sign_fn( gossip->sign_ctx, message->piong->hash, 32UL, message->piong->signature );
-
   fd_ping_tracker_track( gossip->ping_tracker,
                          ping->from,
                          0UL, /* FIXME: Get stake */
                          peer_address,
                          now );
+
+  /* Construct and send the pong response */
   uchar payload[ 1232UL ];
-  ulong payload_sz = fd_gossip_msg_serialize( message, payload, 1232UL );
-  gossip->send_fn( gossip->send_ctx, payload, payload_sz, peer_address );
+  ulong i = fd_gossip_init_msg_payload( payload, 1232UL, FD_GOSSIP_MESSAGE_PONG );
+
+  fd_memcpy( payload+i, gossip->identity_pubkey, 32UL )               ; i+=32UL     ; /* Pubkey */
+  fd_ping_tracker_hash_ping_token( payload+i, ping->token )           ; i+=32UL     ; /* Hash  */
+  gossip->sign_fn( gossip->sign_ctx, payload+i, 32UL, payload+i+32UL ); i+=32UL+64UL; /* Signature (performed on hash) */
+
+  gossip->send_fn( gossip->send_ctx, payload, i, peer_address );
   return FD_GOSSIP_RX_OK;
 }
 
@@ -339,15 +339,16 @@ tx_ping( fd_gossip_t * gossip,
                                       &peer_pubkey,
                                       &peer_address,
                                       &ping_token ) ) {
-    fd_gossip_message_t * message = new_outgoing( gossip );
-    message->tag = FD_GOSSIP_MESSAGE_PING;
-    fd_memcpy( message->piong->from, gossip->identity_pubkey, 32UL );
-    fd_memcpy( message->piong->token, ping_token, 32UL );
-    gossip->sign_fn( gossip->sign_ctx, message->piong->token, 32UL, message->pong->signature );
-
+    
+    /* Construct and send ping message */
     uchar payload[ 1232UL ];
-    ulong payload_sz = fd_gossip_msg_serialize( message, payload, 1232UL );
-    gossip->send_fn( gossip->send_ctx, payload, payload_sz, peer_address );
+    ulong i = fd_gossip_init_msg_payload( payload, 1232UL, FD_GOSSIP_MESSAGE_PING );
+
+    fd_memcpy( payload+i, gossip->identity_pubkey, 32UL )               ; i+=32UL     ; /* Pubkey */
+    fd_memcpy( payload+i, ping_token, 32UL )                            ;             ; /* Ping token */
+    gossip->sign_fn( gossip->sign_ctx, payload+i, 32UL, payload+i+32UL ); i+=32UL+64UL; /* Signature (on token) */
+
+    gossip->send_fn( gossip->send_ctx, payload, i, peer_address );
   }
 }
 
