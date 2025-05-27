@@ -40,8 +40,8 @@ verify_signatures( fd_gossip_message_t const *  message,
   for( ulong i=0UL; i<message->crds_cnt; i++ ) {
     err = fd_ed25519_verify( payload + message->crds[i].offset+64UL,
                              message->crds[i].sz-64UL,
-                             message->crds[i].signature,
-                             message->pubkey,
+                             message->crds[i].crd_val.signature,
+                             message->crds[i].crd_val.key.pubkey,
                              sha );
 
     /* Full message must be dropped if any one value fails verify */
