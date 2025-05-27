@@ -31,8 +31,8 @@
 
 static ulong
 fd_gossip_msg_ping_pong_parse( fd_gossip_message_t * msg,
-                          uchar const *         payload,
-                          ulong                 payload_sz ) {
+                               uchar const *         payload,
+                               ulong                 payload_sz ) {
   CHECK_INIT( payload, payload_sz );
   fd_gossip_ping_pong_t * piong = msg->piong;
   CHECK_LEFT( 32UL                ); memcpy( piong->from,      payload+i, 32UL ); i+=32UL; /* Pubkey */
@@ -43,11 +43,49 @@ fd_gossip_msg_ping_pong_parse( fd_gossip_message_t * msg,
   fd_memcpy( msg->pubkey, piong->from, 32UL );
   fd_memcpy( msg->signature, piong->signature, 64UL );
   
-  msg->has_signable_data    = 1;
+  msg->has_non_crds_signable_data    = 1;
   msg->signable_data_offset = 32UL;
   msg->signable_sz          = 32UL;
   
   return i;
+}
+
+static ulong
+fd_gossip_pull_req_parse( fd_gossip_message_t * msg,
+                          uchar const *         payload,
+                          ulong                 payload_sz ) {
+  CHECK_INIT( payload, payload_sz );
+  fd_gossip_pull_request_t * pull_request = msg->pull_request;
+
+  /* Parse filter 
+     FIXME: can we avoid memcpy and just pass offsets here? */
+  fd_gossip_crds_filter_t * filter = pull_request->filter;
+  /* parse bloom */
+  fd_gossip_bloom_t * bloom = filter->bloom;
+  CHECK_LEFT( 8UL                 ); bloom->keys_len = FD_LOAD( ulong, payload+i );            i+=8UL;
+  CHECK_LEFT( bloom->keys_len*8UL ); fd_memcpy( bloom->keys, payload+i, bloom->keys_len*8UL ); i+=bloom->keys_len*8UL;
+
+  uchar has_bits = 0;
+  CHECK_LEFT( 1UL                 ); has_bits = FD_LOAD( uchar, payload+i );                   i++;
+  if( has_bits ) {
+    CHECK_LEFT( 8UL                 ); bloom->bits_len = FD_LOAD( ulong, payload+i );            i+=8UL;
+    CHECK_LEFT( bloom->bits_len*8UL ); fd_memcpy( bloom->bits, payload+i, bloom->bits_len*8UL ); i+=bloom->bits_len*8UL;
+    CHECK_LEFT( 8UL                 ); /* bits_len (TODO: check this vs bitvec len above?) */;   i+=8UL;
+  } else {
+    bloom->bits_len = 0UL;
+  }
+  CHECK_LEFT( 8UL                 ); bloom->num_bits_set = FD_LOAD( ulong, payload+i );        i+=8UL;
+
+  CHECK_LEFT( 8UL                 ); filter->mask       = FD_LOAD( ulong, payload+i );         i+=8UL;
+  CHECK_LEFT( 4UL                 ); filter->mask_bits  = FD_LOAD( uint, payload+i );          i+=4UL;
+  
+  /* Parse contact info */
+  /* TODO: call parse_crds with crds_cnt = 1 */
+
+  msg->has_non_crds_signable_data = 0; /* Signable data in contact info */
+
+
+
 }
 
 ulong

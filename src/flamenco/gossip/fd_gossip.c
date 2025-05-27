@@ -26,7 +26,7 @@ verify_signatures( fd_gossip_message_t const *  message,
   int err = 0;
   /* Optimize for CRDS composites (push/pull) that don't have an outer signable
      data */
-  if( FD_UNLIKELY( message->has_signable_data ) ) {
+  if( FD_UNLIKELY( message->has_non_crds_signable_data ) ) {
     /* TODO: Special case for prune */
     err = fd_ed25519_verify( payload+message->signable_data_offset,
                              message->signable_sz,

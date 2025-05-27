@@ -53,7 +53,7 @@ struct fd_gossip_message {
   /* Signature related metadata, analagous to Agave's Signable trait (at least on the rx side) 
      FIXME: Prune does not define signable data as a contiguous region, which is really annoying */
   struct{
-    uchar   has_signable_data; /* 0 for CRDS composite type */
+    uchar   has_non_crds_signable_data;
 
     /* Should these be offsets in payload instead? */
     uchar   pubkey[32UL];
