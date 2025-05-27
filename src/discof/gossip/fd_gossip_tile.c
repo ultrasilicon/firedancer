@@ -3,6 +3,7 @@
 #include "generated/fd_gossip_tile_seccomp.h"
 
 #include "../../flamenco/gossip/fd_gossip.h"
+#include "../../flamenco/gossip/fd_gossip_private.h"
 #include "../../disco/keyguard/fd_keyswitch.h"
 #include "../../disco/keyguard/fd_keyload.h"
 #include "../../disco/keyguard/fd_keyguard_client.h"
@@ -50,6 +51,9 @@ struct fd_gossip_tile_ctx {
 
   fd_keyguard_client_t keyguard_client[ 1 ];
   fd_keyswitch_t *     keyswitch;
+
+  fd_ip4_udp_hdrs_t net_out_hdr[ 1 ]; /* Used to construct outgoing network packets */
+  fd_stem_context_t * stem; /* This is ugly! */
 };
 
 typedef struct fd_gossip_tile_ctx fd_gossip_tile_ctx_t;
@@ -65,6 +69,57 @@ scratch_footprint( fd_topo_tile_t const * tile ) {
   l = FD_LAYOUT_APPEND( l, alignof(fd_gossip_tile_ctx_t), sizeof(fd_gossip_tile_ctx_t) );
   l = FD_LAYOUT_APPEND( l, fd_gossip_align(),             fd_gossip_footprint( tile->gossip.max_entries ) );
   return FD_LAYOUT_FINI( l, scratch_align() );
+}
+
+static void
+gossip_send_fn( void * ctx,
+                uchar const *         payload,
+                ulong                 payload_sz,
+                fd_ip4_port_t const * peer_address,
+                ulong                 tsorig ) {
+  fd_gossip_tile_ctx_t * gossip_ctx = (fd_gossip_tile_ctx_t *)ctx;
+
+  ulong packet_sz = payload_sz + sizeof(fd_ip4_udp_hdrs_t);
+  gossip_ctx->net_out->chunk = fd_dcache_compact_next( gossip_ctx->net_out->chunk, packet_sz, gossip_ctx->net_out->chunk0, gossip_ctx->net_out->wmark );
+
+  uchar * packet          = (uchar *)fd_chunk_to_laddr( gossip_ctx->net_out->mem, gossip_ctx->net_out->chunk );
+  fd_ip4_udp_hdrs_t * hdr = (fd_ip4_udp_hdrs_t *)packet;
+  *hdr = *gossip_ctx->net_out_hdr;
+
+  fd_ip4_hdr_t * ip4 = hdr->ip4;
+  fd_udp_hdr_t * udp = hdr->udp;
+
+  /* Update payload size in headers */
+  ip4->net_tot_len = fd_ushort_bswap( (ushort)(packet_sz + sizeof(fd_ip4_hdr_t) + sizeof(fd_udp_hdr_t)) );
+  udp->net_len     = fd_ushort_bswap( (ushort)(payload_sz + sizeof(fd_udp_hdr_t)) );
+
+  /* Fill in destination info */
+  ip4->daddr     = peer_address->addr;
+  udp->net_dport =  peer_address->port;
+
+  /* IP Checksum calculation */
+  ip4->check = fd_ip4_hdr_check_fast( ip4 );
+  /* TODO: ip4 net_id? */
+  
+  /* Inject payload */
+  fd_memcpy( packet + sizeof(fd_ip4_udp_hdrs_t), payload, payload_sz );
+
+  /* Publish fragment */
+  ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
+  ulong sig   = fd_disco_netmux_sig( peer_address->addr, peer_address->port, peer_address->addr, DST_PROTO_OUTGOING, sizeof(fd_ip4_udp_hdrs_t) );
+  fd_stem_publish( gossip_ctx->stem, 0UL, 0UL, gossip_ctx->net_out->chunk, packet_sz, sig, tsorig, tspub );
+
+
+  
+}
+
+static void
+gossip_sign_fn( void * ctx,
+                uchar const * data,
+                ulong sz,
+                uchar * signature ) {
+  fd_gossip_tile_ctx_t * gossip_ctx = (fd_gossip_tile_ctx_t *)ctx;
+  fd_keyguard_client_sign( gossip_ctx->keyguard_client, data, sz, signature );
 }
 
 static inline void
@@ -125,12 +180,13 @@ after_frag( fd_gossip_tile_ctx_t * ctx,
             ulong                  sz,
             ulong                  tsorig FD_PARAM_UNUSED,
             ulong                  tspub  FD_PARAM_UNUSED,
-            fd_stem_context_t *    stem   FD_PARAM_UNUSED ) {
+            fd_stem_context_t *    stem ) {
   if( FD_UNLIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET ) ) {
     long now = ctx->last_wallclock + (long)((double)(fd_tickcount()-ctx->last_tickcount)/ctx->ticks_per_ns);
 
     fd_gossip_advance( ctx->gossip, now );
     fd_gossip_rx( ctx->gossip, ctx->buffer, sz, now );
+    ctx->stem = stem;
   } else if( FD_UNLIKELY( ctx->in_kind[ in_idx ]==IN_KIND_SHRED_VERSION ) ) {
     FD_MGAUGE_SET( GOSSIP, SHRED_VERSION, (ushort)sig );
     fd_gossip_set_expected_shred_version( ctx->gossip, 1, (ushort)sig );
@@ -250,6 +306,11 @@ unprivileged_init( fd_topo_t *      topo,
                                                        sign_in->dcache ) ) ) {
     FD_LOG_ERR(( "failed to join keyguard client" ));
 }
+
+  fd_ip4_udp_hdr_init( ctx->net_out_hdr, 
+                       FD_GOSSIP_MTU,
+                       tile->gossip.ip_addr,
+                       tile->gossip.listen_port );
 
   ulong scratch_top = FD_SCRATCH_ALLOC_FINI( l, 1UL );
   if( FD_UNLIKELY( scratch_top > (ulong)scratch + scratch_footprint( tile ) ) )

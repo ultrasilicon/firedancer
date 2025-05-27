@@ -190,7 +190,8 @@ rx_prune( fd_gossip_t *             gossip,
 static int
 rx_ping( fd_gossip_t *           gossip,
          fd_gossip_ping_pong_t * ping,
-         fd_ip4_port_t *         peer_address ) {
+         fd_ip4_port_t *         peer_address,
+         long                    now ) {
   /* Construct and send the pong response */
   uchar payload[ 1232UL ];
   ulong i = fd_gossip_init_msg_payload( payload, 1232UL, FD_GOSSIP_MESSAGE_PONG );
@@ -199,7 +200,7 @@ rx_ping( fd_gossip_t *           gossip,
   fd_ping_tracker_hash_ping_token( payload+i, ping->token )           ; i+=32UL     ; /* Hash  */
   gossip->sign_fn( gossip->sign_ctx, payload+i, 32UL, payload+i+32UL ); i+=32UL+64UL; /* Signature (performed on hash) */
 
-  gossip->send_fn( gossip->send_ctx, payload, i, peer_address );
+  gossip->send_fn( gossip->send_ctx, payload, i, peer_address, (ulong)now );
   return FD_GOSSIP_RX_OK;
 }
 
@@ -295,7 +296,7 @@ fd_gossip_rx( fd_gossip_t * gossip,
       error = rx_prune( gossip, message->prune, now );
       break;
     case FD_GOSSIP_MESSAGE_PING:
-      error = rx_ping( gossip, message->piong, peer_address );
+      error = rx_ping( gossip, message->piong, peer_address, now );
       break;
     case FD_GOSSIP_MESSAGE_PONG:
       error = rx_pong( gossip, message->piong, peer_address, now );
@@ -341,7 +342,7 @@ tx_ping( fd_gossip_t * gossip,
     fd_memcpy( payload+i, ping_token, 32UL )                            ;             ; /* Ping token */
     gossip->sign_fn( gossip->sign_ctx, payload+i, 32UL, payload+i+32UL ); i+=32UL+64UL; /* Signature (on token) */
 
-    gossip->send_fn( gossip->send_ctx, payload, i, peer_address );
+    gossip->send_fn( gossip->send_ctx, payload, i, peer_address, (ulong)now );
   }
 }
 

@@ -11,7 +11,8 @@
 typedef void (*fd_gossip_send_fn)( void *                 ctx,
                                    uchar const *          data,
                                    ulong                  sz,
-                                   fd_ip4_port_t const *  peer_address );
+                                   fd_ip4_port_t const *  peer_address,
+                                   ulong                  now );
 typedef void (*fd_gossip_sign_fn)( void *         ctx,
                                    uchar const *  data,
                                    ulong          sz,
