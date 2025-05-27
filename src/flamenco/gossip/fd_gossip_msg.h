@@ -15,6 +15,12 @@
 #define FD_GOSSIP_MSG_MAX_CRDS (10UL)
 
 
+/* Gossip messages encode wallclock in millis, while we 
+   parse them into nanoseconds for internal use. */
+#define FD_NANOSEC_TO_MILLI(_ts_) ((long)(_ts_/1000000))
+#define FD_MILLI_TO_NANOSEC(_ts_) ((long)(_ts_*1000000))
+
+
 
 struct fd_gossip_message {
   uchar tag; // uint in rust bincode

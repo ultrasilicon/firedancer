@@ -169,7 +169,7 @@ static int
 rx_prune( fd_gossip_t *             gossip,
           fd_gossip_prune_t const * prune,
           long                      now ) {
-  if( FD_UNLIKELY( now-500L*1000L*1000L>(long)prune->wallclock ) ) return FD_GOSSIP_RX_PRUNE_ERR_STALE;
+  if( FD_UNLIKELY( now-FD_MILLI_TO_NANOSEC(500L)>(long)prune->wallclock_nanos ) ) return FD_GOSSIP_RX_PRUNE_ERR_STALE;
   else if( FD_UNLIKELY( !!memcmp( gossip->identity_pubkey, prune->destination, 32UL ) ) ) return FD_GOSSIP_RX_PRUNE_ERR_DESTINATION;
 
   ulong identity_stake = 0UL; /* FIXME */
@@ -190,14 +190,7 @@ rx_prune( fd_gossip_t *             gossip,
 static int
 rx_ping( fd_gossip_t *           gossip,
          fd_gossip_ping_pong_t * ping,
-         fd_ip4_port_t *         peer_address,
-         long now ) {
-  fd_ping_tracker_track( gossip->ping_tracker,
-                         ping->from,
-                         0UL, /* FIXME: Get stake */
-                         peer_address,
-                         now );
-
+         fd_ip4_port_t *         peer_address ) {
   /* Construct and send the pong response */
   uchar payload[ 1232UL ];
   ulong i = fd_gossip_init_msg_payload( payload, 1232UL, FD_GOSSIP_MESSAGE_PONG );
@@ -302,7 +295,7 @@ fd_gossip_rx( fd_gossip_t * gossip,
       error = rx_prune( gossip, message->prune, now );
       break;
     case FD_GOSSIP_MESSAGE_PING:
-      error = rx_ping( gossip, message->piong, peer_address, now );
+      error = rx_ping( gossip, message->piong, peer_address );
       break;
     case FD_GOSSIP_MESSAGE_PONG:
       error = rx_pong( gossip, message->piong, peer_address, now );

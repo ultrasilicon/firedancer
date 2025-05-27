@@ -34,7 +34,7 @@ struct fd_crds_key {
 };
 typedef struct fd_crds_key fd_crds_key_t;
 
-struct fd_gossip_contact_info {
+struct fd_gossip_crds_contact_info {
   long   instance_creation_wallclock_nanos;
   ushort shred_version;
 
@@ -58,15 +58,15 @@ struct fd_gossip_contact_info {
   } sockets[ 13UL ];
 };
 
-typedef struct fd_gossip_contact_info fd_gossip_contact_info_t;
+typedef struct fd_gossip_crds_contact_info fd_gossip_crds_contact_info_t;
 
-struct fd_gossip_vote {
+struct fd_gossip_crds_vote {
   ulong slot;
   uchar vote_tower_index;
   uchar txn[ 1232UL ];
 };
 
-typedef struct fd_gossip_vote fd_gossip_vote_t;
+typedef struct fd_gossip_crds_vote fd_gossip_crds_vote_t;
 
 struct fd_gossip_crds_value {
 
@@ -74,8 +74,8 @@ struct fd_gossip_crds_value {
   long wallclock_nanos;
   uchar signature[64UL]; // signable data is always offset + sizeof(signature); signable_sz = sz - sizeof(signature)
   union {
-    fd_gossip_contact_info_t contact_info;
-    fd_gossip_vote_t         vote;
+    fd_gossip_crds_contact_info_t contact_info;
+    fd_gossip_crds_vote_t         vote;
   };
 };
 typedef struct fd_gossip_crds_value fd_gossip_crds_value_t;

@@ -93,7 +93,7 @@ struct fd_gossip_message_prune {
   uchar prunes[ 33UL ][ 32UL ];
   uchar signature[ 64UL ];
   uchar destination[ 32UL ];
-  ulong wallclock;
+  long  wallclock_nanos; /* needs to be converted when parsed from a gossip message */
 
 };
 typedef struct fd_gossip_message_prune fd_gossip_prune_t;

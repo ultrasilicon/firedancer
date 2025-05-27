@@ -130,6 +130,8 @@ fd_gossip_set_identity( fd_gossip_t * gossip,
       periodically rotated, with one new peer entering and one old peer
       leaving, based on stake weights.
 
+   now is the current time in nanoseconds.
+
    Only actions which are necessary and useful will be performed, and
    the function is idempotent and fast otherwise.  advance should be
    called as often as possible. */
@@ -142,6 +144,10 @@ fd_gossip_advance( fd_gossip_t * gossip,
    from the network.  It is expected that the packet is a UDP packet but
    otherwise no assumptions are made about the contents of the packet,
    in particular it might be malformed, corrupted, malicious, and so on.
+
+   now is the current time in nanoseconds, and is used to determine
+   whether the packet is stale or not, and to update the internal state
+   of the gossip protocol.
 
    Receiving a packet might cause response packets to need to be sent
    back to the gossip network.  The response packets are queued for
