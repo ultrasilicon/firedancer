@@ -14,17 +14,7 @@
     the size of the signature and discriminant. */
 #define FD_GOSSIP_MSG_MAX_CRDS (10UL)
 
-/* FIXME: This should be imported from fd_crds instead. */
-struct fd_crds_key {
-  uchar tag;
-  uchar pubkey[ 32UL ];
-  union {
-    uchar  vote_index;
-    uchar  epoch_slots_index;
-    ushort duplicate_shred_index;
-  };
-};
-typedef struct fd_crds_key fd_crds_key_t;
+
 
 struct fd_gossip_message {
   uchar tag; // uint in rust bincode
@@ -73,16 +63,7 @@ struct fd_gossip_message {
     ulong offset; /* offset to start of CRDS value in payload */
     ulong sz;     /* size of CRDS value in payload */
   
-    fd_crds_key_t key;
-
-
-    uchar signature[64UL]; // signable data is always offset + sizeof(signature); signable_sz = sz - sizeof(signature)
-    long wallclock_nanos;
-
-    union {
-      fd_gossip_contact_info_t contact_info;
-      fd_gossip_vote_t         vote;
-    };
+    fd_gossip_crds_value_t crd_val;
   } crds[ FD_GOSSIP_MSG_MAX_CRDS ];
 
 };
@@ -97,9 +78,11 @@ fd_gossip_msg_parse( fd_gossip_message_t * msg,
                      uchar const *         payload,
                      ulong                 payload_sz );
 
+/* Initializes a payload buffer for a gossip message with tag encoded.
+   Returns offset into the buffer after tag, where the inner message 
+   should begin. */
 ulong
-fd_gossip_msg_serialize( fd_gossip_message_t const * msg,
-                         uchar *                  payload,
-                         ulong                    payload_sz );
-
+fd_gossip_init_msg_payload( uchar * payload,
+                            ulong   payload_sz,
+                            uchar   tag );
 #endif /* HEADER_fd_src_flamenco_gossip_fd_gossip_msg_h */

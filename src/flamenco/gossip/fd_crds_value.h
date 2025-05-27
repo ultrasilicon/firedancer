@@ -23,6 +23,17 @@
 #define FD_GOSSIP_CLIENT_FD     (2)
 #define FD_GOSSIP_CLIENT_AGAVE  (3)
 
+struct fd_crds_key {
+  uchar tag;
+  uchar pubkey[ 32UL ];
+  union {
+    uchar  vote_index;
+    uchar  epoch_slots_index;
+    ushort duplicate_shred_index;
+  };
+};
+typedef struct fd_crds_key fd_crds_key_t;
+
 struct fd_gossip_contact_info {
   long   instance_creation_wallclock_nanos;
   ushort shred_version;
@@ -58,8 +69,14 @@ struct fd_gossip_vote {
 typedef struct fd_gossip_vote fd_gossip_vote_t;
 
 struct fd_gossip_crds_value {
-  uchar                 signature[ 64UL ];
-  // fd_gossip_crds_data_t data[  ];
+
+  fd_crds_key_t key;
+  long wallclock_nanos;
+  uchar signature[64UL]; // signable data is always offset + sizeof(signature); signable_sz = sz - sizeof(signature)
+  union {
+    fd_gossip_contact_info_t contact_info;
+    fd_gossip_vote_t         vote;
+  };
 };
 typedef struct fd_gossip_crds_value fd_gossip_crds_value_t;
 

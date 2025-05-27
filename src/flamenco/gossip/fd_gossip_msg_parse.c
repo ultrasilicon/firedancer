@@ -29,6 +29,23 @@
 //     (out_sz)   = _out_sz;                                                   \
 //   } while( 0 )
 
+FD_FN_UNUSED
+static ulong
+fd_gossip_msg_crds_arr_parse( fd_gossip_message_t * msg,
+                              uchar const *         payload,
+                              ulong                 payload_sz,
+                              ulong                 crds_cnt ) {
+  /* TODO */
+  msg->crds_cnt = crds_cnt;
+  if( FD_UNLIKELY( crds_cnt>FD_GOSSIP_MSG_MAX_CRDS ) ) {
+    FD_LOG_ERR(( "Too many CRDS values in message: %lu. Possibly need to recompute FD_GOSSIP_MSG_MAX_CRDS", crds_cnt ));
+  }
+
+
+  (void)payload;
+  return payload_sz;
+}
+
 static ulong
 fd_gossip_msg_ping_pong_parse( fd_gossip_message_t * msg,
                                uchar const *         payload,
@@ -80,12 +97,11 @@ fd_gossip_pull_req_parse( fd_gossip_message_t * msg,
   CHECK_LEFT( 4UL                 ); filter->mask_bits  = FD_LOAD( uint, payload+i );          i+=4UL;
   
   /* Parse contact info */
-  /* TODO: call parse_crds with crds_cnt = 1 */
+  i+=fd_gossip_msg_crds_arr_parse( msg, payload+i, payload_sz-i, 1UL );
 
   msg->has_non_crds_signable_data = 0; /* Signable data in contact info */
 
-
-
+  return i;
 }
 
 ulong

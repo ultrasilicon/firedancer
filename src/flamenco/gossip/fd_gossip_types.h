@@ -12,7 +12,7 @@
 #define FD_GOSSIP_MESSAGE_PONG          (5)
 
 /* Gossip message tag can never exceed this. */
-#define FD_GOSSIP_MESSAGE_LAST          (5)
+#define FD_GOSSIP_MESSAGE_LAST          (FD_GOSSIP_MESSAGE_PONG)
 
 #define FD_GOSSIP_VALUE_VOTE                          ( 1)
 #define FD_GOSSIP_VALUE_LOWEST_SLOT                   ( 2)
@@ -48,7 +48,7 @@ typedef struct fd_gossip_crds_data fd_gossip_crds_data_t;
 
 struct fd_gossip_pull_request {
   fd_gossip_crds_filter_t filter[ 1 ];
-  fd_gossip_crds_value_t  value[ 1 ];
+  // fd_gossip_crds_value_t  value[ 1 ];
 };
 
 typedef struct fd_gossip_pull_request fd_gossip_pull_request_t;
