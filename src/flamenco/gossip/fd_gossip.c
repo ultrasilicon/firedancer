@@ -119,26 +119,26 @@ static int
 verify_signatures( fd_gossip_message_t const *  message,
                    uchar const *                payload,
                    fd_sha512_t *                sha ) {
-  int err = 0;
+
   /* Optimize for CRDS composites (push/pull) that don't have an outer signable
      data */
-  if( FD_UNLIKELY( message->has_non_crds_signable_data ) ) {
+  if( FD_UNLIKELY( message->signable_sz != 0 ) ) {
     /* TODO: Special case for prune */
-    err = fd_ed25519_verify( payload+message->signable_data_offset,
-                             message->signable_sz,
-                             message->signature,
-                             message->pubkey,
-                             sha );
+    int err = fd_ed25519_verify( payload+message->signable_data_offset,
+                                 message->signable_sz,
+                                 message->signature,
+                                 message->pubkey,
+                                 sha );
+    if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err;
   }
-  if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err;
 
   /* Verify CRDS entries */
   for( ulong i=0UL; i<message->crds_cnt; i++ ) {
-    err = fd_ed25519_verify( payload + message->crds[i].offset+64UL,
-                             message->crds[i].sz-64UL,
-                             message->crds[i].crd_val.signature,
-                             message->crds[i].crd_val.key.pubkey,
-                             sha );
+    int err = fd_ed25519_verify( payload + message->crds[i].offset+64UL,
+                                 message->crds[i].sz-64UL,
+                                 message->crds[i].crd_val.signature,
+                                 message->crds[i].crd_val.key->pubkey,
+                                 sha );
 
     /* Full message must be dropped if any one value fails verify */
     if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err;

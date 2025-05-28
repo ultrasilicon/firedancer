@@ -47,6 +47,7 @@ struct fd_crds_key {
     ushort duplicate_shred_index;
   };
 };
+
 typedef struct fd_crds_key fd_crds_key_t;
 
 struct fd_gossip_crds_contact_info {
@@ -77,7 +78,6 @@ typedef struct fd_gossip_crds_contact_info fd_gossip_crds_contact_info_t;
 
 struct fd_gossip_crds_vote {
   ulong   slot;
-  uchar   vote_tower_index;
   uchar * txn; /* TODO: avoid pointers here */
   ulong   txn_sz;
 };
