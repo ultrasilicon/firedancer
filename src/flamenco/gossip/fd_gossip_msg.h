@@ -69,7 +69,7 @@ struct fd_gossip_message {
     ulong offset; /* offset to start of CRDS value in payload */
     ulong sz;     /* size of CRDS value in payload */
 
-    fd_gossip_crds_value_t crd_val;
+    fd_crds_value_t crd_val;
   } crds[ FD_GOSSIP_MSG_MAX_CRDS ];
 
 };

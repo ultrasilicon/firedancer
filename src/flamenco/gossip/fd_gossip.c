@@ -72,7 +72,7 @@ fd_gossip_new( void *                shmem,
 
   fd_ping_tracker_new( ping_tracker, rng );
 
-  fd_sha512_new( gossip->sha512 );
+  fd_sha512_init( gossip->sha512 );
   gossip->send_fn          = send_fn;
   gossip->send_ctx         = send_ctx;
   gossip->sign_fn          = sign_fn;
@@ -543,7 +543,7 @@ tx_pull_request( fd_gossip_t * gossip,
 
   for( ulong i=0UL; i<gossip->failed_inserts_len; i++ ) {
     /* TODO: Make the failed insert list also a bplus, for fast finding of matching hashes? */
-    fd_gossip_crds_value_t * value = gossip->failed_inserts[ (gossip->failed_inserts_idx+i) % gossip->failed_inserts_len ];
+    fd_crds_value_t * value = gossip->failed_inserts[ (gossip->failed_inserts_idx+i) % gossip->failed_inserts_len ];
     uchar const * hash = fd_crds_value_hash( value );
     if( FD_LIKELY( (fd_ulong_load_8( hash )>>shift)!=mask ) ) continue;
     fd_bloom_insert( filter, hash, 32UL );
