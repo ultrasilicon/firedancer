@@ -108,9 +108,6 @@ gossip_send_fn( void *                ctx,
   ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
   ulong sig   = fd_disco_netmux_sig( peer_address->addr, peer_address->port, peer_address->addr, DST_PROTO_OUTGOING, sizeof(fd_ip4_udp_hdrs_t) );
   fd_stem_publish( gossip_ctx->stem, 0UL, 0UL, gossip_ctx->net_out->chunk, packet_sz, sig, tsorig, tspub );
-
-
-
 }
 
 static void
@@ -315,7 +312,7 @@ unprivileged_init( fd_topo_t *      topo,
   fd_ip4_udp_hdr_init( ctx->net_out_hdr,
                        FD_GOSSIP_MTU,
                        tile->gossip.ip_addr,
-                       tile->gossip.listen_port );
+                       tile->gossip.ports.gossip );
 
   ulong scratch_top = FD_SCRATCH_ALLOC_FINI( l, 1UL );
   if( FD_UNLIKELY( scratch_top > (ulong)scratch + scratch_footprint( tile ) ) )

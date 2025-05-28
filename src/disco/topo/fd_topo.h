@@ -175,7 +175,6 @@ typedef struct {
       fd_ip4_port_t entrypoints[ 16UL ];
 
       uint   ip_addr;
-      ushort listen_port;
       int    has_expected_shred_version;
       ushort expected_shred_version;
 
