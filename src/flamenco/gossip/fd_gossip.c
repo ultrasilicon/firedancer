@@ -1,7 +1,6 @@
 #include "fd_gossip.h"
 #include "fd_gossip_types.h"
 #include "fd_gossip_msg.h"
-#include "fd_gossip_private.h"
 
 #include "fd_crds.h"
 #include "fd_active_set.h"
@@ -9,6 +8,103 @@
 #include "fd_ping_tracker.h"
 #include "../../ballet/ed25519/fd_ed25519.h"
 #include "../../ballet/sha256/fd_sha256.h"
+
+struct fd_gossip_private {
+  uchar               identity_pubkey[ 32UL ];
+
+  fd_gossip_metrics_t metrics[1];
+
+  // fd_crds_t *         crds;
+  // fd_active_set_t *   active_set;
+  fd_ping_tracker_t * ping_tracker;
+
+  fd_sha512_t         sha512[1];
+
+  /* Callbacks */
+  fd_gossip_sign_fn sign_fn;
+  void *            sign_ctx;
+
+  fd_gossip_send_fn send_fn;
+  void *            send_ctx;
+};
+
+ulong
+fd_gossip_align( void ) {
+  return fd_ping_tracker_align();
+}
+
+ulong
+fd_gossip_footprint( ulong max_values ) {
+  (void) max_values;
+  ulong l;
+  l = FD_LAYOUT_INIT;
+  l = FD_LAYOUT_APPEND( l, alignof(fd_gossip_t), sizeof(fd_gossip_t) );
+  // l = FD_LAYOUT_APPEND( l, fd_crds_align(), fd_crds_footprint( max_values ) );
+  // l = FD_LAYOUT_APPEND( l, fd_active_set_align(), fd_active_set_footprint() );
+  l = FD_LAYOUT_APPEND( l, fd_ping_tracker_align(), fd_ping_tracker_footprint() );
+  l = FD_LAYOUT_FINI( l, fd_gossip_align() );
+  return l;
+}
+
+void *
+fd_gossip_new( void *                shmem,
+               fd_rng_t *            rng,
+               ulong                 max_values,
+               int                   has_expected_shred_version,
+               ushort                expected_shred_version,
+               ulong                 entrypoints_cnt,
+               fd_ip4_port_t const * entrypoints,
+               uchar const *         identity_pubkey,
+               fd_gossip_send_fn     send_fn,
+               void *                send_ctx,
+               fd_gossip_sign_fn     sign_fn,
+               void *                sign_ctx ) {
+  if( FD_UNLIKELY( !shmem ) ) {
+    FD_LOG_ERR(( "NULL shmem" ));
+  }
+  if( FD_UNLIKELY( !fd_ulong_is_aligned( (ulong)shmem, fd_gossip_align() ) ) ) {
+    FD_LOG_ERR(( "misaligned shmem" ));
+  }
+
+  FD_SCRATCH_ALLOC_INIT( l, shmem );
+  fd_gossip_t * gossip = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_gossip_t), sizeof(fd_gossip_t) );
+  void * ping_tracker  = FD_SCRATCH_ALLOC_APPEND( l, fd_ping_tracker_align(), fd_ping_tracker_footprint() );
+
+  fd_ping_tracker_new( ping_tracker, rng );
+
+  fd_sha512_new( gossip->sha512 );
+  gossip->send_fn          = send_fn;
+  gossip->send_ctx         = send_ctx;
+  gossip->sign_fn          = sign_fn;
+  gossip->sign_ctx         = sign_ctx;
+
+
+  fd_gossip_set_expected_shred_version( gossip, has_expected_shred_version, expected_shred_version );
+  fd_gossip_set_identity( gossip, identity_pubkey );
+
+
+
+  return gossip;
+}
+
+fd_gossip_t *
+fd_gossip_join( void * shgossip ) {
+  if( FD_UNLIKELY( !shgossip ) ) {
+    FD_LOG_ERR(( "NULL shgossip" ));
+  }
+  if( FD_UNLIKELY( !fd_ulong_is_aligned( (ulong)shgossip, fd_gossip_align() ) ) ) {
+    FD_LOG_ERR(( "misaligned shgossip" ));
+  }
+
+  FD_SCRATCH_ALLOC_INIT( l, shgossip );
+  fd_gossip_t * gossip = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_gossip_t), sizeof(fd_gossip_t) );
+  void * ping_tracker  = FD_SCRATCH_ALLOC_APPEND( l, fd_ping_tracker_align(), fd_ping_tracker_footprint() );
+
+  gossip->ping_tracker = fd_ping_tracker_join( ping_tracker );
+  /* No need to join fd_sha512? */
+
+  return gossip;
+}
 
 static int
 parse_message( uchar const *         data,
@@ -50,13 +146,6 @@ verify_signatures( fd_gossip_message_t const *  message,
 
   return FD_GOSSIP_RX_OK;
 }
-
-static fd_gossip_message_t *
-new_outgoing( fd_gossip_t * gossip ) {
-  fd_gossip_msg_init( gossip->outgoing );
-  return gossip->outgoing;
-}
-
 
 // static int
 // rx_pull_request( fd_gossip_t *                    gossip,

@@ -3,10 +3,10 @@
 #include "generated/fd_gossip_tile_seccomp.h"
 
 #include "../../flamenco/gossip/fd_gossip.h"
-#include "../../flamenco/gossip/fd_gossip_private.h"
 #include "../../disco/keyguard/fd_keyswitch.h"
 #include "../../disco/keyguard/fd_keyload.h"
 #include "../../disco/keyguard/fd_keyguard_client.h"
+#include "../../disco/keyguard/fd_keyguard.h"
 
 #include <sys/random.h>
 
@@ -72,7 +72,7 @@ scratch_footprint( fd_topo_tile_t const * tile ) {
 }
 
 static void
-gossip_send_fn( void * ctx,
+gossip_send_fn( void *                ctx,
                 uchar const *         payload,
                 ulong                 payload_sz,
                 fd_ip4_port_t const * peer_address,
@@ -114,12 +114,12 @@ gossip_send_fn( void * ctx,
 }
 
 static void
-gossip_sign_fn( void * ctx,
+gossip_sign_fn( void *        ctx,
                 uchar const * data,
-                ulong sz,
-                uchar * signature ) {
+                ulong         sz,
+                uchar *       signature ) {
   fd_gossip_tile_ctx_t * gossip_ctx = (fd_gossip_tile_ctx_t *)ctx;
-  fd_keyguard_client_sign( gossip_ctx->keyguard_client, data, sz, signature );
+  fd_keyguard_client_sign( gossip_ctx->keyguard_client, signature, data, sz, FD_KEYGUARD_SIGN_TYPE_ED25519 );
 }
 
 static inline void
@@ -252,7 +252,12 @@ unprivileged_init( fd_topo_t *      topo,
                                                tile->gossip.expected_shred_version,
                                                tile->gossip.entrypoints_cnt,
                                                tile->gossip.entrypoints,
-                                               ctx->identity_key->uc ) );
+                                               ctx->identity_key->uc,
+
+                                               gossip_send_fn,
+                                               (void*)ctx,
+                                               gossip_sign_fn,
+                                               (void*)ctx ) );
   FD_TEST( ctx->gossip );
 
   FD_MGAUGE_SET( GOSSIP, SHRED_VERSION, tile->gossip.expected_shred_version );

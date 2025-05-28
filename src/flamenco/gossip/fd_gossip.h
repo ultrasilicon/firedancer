@@ -73,6 +73,16 @@ struct fd_gossip_metrics {
 
 typedef struct fd_gossip_metrics fd_gossip_metrics_t;
 
+typedef void (*fd_gossip_send_fn)( void *                 ctx,
+                                   uchar const *          data,
+                                   ulong                  sz,
+                                   fd_ip4_port_t const *  peer_address,
+                                   ulong                  now );
+typedef void (*fd_gossip_sign_fn)( void *         ctx,
+                                   uchar const *  data,
+                                   ulong          sz,
+                                   uchar *        signature );
+
 FD_PROTOTYPES_BEGIN
 
 FD_FN_CONST ulong
@@ -89,7 +99,11 @@ fd_gossip_new( void *                shmem,
                ushort                expected_shred_version,
                ulong                 entrypoints_cnt,
                fd_ip4_port_t const * entrypoints,
-               uchar const *         identity_pubkey );
+               uchar const *         identity_pubkey,
+               fd_gossip_send_fn     send_fn,
+               void *                send_ctx,
+               fd_gossip_sign_fn     sign_fn,
+               void *                sign_ctx );
 
 fd_gossip_t *
 fd_gossip_join( void * shgossip );
