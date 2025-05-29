@@ -42,6 +42,29 @@ class GeyserClient {
       }
     }
 
+    void testPing() {
+      // Data we are sending to the server.
+      ::geyser::PingRequest request;
+      request.set_count(1234);
+
+      // Container for the data we expect from the server.
+      ::geyser::PongResponse reply;
+
+      // Context for the client. It could be used to convey extra information to
+      // the server and/or tweak certain RPC behaviors.
+      ClientContext context;
+
+      // The actual RPC.
+      Status status = stub_->Ping(&context, request, &reply);
+
+      // Act upon its status.
+      if (status.ok()) {
+        std::cout << "pong=" << reply.count() << std::endl;
+      } else {
+        std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+      }
+    }
+
   private:
     std::unique_ptr<geyser::Geyser::Stub> stub_;
 };
@@ -55,7 +78,9 @@ int main(int argc, char** argv) {
   // We indicate that the channel isn't authenticated (use of
   // InsecureChannelCredentials()).
   GeyserClient geyser(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
+
   geyser.testGetVersion();
+  geyser.testPing();
 
   return 0;
 }

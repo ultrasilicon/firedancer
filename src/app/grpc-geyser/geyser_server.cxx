@@ -40,6 +40,7 @@ class GeyserServiceImpl final : public geyser::Geyser::Service {
     }
 
     virtual ::grpc::Status Ping(::grpc::ServerContext* context, const ::geyser::PingRequest* request, ::geyser::PongResponse* response) override {
+      response->set_count( request->count() );
       return Status::OK;
     }
 
