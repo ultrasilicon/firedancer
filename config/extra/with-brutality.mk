@@ -1,6 +1,8 @@
 CPPFLAGS+=              \
+  -Werror               \
   -Wall                 \
   -Wextra               \
+  -Wpedantic            \
   -Wstrict-aliasing=2   \
   -Wconversion          \
   -Wdouble-promotion    \
