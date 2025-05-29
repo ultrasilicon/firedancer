@@ -15,6 +15,14 @@ typedef struct fd_crds_mask_iter_private fd_crds_mask_iter_t;
 
 FD_PROTOTYPES_BEGIN
 
+/* Returns the timestamp when the node received the CRDS value associated
+   with table entry `entry`.
+
+   To get the wallclock attached by the originator of the CRDS value,
+   use fd_crds_value_wallclock( entry->value ) instead. */
+long
+fd_crds_entry_wallclock( fd_crds_entry_t const * entry );
+
 FD_FN_CONST ulong
 fd_crds_align( void );
 

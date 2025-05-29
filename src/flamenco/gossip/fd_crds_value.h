@@ -124,11 +124,22 @@ struct fd_crds_value {
 typedef struct fd_crds_value fd_crds_value_t;
 
 FD_PROTOTYPES_BEGIN
+
+/* Returns the wallclock attached by the originator of the CRDS value. */
 long
-fd_crds_value_wallclock( fd_crds_value_t const * value );
+fd_crds_value_wallclock( fd_crds_value_t const * value ){
+  return value->wallclock_nanos;
+}
 
 uchar const *
-fd_crds_value_pubkey( fd_crds_value_t const * value );
+fd_crds_value_pubkey( fd_crds_value_t const * value ){
+  return value->key->pubkey;
+}
+
+uchar
+fd_crds_value_tag( fd_crds_value_t const * value ){
+  return value->key->tag;
+}
 
 uchar const *
 fd_crds_value_hash( fd_crds_value_t const * value );

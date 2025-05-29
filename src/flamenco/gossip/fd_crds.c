@@ -80,6 +80,11 @@ struct fd_crds_entry_private {
   } hash;
 };
 
+long
+fd_crds_entry_wallclock( fd_crds_entry_t const * entry ){
+  return entry->expire.wallclock_nanos;
+}
+
 #define POOL_NAME   crds_pool
 #define POOL_T      fd_crds_entry_t
 #define POOL_NEXT   pool_next
@@ -396,31 +401,33 @@ fd_crds_release( fd_crds_t *       crds,
 }
 
 static inline int
-overrides( fd_crds_entry_t const * value,
-           fd_crds_entry_t const * candidate ) {
-  long val_wc = fd_crds_value_wallclock( value->value );
-  long cand_wc = fd_crds_value_wallclock( candidate->value );
-  switch( value->value->key->tag ) { /* FIXME: gross */
+overrides( fd_crds_entry_t const * value_entry,
+           fd_crds_entry_t const * candidate_entry ) {
+  long val_wc  = fd_crds_value_wallclock( value_entry->value );
+  long cand_wc = fd_crds_value_wallclock( candidate_entry->value );
+  long val_ci_onset  = value_entry->value->contact_info.instance_creation_wallclock_nanos;
+  long cand_ci_onset = candidate_entry->value->contact_info.instance_creation_wallclock_nanos;
+
+  switch( fd_crds_value_tag( value_entry->value ) ) {
     case FD_CRDS_TAG_CONTACT_INFO:
-      if( FD_UNLIKELY( candidate->value->contact_info.instance_creation_wallclock_nanos>value->value->contact_info.instance_creation_wallclock_nanos ) ) return 1;
-      else if( FD_UNLIKELY( candidate->value->contact_info.instance_creation_wallclock_nanos<value->value->contact_info.instance_creation_wallclock_nanos ) ) return 0;
+      if( FD_UNLIKELY( cand_ci_onset>val_ci_onset ) ) return 1;
+      else if( FD_UNLIKELY( cand_ci_onset<val_ci_onset ) ) return 0;
       else if( FD_UNLIKELY( cand_wc>val_wc ) ) return 1;
       else if( FD_UNLIKELY( cand_wc<val_wc ) ) return 0;
       break;
     case FD_CRDS_TAG_NODE_INSTANCE:
-
-      if( FD_LIKELY( candidate->value->node_instance.token==value->value->node_instance.token ) ) break;
-      else if( FD_LIKELY( memcmp( candidate->value->node_instance.from, value->value->node_instance.from, 32UL ) ) ) break;
+      if( FD_LIKELY( candidate_entry->value->node_instance.token==value_entry->value->node_instance.token ) ) break;
+      else if( FD_LIKELY( memcmp( candidate_entry->value->node_instance.from, value_entry->value->node_instance.from, 32UL ) ) ) break;
       else if( FD_UNLIKELY( cand_wc>val_wc ) ) return 1;
       else if( FD_UNLIKELY( cand_wc<val_wc ) ) return 0;
-      else return !!(candidate->value->node_instance.token<value->value->node_instance.token);
+      else return !!(candidate_entry->value->node_instance.token<value_entry->value->node_instance.token);
     default:
       break;
   }
 
   if( FD_UNLIKELY( cand_wc>val_wc ) ) return 1;
   else if( FD_UNLIKELY( cand_wc<val_wc ) ) return 0;
-  else return !!candidate->hash.hash<value->hash.hash;
+  else return !!candidate_entry->hash.hash<value_entry->hash.hash;
 }
 
 int
@@ -462,6 +469,7 @@ fd_crds_insert( fd_crds_t *       crds,
 
       return replace->num_duplicates++;
     }
+    replace->num_duplicates = 0;
 
     insert_purged( crds, fd_crds_value_hash( replace->value ), fd_crds_value_wallclock( replace->value ) );
 
@@ -486,6 +494,7 @@ fd_crds_insert( fd_crds_t *       crds,
   }
   hash_treap_ele_insert( crds->hash_treap, value, crds->pool );
   lookup_map_ele_insert( crds->lookup_map, value, crds->pool );
+  return 0;
 }
 
 struct fd_crds_mask_iter_private {
