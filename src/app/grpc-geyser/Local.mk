@@ -18,3 +18,5 @@ LDFLAGS += $(PKG)/lib64/libutf8_validity.a
 LDFLAGS += -pthread -ldl -lsystemd
 
 $(call make-bin,fd_grpc_geyser,geyser_server geyser.grpc.pb geyser.pb solana-storage.pb,fd_discof fd_disco fd_flamenco fd_reedsol fd_funk fd_tango fd_choreo fd_waltz fd_ballet fd_util,$(SECP256K1_LIBS))
+
+$(call make-unit-test,test_geyser_client,test_geyser_client geyser.grpc.pb geyser.pb solana-storage.pb,fd_discof fd_disco fd_flamenco fd_reedsol fd_funk fd_tango fd_choreo fd_waltz fd_ballet fd_util,$(SECP256K1_LIBS))
