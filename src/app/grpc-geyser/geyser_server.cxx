@@ -13,6 +13,8 @@
 
 #include "geyser.grpc.pb.h"
 
+#include "../firedancer/version.h"
+
 using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
@@ -22,6 +24,45 @@ ABSL_FLAG(uint16_t, port, 8123, "Server port for the service");
 
 // Logic and data behind the server's behavior.
 class GeyserServiceImpl final : public geyser::Geyser::Service {
+  public:
+    GeyserServiceImpl() {
+    }
+
+    virtual ~GeyserServiceImpl() override {
+    }
+
+    virtual ::grpc::Status Subscribe(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::geyser::SubscribeUpdate, ::geyser::SubscribeRequest>* stream) override {
+      return Status::OK;
+    }
+
+    virtual ::grpc::Status SubscribeReplayInfo(::grpc::ServerContext* context, const ::geyser::SubscribeReplayInfoRequest* request, ::geyser::SubscribeReplayInfoResponse* response) override {
+      return Status::OK;
+    }
+
+    virtual ::grpc::Status Ping(::grpc::ServerContext* context, const ::geyser::PingRequest* request, ::geyser::PongResponse* response) override {
+      return Status::OK;
+    }
+
+    virtual ::grpc::Status GetLatestBlockhash(::grpc::ServerContext* context, const ::geyser::GetLatestBlockhashRequest* request, ::geyser::GetLatestBlockhashResponse* response) override {
+      return Status::OK;
+    }
+
+    virtual ::grpc::Status GetBlockHeight(::grpc::ServerContext* context, const ::geyser::GetBlockHeightRequest* request, ::geyser::GetBlockHeightResponse* response) override {
+      return Status::OK;
+    }
+
+    virtual ::grpc::Status GetSlot(::grpc::ServerContext* context, const ::geyser::GetSlotRequest* request, ::geyser::GetSlotResponse* response) override {
+      return Status::OK;
+    }
+
+    virtual ::grpc::Status IsBlockhashValid(::grpc::ServerContext* context, const ::geyser::IsBlockhashValidRequest* request, ::geyser::IsBlockhashValidResponse* response) override {
+      return Status::OK;
+    }
+
+    virtual ::grpc::Status GetVersion(::grpc::ServerContext* context, const ::geyser::GetVersionRequest* request, ::geyser::GetVersionResponse* response) override {
+      response->set_version(FIREDANCER_VERSION);
+      return Status::OK;
+    }
 };
 
 void RunServer(uint16_t port) {
