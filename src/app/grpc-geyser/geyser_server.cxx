@@ -5,6 +5,8 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <stdio.h>
+#include <pthread.h>
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
@@ -24,8 +26,8 @@ using grpc::ServerContext;
 using grpc::Status;
 
 ABSL_FLAG(uint16_t, port, 8123, "Server port for the service");
-ABSL_FLAG(std::string, funk_file, NULL, "Funk database file");
-ABSL_FLAG(std::string, blockstore_wksp, "fd1_bstore.wksp", "Blockstore workspace");
+ABSL_FLAG(std::string, funk_file, "/data/asiegel/testnet.funk", "Funk database file");
+ABSL_FLAG(std::string, blockstore_wksp, "fd1_blockstore.wksp", "Blockstore workspace");
 ABSL_FLAG(std::string, notify_wksp, "fd1_replay_notif.wksp", "Notification link workspace");
 ABSL_FLAG(int, max_block_idx, 65536, "Max number of blocks which can be indexed");
 ABSL_FLAG(int, max_txn_idx, 1048576, "Max number of transactions which can be indexed");
@@ -97,6 +99,13 @@ void RunServer(uint16_t port) {
   server->Wait();
 }
 
+void*
+fd_thread_fun(void* arg) {
+  geys_fd_loop_args_t * loop_args = (geys_fd_loop_args_t *)arg;
+  geys_fd_loop( loop_args );
+  return NULL;
+}
+
 int main(int argc, char** argv) {
   fd_boot( &argc, &argv );
 
@@ -111,6 +120,13 @@ int main(int argc, char** argv) {
   strncpy(loop_args.funk_file, absl::GetFlag(FLAGS_funk_file).c_str(), PATH_MAX-1);
   strncpy(loop_args.blockstore_wksp, absl::GetFlag(FLAGS_blockstore_wksp).c_str(), 32-1);
   strncpy(loop_args.notify_wksp, absl::GetFlag(FLAGS_notify_wksp).c_str(), 32-1);
+
+  pthread_t tid;
+  int result = pthread_create(&tid, NULL, fd_thread_fun, &loop_args);
+  if( result != 0 ) {
+    perror("pthread_create failed");
+    return 1;
+  }
 
   RunServer(absl::GetFlag(FLAGS_port));
 
