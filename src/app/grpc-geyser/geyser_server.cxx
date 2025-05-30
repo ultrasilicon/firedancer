@@ -14,6 +14,7 @@
 #include "geyser.grpc.pb.h"
 
 #include "../firedancer/version.h"
+#include "../../util/fd_util.h"
 
 using grpc::Server;
 using grpc::ServerBuilder;
@@ -88,8 +89,10 @@ void RunServer(uint16_t port) {
 }
 
 int main(int argc, char** argv) {
+  fd_boot( &argc, &argv );
   absl::ParseCommandLine(argc, argv);
   absl::InitializeLog();
   RunServer(absl::GetFlag(FLAGS_port));
+  fd_halt();
   return 0;
 }
