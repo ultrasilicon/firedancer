@@ -435,8 +435,9 @@ after_credit( fd_restart_tile_ctx_t * ctx,
       }
     }
 
-    fd_vote_accounts_t const * epoch_stakes[ FD_RESTART_EPOCHS_MAX ] = { &ctx->epoch_bank.stakes.vote_accounts,
-                                                                         &ctx->epoch_bank.next_epoch_stakes };
+    // fd_vote_accounts_t const * epoch_stakes[ FD_RESTART_EPOCHS_MAX ] = { &ctx->epoch_bank.stakes.vote_accounts,
+    //                                                                      &ctx->epoch_bank.next_epoch_stakes };
+    fd_vote_accounts_t const * epoch_stakes[ FD_RESTART_EPOCHS_MAX ] = { NULL, NULL };
 
     ulong buf_len = 0;
     uchar * buf   = fd_chunk_to_laddr( ctx->gossip_out_mem, ctx->gossip_out_chunk );

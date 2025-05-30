@@ -1092,8 +1092,7 @@
       "type": "struct",
       "archival": "true",
       "fields": [
-        { "name": "stakes",                "type": "stakes" },
-        { "name": "next_epoch_stakes",     "type": "vote_accounts"}
+        { "name": "stakes", "type": "stakes" }
       ]
     },
     {

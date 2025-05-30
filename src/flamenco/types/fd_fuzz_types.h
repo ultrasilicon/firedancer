@@ -1635,7 +1635,6 @@ void *fd_epoch_bank_generate( void *mem, void **alloc_mem, fd_rng_t * rng ) {
   *alloc_mem = (uchar *) *alloc_mem + sizeof(fd_epoch_bank_t);
   fd_epoch_bank_new(mem);
   fd_stakes_generate( &self->stakes, alloc_mem, rng );
-  fd_vote_accounts_generate( &self->next_epoch_stakes, alloc_mem, rng );
   return mem;
 }
 

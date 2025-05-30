@@ -153,7 +153,8 @@ if( FD_UNLIKELY( !bank_mgr ) ) {                                                
   X(fd_hash_t,                         prev_bank_hash,              35UL, 32UL,        8UL   ) \
   X(fd_hash_t,                         genesis_hash,                36UL, 32UL,        8UL   ) \
   X(fd_epoch_schedule_t,               epoch_schedule,              37UL, 40UL,        8UL   ) \
-  X(fd_rent_t,                         rent,                        38UL, 24UL,        8UL   )
+  X(fd_rent_t,                         rent,                        38UL, 24UL,        8UL   ) \
+  X(fd_vote_accounts_global_t,         next_epoch_stakes,           39UL, 100000000UL, 1024UL)
 FD_BANK_MGR_ITER(BANK_MGR_FUNCTIONS)
 
 FD_PROTOTYPES_END

@@ -276,23 +276,6 @@ compute_stake_delegations_tpool_task( void  *tpool,
   compute_stake_delegations( temp_info, task_args, worker_idx, m0, m1 );
 }
 
-/* helper to deserialize a cached vote account */
-fd_vote_state_versioned_t *
-deserialize_vote_account( fd_vote_accounts_pair_t_mapnode_t * elem,
-                          fd_spad_t *                         runtime_spad ) {
-  int err;
-  fd_vote_state_versioned_t * vote_state = fd_bincode_decode_spad( vote_state_versioned,
-                                                                   runtime_spad,
-                                                                   elem->elem.value.data,
-                                                                   elem->elem.value.data_len,
-                                                                   &err );
-   if( FD_UNLIKELY( err ) ) {
-    return NULL;
-   } else {
-    return vote_state;
-   }
-}
-
 /* Populates vote accounts with updated delegated stake from the next cached epoch stakes into temp_info */
 void
 fd_populate_vote_accounts( fd_exec_slot_ctx_t *       slot_ctx,
@@ -376,12 +359,34 @@ fd_populate_vote_accounts( fd_exec_slot_ctx_t *       slot_ctx,
      This is just a workaround for now.
      https://github.com/anza-xyz/agave/blob/v2.2.14/runtime/src/bank/partitioned_epoch_rewards/calculation.rs#L309 */
   ulong total_epoch_stake = 0UL;
-  for( fd_vote_accounts_pair_t_mapnode_t * elem = fd_vote_accounts_pair_t_map_minimum( epoch_bank->next_epoch_stakes.vote_accounts_pool, epoch_bank->next_epoch_stakes.vote_accounts_root );
+
+  fd_vote_accounts_global_t * next_epoch_stakes = fd_bank_mgr_next_epoch_stakes_query( slot_ctx->bank_mgr );
+  fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_pool = fd_vote_accounts_vote_accounts_pool_join( next_epoch_stakes );
+  fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_root = fd_vote_accounts_vote_accounts_root_join( next_epoch_stakes );
+
+  FD_LOG_WARNING(("SIZE %lu", fd_vote_accounts_pair_global_t_map_size( next_epoch_stakes_pool, next_epoch_stakes_root )));
+
+  for( fd_vote_accounts_pair_global_t_mapnode_t * elem = fd_vote_accounts_pair_global_t_map_minimum( next_epoch_stakes_pool, next_epoch_stakes_root );
        elem;
-       elem = fd_vote_accounts_pair_t_map_successor( epoch_bank->next_epoch_stakes.vote_accounts_pool, elem ) ) {
-    fd_pubkey_t const *         vote_account_pubkey = &elem->elem.key;
-    fd_vote_state_versioned_t * vote_state          = deserialize_vote_account( elem,
-                                                                                runtime_spad );
+       elem = fd_vote_accounts_pair_global_t_map_successor( next_epoch_stakes_pool, elem ) ) {
+    fd_pubkey_t const * vote_account_pubkey = &elem->elem.key;
+    FD_TXN_ACCOUNT_DECL( acc );
+    int rc = fd_txn_account_init_from_funk_readonly( acc, vote_account_pubkey, slot_ctx->funk, slot_ctx->funk_txn );
+    FD_TEST( rc == 0 );
+    ulong   data_len = elem->elem.value.data_len;
+    uchar * data   = (uchar *)next_epoch_stakes_pool + elem->elem.value.data_offset;
+
+    //FD_LOG_HEXDUMP_WARNING(("ASDF", data, data_len));
+
+    int err;
+    fd_vote_state_versioned_t * vote_state = fd_bincode_decode_spad( vote_state_versioned,
+                                                                     runtime_spad,
+                                                                     data,
+                                                                     data_len,
+                                                                     &err );
+    //FD_LOG_WARNING(("BR"));
+    //FD_TEST( err == 0 );
+
     if( FD_LIKELY( vote_state ) ) {
       total_epoch_stake += elem->elem.stake;
       // Insert into the temporary vote states cache
@@ -393,6 +398,8 @@ fd_populate_vote_accounts( fd_exec_slot_ctx_t *       slot_ctx,
       FD_LOG_WARNING(( "Failed to deserialize vote account" ));
     }
   }
+
+  FD_LOG_WARNING(("TOTAL EPOCH STAKE %lu", total_epoch_stake));
 
   ulong * total_epoch_stake_bm = fd_bank_mgr_total_epoch_stake_modify( slot_ctx->bank_mgr );
   FD_STORE( ulong, total_epoch_stake_bm, total_epoch_stake );

@@ -190,12 +190,12 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
                                             test_ctx->epoch_ctx.vote_accounts_t_count,
                                             runner->spad );
 
-  /* Update vote cache for epoch T-1 */
-  fd_runtime_fuzz_block_update_votes_cache( epoch_bank->next_epoch_stakes.vote_accounts_pool,
-                                            &epoch_bank->next_epoch_stakes.vote_accounts_root,
-                                            test_ctx->epoch_ctx.vote_accounts_t_1,
-                                            test_ctx->epoch_ctx.vote_accounts_t_1_count,
-                                            runner->spad );
+  // /* Update vote cache for epoch T-1 */
+  // fd_runtime_fuzz_block_update_votes_cache( epoch_bank->next_epoch_stakes.vote_accounts_pool,
+  //                                           &epoch_bank->next_epoch_stakes.vote_accounts_root,
+  //                                           test_ctx->epoch_ctx.vote_accounts_t_1,
+  //                                           test_ctx->epoch_ctx.vote_accounts_t_1_count,
+  //                                           runner->spad );
 
   /* Update vote cache for epoch T-2 */
   uchar * pool_mem                           = fd_spad_alloc( runner->spad,

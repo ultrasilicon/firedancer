@@ -1550,7 +1550,6 @@ typedef struct fd_cluster_version fd_cluster_version_t;
 /* Encoded Size: Dynamic */
 struct fd_epoch_bank {
   fd_stakes_t stakes;
-  fd_vote_accounts_t next_epoch_stakes;
 };
 typedef struct fd_epoch_bank fd_epoch_bank_t;
 #define FD_EPOCH_BANK_ALIGN alignof(fd_epoch_bank_t)

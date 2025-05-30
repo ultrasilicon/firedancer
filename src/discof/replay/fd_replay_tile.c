@@ -349,7 +349,6 @@ static void
 publish_stake_weights( fd_replay_tile_ctx_t * ctx,
                        fd_stem_context_t *    stem,
                        fd_exec_slot_ctx_t *   slot_ctx ) {
-  fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
   fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
   if( slot_ctx->slot_bank.epoch_stakes.vote_accounts_root!=NULL ) {
     ulong *             stake_weights_msg = fd_chunk_to_laddr( ctx->stake_weights_out->mem,
@@ -362,7 +361,10 @@ publish_stake_weights( fd_replay_tile_ctx_t * ctx,
     FD_LOG_NOTICE(("sending current epoch stake weights - epoch: %lu, stake_weight_cnt: %lu, start_slot: %lu, slot_cnt: %lu", stake_weights_msg[0], stake_weights_msg[1], stake_weights_msg[2], stake_weights_msg[3]));
   }
 
-  if( epoch_bank->next_epoch_stakes.vote_accounts_root!=NULL ) {
+  fd_vote_accounts_global_t * next_epoch_stakes = fd_bank_mgr_next_epoch_stakes_query( slot_ctx->bank_mgr );
+  fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_root = fd_vote_accounts_vote_accounts_root_join( next_epoch_stakes );
+
+  if( next_epoch_stakes_root!=NULL ) {
     ulong * stake_weights_msg = fd_chunk_to_laddr( ctx->stake_weights_out->mem, ctx->stake_weights_out->chunk );
     ulong   epoch             = fd_slot_to_leader_schedule_epoch( epoch_schedule,
                                                                   slot_ctx->slot ); /* epoch */

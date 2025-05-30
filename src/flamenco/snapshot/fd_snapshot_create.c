@@ -695,7 +695,7 @@ fd_snapshot_create_populate_bank( fd_snapshot_ctx_t *   snapshot_ctx,
   relevant_epoch_stakes[0].key                        = bank->epoch;
   relevant_epoch_stakes[0].value.stakes.vote_accounts = slot_bank->epoch_stakes;
   relevant_epoch_stakes[1].key                        = bank->epoch+1UL;
-  relevant_epoch_stakes[1].value.stakes.vote_accounts = epoch_bank->next_epoch_stakes;
+  // relevant_epoch_stakes[1].value.stakes.vote_accounts = epoch_bank->next_epoch_stakes;
 
   bank->epoch_stakes_len = 2UL;
   bank->epoch_stakes     = relevant_epoch_stakes;
