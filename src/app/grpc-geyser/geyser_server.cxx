@@ -13,8 +13,10 @@
 
 #include "geyser.grpc.pb.h"
 
-#include "../firedancer/version.h"
+extern "C" {
 #include "../../util/fd_util.h"
+#include "geys_fd_loop.h"
+}
 
 using grpc::Server;
 using grpc::ServerBuilder;
@@ -22,6 +24,13 @@ using grpc::ServerContext;
 using grpc::Status;
 
 ABSL_FLAG(uint16_t, port, 8123, "Server port for the service");
+ABSL_FLAG(std::string, funk_file, NULL, "Funk database file");
+ABSL_FLAG(std::string, blockstore_wksp, "fd1_bstore.wksp", "Blockstore workspace");
+ABSL_FLAG(std::string, notify_wksp, "fd1_replay_notif.wksp", "Notification link workspace");
+ABSL_FLAG(int, max_block_idx, 65536, "Max number of blocks which can be indexed");
+ABSL_FLAG(int, max_txn_idx, 1048576, "Max number of transactions which can be indexed");
+ABSL_FLAG(int, max_acct_idx, 1048576, "Max number of accounts which can be indexed");
+ABSL_FLAG(std::string, history_file, "geyser_history", "Storage for geyser history");
 
 // Logic and data behind the server's behavior.
 class GeyserServiceImpl final : public geyser::Geyser::Service {
@@ -90,9 +99,21 @@ void RunServer(uint16_t port) {
 
 int main(int argc, char** argv) {
   fd_boot( &argc, &argv );
+
   absl::ParseCommandLine(argc, argv);
   absl::InitializeLog();
+
+  geys_fd_loop_args_t loop_args;
+  loop_args.history.block_index_max = absl::GetFlag(FLAGS_max_block_idx);
+  loop_args.history.txn_index_max = absl::GetFlag(FLAGS_max_txn_idx);
+  loop_args.history.acct_index_max = absl::GetFlag(FLAGS_max_acct_idx);
+  strncpy(loop_args.history.history_file, absl::GetFlag(FLAGS_history_file).c_str(), PATH_MAX);
+  strncpy(loop_args.funk_file, absl::GetFlag(FLAGS_funk_file).c_str(), PATH_MAX);
+  strncpy(loop_args.blockstore_wksp, absl::GetFlag(FLAGS_blockstore_wksp).c_str(), 32);
+  strncpy(loop_args.notify_wksp, absl::GetFlag(FLAGS_notify_wksp).c_str(), 32);
+
   RunServer(absl::GetFlag(FLAGS_port));
+
   fd_halt();
   return 0;
 }
