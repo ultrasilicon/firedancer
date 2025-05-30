@@ -103,7 +103,8 @@ fd_gossip_new( void *                shmem,
                fd_gossip_send_fn     send_fn,
                void *                send_ctx,
                fd_gossip_sign_fn     sign_fn,
-               void *                sign_ctx );
+               void *                sign_ctx,
+               long                  now );
 
 fd_gossip_t *
 fd_gossip_join( void * shgossip );

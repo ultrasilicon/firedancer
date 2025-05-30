@@ -240,6 +240,10 @@ unprivileged_init( fd_topo_t *      topo,
   fd_gossip_tile_ctx_t * ctx = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_gossip_tile_ctx_t), sizeof(fd_gossip_tile_ctx_t) );
   void * gossip              = FD_SCRATCH_ALLOC_APPEND( l, fd_gossip_align(),             fd_gossip_footprint( tile->gossip.max_entries ) );
 
+  ctx->ticks_per_ns   = fd_tempo_tick_per_ns( NULL );
+  ctx->last_wallclock = fd_log_wallclock();
+  ctx->last_tickcount = fd_tickcount();
+
   fd_rng_t rng[ 1 ];
   FD_TEST( fd_rng_join( fd_rng_new( rng, ctx->rng_seed, ctx->rng_idx ) ) );
   ctx->gossip = fd_gossip_join( fd_gossip_new( gossip,
@@ -254,7 +258,9 @@ unprivileged_init( fd_topo_t *      topo,
                                                gossip_send_fn,
                                                (void*)ctx,
                                                gossip_sign_fn,
-                                               (void*)ctx ) );
+                                               (void*)ctx,
+
+                                               ctx->last_wallclock ) );
   FD_TEST( ctx->gossip );
 
   FD_MGAUGE_SET( GOSSIP, SHRED_VERSION, tile->gossip.expected_shred_version );
@@ -265,10 +271,6 @@ unprivileged_init( fd_topo_t *      topo,
 
   ctx->keyswitch = fd_keyswitch_join( fd_topo_obj_laddr( topo, tile->keyswitch_obj_id ) );
   FD_TEST( ctx->keyswitch );
-
-  ctx->ticks_per_ns   = fd_tempo_tick_per_ns( NULL );
-  ctx->last_wallclock = fd_log_wallclock();
-  ctx->last_tickcount = fd_tickcount();
 
   ulong sign_in_tile_idx = ULONG_MAX;
   for( ulong i=0UL; i<tile->in_cnt; i++ ) {
@@ -307,7 +309,7 @@ unprivileged_init( fd_topo_t *      topo,
                                                        sign_in->mcache,
                                                        sign_in->dcache ) ) ) {
     FD_LOG_ERR(( "failed to join keyguard client" ));
-}
+  }
 
   fd_ip4_udp_hdr_init( ctx->net_out_hdr,
                        FD_GOSSIP_MTU,
