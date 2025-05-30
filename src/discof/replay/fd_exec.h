@@ -56,10 +56,11 @@ generate_replay_exec_epoch_msg( fd_exec_slot_ctx_t * slot_ctx,
                                 fd_runtime_public_epoch_msg_t * epoch_msg_out ) {
 
     fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+    fd_rent_t *           rent           = fd_bank_mgr_rent_query( slot_ctx->bank_mgr );
 
     epoch_msg_out->features            = slot_ctx->epoch_ctx->features;
     epoch_msg_out->epoch_schedule      = *epoch_schedule;
-    epoch_msg_out->rent                = slot_ctx->epoch_ctx->epoch_bank.rent;
+    epoch_msg_out->rent                = *rent;
     epoch_msg_out->bank_hash_cmp_gaddr = fd_wksp_gaddr_fast( runtime_public_wksp,
                                                          fd_bank_hash_cmp_leave( bank_hash_cmp ) );
     if( FD_UNLIKELY( !epoch_msg_out->bank_hash_cmp_gaddr ) ) {

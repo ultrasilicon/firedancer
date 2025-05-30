@@ -1093,7 +1093,6 @@
       "archival": "true",
       "fields": [
         { "name": "stakes",                "type": "stakes" },
-        { "name": "rent",                  "type": "rent" },
         { "name": "next_epoch_stakes",     "type": "vote_accounts"}
       ]
     },

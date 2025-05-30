@@ -408,7 +408,6 @@ fd_sysvar_clock_update( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad 
   fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
 
   ulong             epoch_old  = clock->epoch;
-  fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
   ulong             epoch_new  = fd_slot_to_epoch( epoch_schedule,
                                                    clock->slot,
                                                    NULL );
@@ -447,7 +446,8 @@ fd_sysvar_clock_update( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad 
     return FD_EXECUTOR_INSTR_ERR_CUSTOM_ERR;
   }
 
-  ulong lamps = fd_rent_exempt_minimum_balance( &epoch_bank->rent, sz );
+  fd_rent_t * rent = fd_bank_mgr_rent_query( slot_ctx->bank_mgr );
+  ulong lamps = fd_rent_exempt_minimum_balance( rent, sz );
   if( acc->vt->get_lamports( acc ) < lamps ) {
     acc->vt->set_lamports( acc, lamps );
   }

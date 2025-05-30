@@ -39,9 +39,6 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   assert( epoch_ctx );
   assert( slot_ctx  );
 
-  /* Set up epoch context */
-  fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( epoch_ctx );
-
   /* Set up slot context */
 
   slot_ctx->epoch_ctx    = epoch_ctx;
@@ -133,7 +130,9 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   *epoch_schedule = default_epoch_schedule;
   fd_bank_mgr_epoch_schedule_save( slot_ctx->bank_mgr );
 
-  epoch_bank->rent                = default_rent;
+  fd_rent_t * rent_bm = fd_bank_mgr_rent_modify( slot_ctx->bank_mgr );
+  *rent_bm = default_rent;
+  fd_bank_mgr_rent_save( slot_ctx->bank_mgr );
 
   double * slots_per_year = fd_bank_mgr_slots_per_year_modify( slot_ctx->bank_mgr );
   *slots_per_year = SECONDS_PER_YEAR * (1000000000.0 / (double)6250000) / (double)(*fd_bank_mgr_ticks_per_slot_query( slot_ctx->bank_mgr ));
@@ -149,7 +148,9 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
 
   if( slot_ctx->sysvar_cache->has_rent ) {
     uchar * val_rent = fd_wksp_laddr_fast( runner->wksp, slot_ctx->sysvar_cache->gaddr_rent );
-    epoch_bank->rent = *(fd_rent_t *)fd_type_pun_const( val_rent );
+    fd_rent_t * rent_bm = fd_bank_mgr_rent_modify( slot_ctx->bank_mgr );
+    *rent_bm = *(fd_rent_t *)fd_type_pun_const( val_rent );
+    fd_bank_mgr_rent_save( slot_ctx->bank_mgr );
   }
 
   /* Provide default slot hashes of size 1 if not provided */

@@ -238,11 +238,6 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Index vote accounts */
 
-  /* Copy over fields */
-
-  epoch_bank->rent = oldbank->rent_collector.rent;
-  fd_memcpy( &epoch_bank->rent, &oldbank->rent_collector.rent, sizeof(fd_rent_t) );
-
   /* Block Hash Queue */
 
   fd_block_hash_queue_global_t * bhq = fd_bank_mgr_block_hash_queue_modify( slot_ctx->bank_mgr );
@@ -423,6 +418,12 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
   fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_modify( slot_ctx->bank_mgr );
   *epoch_schedule = oldbank->epoch_schedule;
   fd_bank_mgr_epoch_schedule_save( slot_ctx->bank_mgr );
+
+  /* Rent */
+
+  fd_rent_t * rent = fd_bank_mgr_rent_modify( slot_ctx->bank_mgr );
+  *rent = oldbank->rent_collector.rent;
+  fd_bank_mgr_rent_save( slot_ctx->bank_mgr );
 
   /* Last Restart Slot */
 

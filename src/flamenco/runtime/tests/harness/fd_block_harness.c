@@ -150,7 +150,10 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   fd_bank_mgr_epoch_schedule_save( bank_mgr );
 
   uchar * val_rent = fd_wksp_laddr_fast( runner->wksp, slot_ctx->sysvar_cache->gaddr_rent );
-  fd_memcpy( &epoch_bank->rent, val_rent, sizeof(fd_rent_t) );
+  fd_rent_t * rent_bm = fd_bank_mgr_rent_modify( bank_mgr );
+  *rent_bm = *(fd_rent_t *)fd_type_pun_const( val_rent );
+  fd_bank_mgr_rent_save( bank_mgr );
+
   prev_slot = fd_bank_mgr_prev_slot_query( bank_mgr );
   epoch_bank->stakes.epoch = fd_slot_to_epoch( epoch_schedule, *prev_slot, NULL );
 

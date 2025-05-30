@@ -3464,7 +3464,9 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
   *epoch_schedule = genesis_block->epoch_schedule;
   fd_bank_mgr_epoch_schedule_save( slot_ctx->bank_mgr );
 
-  epoch_bank->rent                    = genesis_block->rent;
+  fd_rent_t * rent_bm = fd_bank_mgr_rent_modify( slot_ctx->bank_mgr );
+  *rent_bm = genesis_block->rent;
+  fd_bank_mgr_rent_save( slot_ctx->bank_mgr );
 
   ulong * block_height = fd_bank_mgr_block_height_modify( slot_ctx->bank_mgr );
   *block_height = 0UL;

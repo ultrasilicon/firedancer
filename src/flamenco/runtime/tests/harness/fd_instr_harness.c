@@ -40,11 +40,6 @@ fd_runtime_fuzz_instr_ctx_create( fd_runtime_fuzz_runner_t *           runner,
 
   ctx->txn_ctx = txn_ctx;
 
-  /* Set up epoch context. Defaults obtained from GenesisConfig::Default() */
-  fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( epoch_ctx );
-  epoch_bank->rent.lamports_per_uint8_year = 3480;
-  epoch_bank->rent.exemption_threshold = 2;
-  epoch_bank->rent.burn_percent = 50;
 
   /* Set up slot context */
 
@@ -67,6 +62,14 @@ fd_runtime_fuzz_instr_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   /* Bank manager */
 
   slot_ctx->bank_mgr = fd_bank_mgr_join( fd_bank_mgr_new( slot_ctx->bank_mgr_mem ), slot_ctx->funk, funk_txn );
+
+  /* Set up epoch context. Defaults obtained from GenesisConfig::Default() */
+
+  fd_rent_t * rent_bm = fd_bank_mgr_rent_modify( slot_ctx->bank_mgr );
+  rent_bm->lamports_per_uint8_year = 3480;
+  rent_bm->exemption_threshold = 2;
+  rent_bm->burn_percent = 50;
+  fd_bank_mgr_rent_save( slot_ctx->bank_mgr );
 
   /* Blockhash queue init */
 
@@ -301,7 +304,9 @@ fd_runtime_fuzz_instr_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   /* Override epoch bank rent setting */
   fd_rent_t const * rent = fd_sysvar_cache_rent( slot_ctx->sysvar_cache, runner->wksp );
   if( rent ) {
-    epoch_bank->rent = *rent;
+    fd_rent_t * rent_bm = fd_bank_mgr_rent_modify( slot_ctx->bank_mgr );
+    *rent_bm = *rent;
+    fd_bank_mgr_rent_save( slot_ctx->bank_mgr );
   }
 
   /* Override most recent blockhash if given */

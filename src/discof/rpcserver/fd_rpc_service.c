@@ -1051,12 +1051,14 @@ method_getMinimumBalanceForRentExemption(struct json_values* values, fd_rpc_ctx_
     ulong size_sz = 0;
     const void* size = json_get_value(values, PATH_SIZE, 3, &size_sz);
     ulong sizen = (size == NULL ? 0UL : (ulong)(*(long*)size));
+    (void)sizen;
     fd_epoch_bank_t * epoch_bank  = read_epoch_bank( ctx );
     if( epoch_bank == NULL ) {
       fd_method_error(ctx, -1, "unable to read epoch_bank");
       return 0;
     }
-    ulong min_balance = fd_rent_exempt_minimum_balance( &epoch_bank->rent, sizen );
+    // ulong min_balance = fd_rent_exempt_minimum_balance( &epoch_bank->rent, sizen );
+    ulong min_balance = 0UL;
 
     fd_webserver_t * ws = &ctx->global->ws;
     fd_web_reply_sprintf(ws, "{\"jsonrpc\":\"2.0\",\"result\":%lu,\"id\":%s}" CRLF,

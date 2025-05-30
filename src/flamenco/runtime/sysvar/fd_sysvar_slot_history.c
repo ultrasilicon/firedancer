@@ -3,7 +3,7 @@
 #include "fd_sysvar_rent.h"
 #include "../fd_executor_err.h"
 #include "../fd_system_ids.h"
-
+#include "../fd_bank_mgr.h"
 /* FIXME These constants should be header defines */
 
 static const ulong slot_history_min_account_size = 131097;
@@ -128,8 +128,8 @@ fd_sysvar_slot_history_update( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtim
     return FD_EXECUTOR_INSTR_ERR_CUSTOM_ERR;
   }
 
-  fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
-  rec->vt->set_lamports( rec, fd_rent_exempt_minimum_balance( &epoch_bank->rent, sz ) );
+  fd_rent_t * rent = fd_bank_mgr_rent_query( slot_ctx->bank_mgr );
+  rec->vt->set_lamports( rec, fd_rent_exempt_minimum_balance( rent, sz ) );
 
   rec->vt->set_data_len( rec, sz );
   rec->vt->set_owner( rec, &fd_sysvar_owner_id );

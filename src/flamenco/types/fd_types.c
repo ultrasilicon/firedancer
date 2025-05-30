@@ -8910,8 +8910,6 @@ int fd_epoch_bank_encode( fd_epoch_bank_t const * self, fd_bincode_encode_ctx_t 
   int err;
   err = fd_stakes_encode( &self->stakes, ctx );
   if( FD_UNLIKELY( err ) ) return err;
-  err = fd_rent_encode( &self->rent, ctx );
-  if( FD_UNLIKELY( err ) ) return err;
   err = fd_vote_accounts_encode( &self->next_epoch_stakes, ctx );
   if( FD_UNLIKELY( err ) ) return err;
   return FD_BINCODE_SUCCESS;
@@ -8920,8 +8918,6 @@ static int fd_epoch_bank_decode_footprint_inner( fd_bincode_decode_ctx_t * ctx, 
   if( ctx->data>=ctx->dataend ) { return FD_BINCODE_ERR_OVERFLOW; };
   int err = 0;
   err = fd_stakes_decode_footprint_inner( ctx, total_sz );
-  if( FD_UNLIKELY( err ) ) return err;
-  err = fd_rent_decode_footprint_inner( ctx, total_sz );
   if( FD_UNLIKELY( err ) ) return err;
   err = fd_vote_accounts_decode_footprint_inner( ctx, total_sz );
   if( FD_UNLIKELY( err ) ) return err;
@@ -8938,7 +8934,6 @@ int fd_epoch_bank_decode_footprint( fd_bincode_decode_ctx_t * ctx, ulong * total
 static void fd_epoch_bank_decode_inner( void * struct_mem, void * * alloc_mem, fd_bincode_decode_ctx_t * ctx ) {
   fd_epoch_bank_t * self = (fd_epoch_bank_t *)struct_mem;
   fd_stakes_decode_inner( &self->stakes, alloc_mem, ctx );
-  fd_rent_decode_inner( &self->rent, alloc_mem, ctx );
   fd_vote_accounts_decode_inner( &self->next_epoch_stakes, alloc_mem, ctx );
 }
 void * fd_epoch_bank_decode( void * mem, fd_bincode_decode_ctx_t * ctx ) {
@@ -8952,20 +8947,17 @@ void * fd_epoch_bank_decode( void * mem, fd_bincode_decode_ctx_t * ctx ) {
 void fd_epoch_bank_new(fd_epoch_bank_t * self) {
   fd_memset( self, 0, sizeof(fd_epoch_bank_t) );
   fd_stakes_new( &self->stakes );
-  fd_rent_new( &self->rent );
   fd_vote_accounts_new( &self->next_epoch_stakes );
 }
 void fd_epoch_bank_walk( void * w, fd_epoch_bank_t const * self, fd_types_walk_fn_t fun, const char *name, uint level ) {
   fun( w, self, name, FD_FLAMENCO_TYPE_MAP, "fd_epoch_bank", level++ );
   fd_stakes_walk( w, &self->stakes, fun, "stakes", level );
-  fd_rent_walk( w, &self->rent, fun, "rent", level );
   fd_vote_accounts_walk( w, &self->next_epoch_stakes, fun, "next_epoch_stakes", level );
   fun( w, self, name, FD_FLAMENCO_TYPE_MAP_END, "fd_epoch_bank", level-- );
 }
 ulong fd_epoch_bank_size( fd_epoch_bank_t const * self ) {
   ulong size = 0;
   size += fd_stakes_size( &self->stakes );
-  size += fd_rent_size( &self->rent );
   size += fd_vote_accounts_size( &self->next_epoch_stakes );
   return size;
 }
