@@ -2347,8 +2347,10 @@ fd_update_next_epoch_stakes( fd_exec_slot_ctx_t * slot_ctx ) {
   /* Copy epoch_ctx->epoch_bank->stakes.vote_accounts into epoch_bank->next_epoch_stakes */
 
   fd_vote_accounts_global_t * next_epoch_stakes = fd_bank_mgr_next_epoch_stakes_modify( slot_ctx->bank_mgr );
-  fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_pool = fd_vote_accounts_vote_accounts_pool_join( next_epoch_stakes );
-  fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_root = fd_vote_accounts_vote_accounts_root_join( next_epoch_stakes );
+
+  uchar * next_epoch_stakes_pool_mem = (uchar *)fd_ulong_align_up( (ulong)next_epoch_stakes + sizeof(fd_vote_accounts_global_t), fd_vote_accounts_pair_global_t_map_align() );
+  fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_pool = fd_vote_accounts_pair_global_t_map_join( fd_vote_accounts_pair_global_t_map_new( next_epoch_stakes_pool_mem, 100000UL ) );
+  fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_root = NULL;
 
   uchar * acc_region_start = (uchar *)fd_ulong_align_up( (ulong)next_epoch_stakes_pool + fd_vote_accounts_pair_global_t_map_footprint( 100000UL ), 8UL );
   ulong   curr_offset      = (ulong)acc_region_start - (ulong)next_epoch_stakes_pool;
