@@ -656,7 +656,7 @@ fd_snapshot_create_populate_bank( fd_snapshot_ctx_t *   snapshot_ctx,
   bank->accounts_data_len                     = 0UL;
 
   bank->slot                                  = snapshot_ctx->slot;
-  bank->epoch                                 = fd_slot_to_epoch( &epoch_bank->epoch_schedule, bank->slot, NULL );
+  // bank->epoch                                 = fd_slot_to_epoch( &epoch_bank->epoch_schedule, bank->slot, NULL );
   // bank->block_height                          = slot_bank->block_height;
 
   /* Collector id can be left as null for both clients */
@@ -669,11 +669,11 @@ fd_snapshot_create_populate_bank( fd_snapshot_ctx_t *   snapshot_ctx,
   bank->collected_rent                        = 0UL;
 
   bank->rent_collector.epoch                  = bank->epoch;
-  bank->rent_collector.epoch_schedule         = epoch_bank->rent_epoch_schedule;
+  // bank->rent_collector.epoch_schedule         = epoch_bank->rent_epoch_schedule;
   // bank->rent_collector.slots_per_year         = epoch_bank->slots_per_year;
   bank->rent_collector.rent                   = epoch_bank->rent;
 
-  bank->epoch_schedule                        = epoch_bank->epoch_schedule;
+  // bank->epoch_schedule                        = epoch_bank->epoch_schedule;
   // bank->inflation                             = epoch_bank->inflation;
 
   /* Unused accounts can be left as NULL for both clients. */

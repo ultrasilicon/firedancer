@@ -165,21 +165,21 @@ fd_runtime_update_leaders( fd_exec_slot_ctx_t * slot_ctx,
 
   FD_SPAD_FRAME_BEGIN( runtime_spad ) {
 
-  fd_epoch_schedule_t schedule = slot_ctx->epoch_ctx->epoch_bank.epoch_schedule;
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
 
-  FD_LOG_INFO(( "schedule->slots_per_epoch = %lu", schedule.slots_per_epoch ));
-  FD_LOG_INFO(( "schedule->leader_schedule_slot_offset = %lu", schedule.leader_schedule_slot_offset ));
-  FD_LOG_INFO(( "schedule->warmup = %d", schedule.warmup ));
-  FD_LOG_INFO(( "schedule->first_normal_epoch = %lu", schedule.first_normal_epoch ));
-  FD_LOG_INFO(( "schedule->first_normal_slot = %lu", schedule.first_normal_slot ));
+  FD_LOG_INFO(( "schedule->slots_per_epoch = %lu", epoch_schedule->slots_per_epoch ));
+  FD_LOG_INFO(( "schedule->leader_schedule_slot_offset = %lu", epoch_schedule->leader_schedule_slot_offset ));
+  FD_LOG_INFO(( "schedule->warmup = %d", epoch_schedule->warmup ));
+  FD_LOG_INFO(( "schedule->first_normal_epoch = %lu", epoch_schedule->first_normal_epoch ));
+  FD_LOG_INFO(( "schedule->first_normal_slot = %lu", epoch_schedule->first_normal_slot ));
 
   fd_vote_accounts_t const * epoch_vaccs = &slot_ctx->slot_bank.epoch_stakes;
 
-  ulong epoch    = fd_slot_to_epoch( &schedule, slot, NULL );
-  ulong slot0    = fd_epoch_slot0( &schedule, epoch );
-  ulong slot_cnt = fd_epoch_slot_cnt( &schedule, epoch );
+  ulong epoch    = fd_slot_to_epoch( epoch_schedule, slot, NULL );
+  ulong slot0    = fd_epoch_slot0( epoch_schedule, epoch );
+  ulong slot_cnt = fd_epoch_slot_cnt( epoch_schedule, epoch );
 
-  fd_runtime_update_slots_per_epoch( slot_ctx, fd_epoch_slot_cnt( &schedule, epoch ) );
+  fd_runtime_update_slots_per_epoch( slot_ctx, fd_epoch_slot_cnt( epoch_schedule, epoch ) );
 
   ulong               vote_acc_cnt  = fd_vote_accounts_pair_t_map_size( epoch_vaccs->vote_accounts_pool, epoch_vaccs->vote_accounts_root );
   fd_stake_weight_t * epoch_weights = fd_spad_alloc_check( runtime_spad, alignof(fd_stake_weight_t), vote_acc_cnt * sizeof(fd_stake_weight_t) );
@@ -328,8 +328,7 @@ fd_runtime_use_multi_epoch_collection( fd_exec_slot_ctx_t const * slot_ctx, ulon
 
   ulong * ticks_per_slot = fd_bank_mgr_ticks_per_slot_query( slot_ctx->bank_mgr );
 
-  fd_epoch_bank_t const * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
-  fd_epoch_schedule_t const * schedule = &epoch_bank->epoch_schedule;
+  fd_epoch_schedule_t const * schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
 
   ulong off;
   ulong epoch = fd_slot_to_epoch( schedule, slot, &off );
@@ -348,8 +347,7 @@ fd_runtime_num_rent_partitions( fd_exec_slot_ctx_t const * slot_ctx, ulong slot 
 
   ulong * ticks_per_slot = fd_bank_mgr_ticks_per_slot_query( slot_ctx->bank_mgr );
 
-  fd_epoch_bank_t const * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
-  fd_epoch_schedule_t const * schedule = &epoch_bank->epoch_schedule;
+  fd_epoch_schedule_t const * schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
 
   ulong off;
   ulong epoch = fd_slot_to_epoch( schedule, slot, &off );
@@ -375,8 +373,7 @@ fd_runtime_get_rent_partition( fd_exec_slot_ctx_t const * slot_ctx, ulong slot )
 
   int use_multi_epoch_collection = fd_runtime_use_multi_epoch_collection( slot_ctx, slot );
 
-  fd_epoch_bank_t const * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
-  fd_epoch_schedule_t const * schedule = &epoch_bank->epoch_schedule;
+  fd_epoch_schedule_t const * schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
 
   ulong off;
   ulong epoch = fd_slot_to_epoch( schedule, slot, &off );
@@ -2820,10 +2817,11 @@ fd_features_activate( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad ) 
 }
 
 uint
-fd_runtime_is_epoch_boundary( fd_epoch_bank_t * epoch_bank, ulong curr_slot, ulong prev_slot ) {
+fd_runtime_is_epoch_boundary( fd_exec_slot_ctx_t * slot_ctx, ulong curr_slot, ulong prev_slot ) {
   ulong slot_idx;
-  ulong prev_epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, prev_slot, &slot_idx );
-  ulong new_epoch  = fd_slot_to_epoch( &epoch_bank->epoch_schedule, curr_slot, &slot_idx );
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+  ulong prev_epoch = fd_slot_to_epoch( epoch_schedule, prev_slot, &slot_idx );
+  ulong new_epoch  = fd_slot_to_epoch( epoch_schedule, curr_slot, &slot_idx );
 
   return ( prev_epoch < new_epoch || slot_idx == 0 );
 }
@@ -2856,7 +2854,8 @@ fd_runtime_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
 
   ulong             slot;
   fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
-  ulong             epoch      = fd_slot_to_epoch( &epoch_bank->epoch_schedule, slot_ctx->slot, &slot );
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+  ulong             epoch      = fd_slot_to_epoch( epoch_schedule, slot_ctx->slot, &slot );
 
   /* Activate new features
      https://github.com/anza-xyz/agave/blob/v2.1.0/runtime/src/bank.rs#L6587-L6598 */
@@ -3461,7 +3460,10 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
   fd_epoch_bank_t *       epoch_bank = fd_exec_epoch_ctx_epoch_bank( epoch_ctx );
   uint128 target_tick_duration      = ((uint128)poh->target_tick_duration.seconds * 1000000000UL + (uint128)poh->target_tick_duration.nanoseconds);
 
-  epoch_bank->epoch_schedule          = genesis_block->epoch_schedule;
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_modify( slot_ctx->bank_mgr );
+  *epoch_schedule = genesis_block->epoch_schedule;
+  fd_bank_mgr_epoch_schedule_save( slot_ctx->bank_mgr );
+
   epoch_bank->rent                    = genesis_block->rent;
 
   ulong * block_height = fd_bank_mgr_block_height_modify( slot_ctx->bank_mgr );
@@ -4143,7 +4145,6 @@ fd_runtime_publish_old_txns( fd_exec_slot_ctx_t * slot_ctx,
   fd_funk_txn_start_write( slot_ctx->funk );
   fd_funk_t *          funk       = slot_ctx->funk;
   fd_funk_txn_pool_t * txnpool    = fd_funk_txn_pool( funk );
-  fd_epoch_bank_t *    epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
 
   if( capture_ctx != NULL ) {
     fd_runtime_checkpt( capture_ctx, slot_ctx, slot_ctx->slot );
@@ -4176,7 +4177,7 @@ fd_runtime_publish_old_txns( fd_exec_slot_ctx_t * slot_ctx,
         /* TODO: The epoch boundary check is not correct due to skipped slots. */
         if( (!(slot_ctx->root_slot % slot_ctx->snapshot_freq) || (
              !(slot_ctx->root_slot % slot_ctx->incremental_freq) && slot_ctx->last_snapshot_slot)) &&
-             !fd_runtime_is_epoch_boundary( epoch_bank, slot_ctx->root_slot, slot_ctx->root_slot - 1UL )) {
+             !fd_runtime_is_epoch_boundary( slot_ctx, slot_ctx->root_slot, slot_ctx->root_slot - 1UL )) {
 
           slot_ctx->last_snapshot_slot         = slot_ctx->root_slot;
           slot_ctx->epoch_ctx->constipate_root = 1;
@@ -4330,9 +4331,9 @@ fd_runtime_block_pre_execute_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
 
   if( slot_ctx->slot != 0UL ) {
     ulong             slot_idx;
-    fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
-    ulong             prev_epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, *prev_slot, &slot_idx );
-    ulong             new_epoch  = fd_slot_to_epoch( &epoch_bank->epoch_schedule, slot_ctx->slot, &slot_idx );
+    fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+    ulong             prev_epoch = fd_slot_to_epoch( epoch_schedule, *prev_slot, &slot_idx );
+    ulong             new_epoch  = fd_slot_to_epoch( epoch_schedule, slot_ctx->slot, &slot_idx );
     if( FD_UNLIKELY( slot_idx==1UL && new_epoch==0UL ) ) {
       /* The block after genesis has a height of 1. */
       ulong * block_height = fd_bank_mgr_block_height_modify( slot_ctx->bank_mgr );

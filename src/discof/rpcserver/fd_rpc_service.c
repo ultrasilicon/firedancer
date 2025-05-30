@@ -718,15 +718,16 @@ method_getEpochInfo(struct json_values* values, fd_rpc_ctx_t * ctx) {
       fd_method_error(ctx, -1, "unable to read epoch_bank");
       return 0;
     }
-    ulong slot_index;
-    ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, slot, &slot_index );
+    ulong slot_index = 0UL;
+    // ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, slot, &slot_index );
+    ulong epoch = 0UL;
 
     fd_web_reply_sprintf(ws, "{\"jsonrpc\":\"2.0\",\"result\":{\"absoluteSlot\":%lu,\"blockHeight\":%lu,\"epoch\":%lu,\"slotIndex\":%lu,\"slotsInEpoch\":%lu,\"transactionCount\":%lu},\"id\":%s}" CRLF,
                          slot,
                          info->slot_exec.height,
                          epoch,
                          slot_index,
-                         fd_epoch_slot_cnt( &epoch_bank->epoch_schedule, epoch ),
+                         432000UL,
                          info->slot_exec.transaction_count,
                          ctx->call_id);
   } FD_SPAD_FRAME_END;
@@ -746,13 +747,14 @@ method_getEpochSchedule(struct json_values* values, fd_rpc_ctx_t * ctx) {
       fd_method_simple_error( ctx, -1, "unable to read epoch_bank" );
       return 0;
     }
-    fd_web_reply_sprintf(ws, "{\"jsonrpc\":\"2.0\",\"result\":{\"firstNormalEpoch\":%lu,\"firstNormalSlot\":%lu,\"leaderScheduleSlotOffset\":%lu,\"slotsPerEpoch\":%lu,\"warmup\":%s},\"id\":%s}" CRLF,
-                         epoch_bank->epoch_schedule.first_normal_epoch,
-                         epoch_bank->epoch_schedule.first_normal_slot,
-                         epoch_bank->epoch_schedule.leader_schedule_slot_offset,
-                         epoch_bank->epoch_schedule.slots_per_epoch,
-                         (epoch_bank->epoch_schedule.warmup ? "true" : "false"),
-                         ctx->call_id);
+    (void)ws;
+    // fd_web_reply_sprintf(ws, "{\"jsonrpc\":\"2.0\",\"result\":{\"firstNormalEpoch\":%lu,\"firstNormalSlot\":%lu,\"leaderScheduleSlotOffset\":%lu,\"slotsPerEpoch\":%lu,\"warmup\":%s},\"id\":%s}" CRLF,
+    //                      epoch_bank->epoch_schedule.first_normal_epoch,
+    //                      epoch_bank->epoch_schedule.first_normal_slot,
+    //                      epoch_bank->epoch_schedule.leader_schedule_slot_offset,
+    //                      epoch_bank->epoch_schedule.slots_per_epoch,
+    //                      (epoch_bank->epoch_schedule.warmup ? "true" : "false"),
+    //                      ctx->call_id);
   } FD_SPAD_FRAME_END;
   return 0;
 }
@@ -957,14 +959,15 @@ method_getLeaderSchedule(struct json_values* values, fd_rpc_ctx_t * ctx) {
   FD_SPAD_FRAME_BEGIN( ctx->global->spad ) {
     fd_webserver_t * ws = &ctx->global->ws;
 
-    ulong slot = get_slot_from_commitment_level( values, ctx );
+    // ulong slot = get_slot_from_commitment_level( values, ctx );
     fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx);
     if( epoch_bank == NULL ) {
       fd_method_error(ctx, -1, "unable to read epoch_bank");
       return 0;
     }
-    ulong slot_index;
-    ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, slot, &slot_index );
+    //ulong slot_index;
+    //ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, slot, &slot_index );
+    ulong epoch = 0UL;
     fd_epoch_leaders_t * leaders = ctx->global->stake_ci->epoch_info[epoch%2].lsched;
 
     /* Reorganize the map to index on sorted leader key */

@@ -350,10 +350,11 @@ publish_stake_weights( fd_replay_tile_ctx_t * ctx,
                        fd_stem_context_t *    stem,
                        fd_exec_slot_ctx_t *   slot_ctx ) {
   fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
   if( slot_ctx->slot_bank.epoch_stakes.vote_accounts_root!=NULL ) {
     ulong *             stake_weights_msg = fd_chunk_to_laddr( ctx->stake_weights_out->mem,
                                                                ctx->stake_weights_out->chunk );
-    ulong epoch = fd_slot_to_leader_schedule_epoch( &epoch_bank->epoch_schedule, slot_ctx->slot );
+    ulong epoch = fd_slot_to_leader_schedule_epoch( epoch_schedule, slot_ctx->slot );
     ulong stake_weights_sz = generate_stake_weight_msg( slot_ctx, ctx->runtime_spad, epoch - 1, stake_weights_msg );
     ulong stake_weights_sig = 4UL;
     fd_stem_publish( stem, 0UL, stake_weights_sig, ctx->stake_weights_out->chunk, stake_weights_sz, 0UL, 0UL, fd_frag_meta_ts_comp( fd_tickcount() ) );
@@ -363,7 +364,7 @@ publish_stake_weights( fd_replay_tile_ctx_t * ctx,
 
   if( epoch_bank->next_epoch_stakes.vote_accounts_root!=NULL ) {
     ulong * stake_weights_msg = fd_chunk_to_laddr( ctx->stake_weights_out->mem, ctx->stake_weights_out->chunk );
-    ulong   epoch             = fd_slot_to_leader_schedule_epoch( &epoch_bank->epoch_schedule,
+    ulong   epoch             = fd_slot_to_leader_schedule_epoch( epoch_schedule,
                                                                   slot_ctx->slot ); /* epoch */
     ulong stake_weights_sz = generate_stake_weight_msg( slot_ctx, ctx->runtime_spad, epoch, stake_weights_msg );
     ulong stake_weights_sig = 4UL;
@@ -724,8 +725,6 @@ snapshot_state_update( fd_replay_tile_ctx_t * ctx, ulong wmk ) {
     return;
   }
 
-  fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( ctx->slot_ctx->epoch_ctx );
-
   /* The distance from the last snapshot should only grow until we skip
      past the last full snapshot. If it has shrunk that means we skipped
      over the snapshot interval. */
@@ -746,7 +745,7 @@ snapshot_state_update( fd_replay_tile_ctx_t * ctx, ulong wmk ) {
   /* TODO: We need a better check if the wmk fell on an epoch boundary due to
      skipped slots. We just don't want to make a snapshot on an epoch boundary */
   if( (is_full_snapshot_ready || is_inc_snapshot_ready) &&
-      !fd_runtime_is_epoch_boundary( epoch_bank, wmk, wmk-1UL ) ) {
+      !fd_runtime_is_epoch_boundary( ctx->slot_ctx, wmk, wmk-1UL ) ) {
 
     /* NOTE: returning early to avoid triggering snapshot creation, as this is not yet supported.*/
     FD_LOG_WARNING(( "snapshot creation not supported! skipping snapshot creation" ));
@@ -1207,13 +1206,12 @@ prepare_new_block_execution( fd_replay_tile_ctx_t * ctx,
   FD_TEST( fork == child );
 
   FD_LOG_NOTICE(( "new block execution - slot: %lu, parent_slot: %lu", curr_slot, ctx->parent_slot ));
-  fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( fork->slot_ctx->epoch_ctx );
 
   /* if it is an epoch boundary, push out stake weights */
 
   ulong * prev_slot = fd_bank_mgr_prev_slot_query( fork->slot_ctx->bank_mgr );
   if( fork->slot_ctx->slot != 0 ) {
-    is_new_epoch_in_new_block = (int)fd_runtime_is_epoch_boundary( epoch_bank, fork->slot_ctx->slot, *prev_slot );
+    is_new_epoch_in_new_block = (int)fd_runtime_is_epoch_boundary( fork->slot_ctx, fork->slot_ctx->slot, *prev_slot );
   }
 
   /* Update starting PoH hash for the new slot for tick verification later */
@@ -1892,10 +1890,9 @@ init_after_snapshot( fd_replay_tile_ctx_t * ctx,
     curr_entry->parent_slot = 0UL;
     curr_entry->epoch       = 0UL;
   } else {
-    fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( ctx->epoch_ctx );
-
-    ulong curr_epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, ctx->curr_slot, NULL );
-    ulong last_slot_in_epoch = fd_ulong_sat_sub( fd_epoch_slot0( &epoch_bank->epoch_schedule, curr_epoch), 1UL );
+    fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( ctx->slot_ctx->bank_mgr );
+    ulong curr_epoch = fd_slot_to_epoch( epoch_schedule, ctx->curr_slot, NULL );
+    ulong last_slot_in_epoch = fd_ulong_sat_sub( fd_epoch_slot0( epoch_schedule, curr_epoch), 1UL );
 
     curr_entry->parent_slot = fd_ulong_min( ctx->parent_slot, last_slot_in_epoch );
     curr_entry->epoch = curr_epoch;

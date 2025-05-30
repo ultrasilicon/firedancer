@@ -1299,7 +1299,9 @@ fd_exec_txn_ctx_from_exec_slot_ctx( fd_exec_slot_ctx_t const * slot_ctx,
 
   /* Distribute rewards */
   fd_epoch_bank_t const * epoch_bank = fd_exec_epoch_ctx_epoch_bank_const( slot_ctx->epoch_ctx );
-  ctx->schedule                    = epoch_bank->epoch_schedule;
+  fd_epoch_schedule_t epoch_schedule_default = {0};
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( ctx->bank_mgr );
+  ctx->schedule                    = !!epoch_schedule ? *epoch_schedule : epoch_schedule_default;
   ctx->rent                        = epoch_bank->rent;
   ctx->stakes                      = epoch_bank->stakes;
 

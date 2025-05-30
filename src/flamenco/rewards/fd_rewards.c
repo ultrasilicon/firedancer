@@ -94,7 +94,9 @@ get_inflation_num_slots( fd_exec_slot_ctx_t * slot_ctx,
 /* https://github.com/anza-xyz/agave/blob/7117ed9653ce19e8b2dea108eff1f3eb6a3378a7/runtime/src/bank.rs#L2121 */
 static double
 slot_in_year_for_inflation( fd_exec_slot_ctx_t * slot_ctx ) {
-  ulong num_slots = get_inflation_num_slots( slot_ctx, &slot_ctx->epoch_ctx->epoch_bank.epoch_schedule, slot_ctx->slot );
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+
+  ulong num_slots = get_inflation_num_slots( slot_ctx, epoch_schedule, slot_ctx->slot );
   return (double)num_slots / (double)*(fd_bank_mgr_slots_per_year_query( slot_ctx->bank_mgr ));
 }
 
@@ -265,19 +267,20 @@ calculate_points( fd_stake_t const *          stake,
 
    https://github.com/anza-xyz/agave/blob/cbc8320d35358da14d79ebcada4dfb6756ffac79/sdk/program/src/epoch_schedule.rs#L103 */
 static ulong
-get_slots_in_epoch( ulong                   epoch,
-                    fd_epoch_bank_t const * epoch_bank ) {
-  return (epoch < epoch_bank->epoch_schedule.first_normal_epoch) ?
+get_slots_in_epoch( ulong                 epoch,
+                    fd_epoch_schedule_t * epoch_schedule ) {
+  return (epoch < epoch_schedule->first_normal_epoch) ?
           1UL << fd_ulong_sat_add(epoch, FD_EPOCH_LEN_MIN_TRAILING_ZERO) :
-          epoch_bank->epoch_schedule.slots_per_epoch;
+          epoch_schedule->slots_per_epoch;
 }
 
 /* https://github.com/anza-xyz/agave/blob/cbc8320d35358da14d79ebcada4dfb6756ffac79/runtime/src/bank.rs#L2082 */
 static double
 epoch_duration_in_years( fd_exec_slot_ctx_t *    slot_ctx,
-                         fd_epoch_bank_t const * epoch_bank,
                          ulong                   prev_epoch ) {
-  ulong slots_in_epoch = get_slots_in_epoch( prev_epoch, epoch_bank );
+
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+  ulong slots_in_epoch = get_slots_in_epoch( prev_epoch, epoch_schedule );
   return (double)slots_in_epoch / (double)*(fd_bank_mgr_slots_per_year_query( slot_ctx->bank_mgr ));
 }
 
@@ -291,10 +294,9 @@ calculate_previous_epoch_inflation_rewards( fd_exec_slot_ctx_t *                
 
     fd_inflation_t * inflation = fd_bank_mgr_inflation_query( slot_ctx->bank_mgr );
 
-    fd_epoch_bank_t const * epoch_bank    = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
     rewards->validator_rate               = validator( inflation, slot_in_year );
     rewards->foundation_rate              = foundation( inflation, slot_in_year );
-    rewards->prev_epoch_duration_in_years = epoch_duration_in_years( slot_ctx, epoch_bank, prev_epoch );
+    rewards->prev_epoch_duration_in_years = epoch_duration_in_years( slot_ctx, prev_epoch );
     rewards->validator_rewards            = (ulong)(rewards->validator_rate * (double)prev_epoch_capitalization * rewards->prev_epoch_duration_in_years);
     FD_LOG_DEBUG(( "Rewards %lu, Rate %.16f, Duration %.18f Capitalization %lu Slot in year %.16f", rewards->validator_rewards, rewards->validator_rate, rewards->prev_epoch_duration_in_years, prev_epoch_capitalization, slot_in_year ));
 }
@@ -834,9 +836,10 @@ calculate_rewards_for_partitioning( fd_exec_slot_ctx_t *                   slot_
                                runtime_spad );
 
   fd_stake_reward_calculation_t * stake_reward_calculation = &validator_result->calculate_stake_vote_rewards_result.stake_reward_calculation;
-  ulong num_partitions = get_reward_distribution_num_blocks( &fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx )->epoch_schedule,
-                                                              slot_ctx->slot,
-                                                              stake_reward_calculation->stake_rewards_len );
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+  ulong num_partitions = get_reward_distribution_num_blocks( epoch_schedule,
+                                                             slot_ctx->slot,
+                                                             stake_reward_calculation->stake_rewards_len );
   hash_rewards_into_partitions( stake_reward_calculation,
                                 parent_blockhash,
                                 num_partitions,
@@ -1070,15 +1073,14 @@ fd_distribute_partitioned_epoch_rewards( fd_exec_slot_ctx_t * slot_ctx,
 
   fd_start_block_height_and_rewards_t * status = &slot_ctx->slot_bank.epoch_reward_status.inner.Active;
 
-  ulong                   height     = *block_height;
-  fd_epoch_bank_t const * epoch_bank = fd_exec_epoch_ctx_epoch_bank_const( slot_ctx->epoch_ctx );
-
+  ulong height                             = *block_height;
   ulong distribution_starting_block_height = status->distribution_starting_block_height;
   ulong distribution_end_exclusive         = distribution_starting_block_height + status->partitioned_stake_rewards.partitions_len;
 
   /* TODO: track current epoch in epoch ctx? */
-  ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, slot_ctx->slot, NULL );
-  if( FD_UNLIKELY( get_slots_in_epoch( epoch, epoch_bank ) <= status->partitioned_stake_rewards.partitions_len ) ) {
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+  ulong epoch = fd_slot_to_epoch( epoch_schedule, slot_ctx->slot, NULL );
+  if( FD_UNLIKELY( get_slots_in_epoch( epoch, epoch_schedule ) <= status->partitioned_stake_rewards.partitions_len ) ) {
     FD_LOG_ERR(( "Should not be distributing rewards" ));
   }
 
@@ -1209,7 +1211,7 @@ fd_rewards_recalculate_partitioned_rewards( fd_exec_slot_ctx_t * slot_ctx,
         https://github.com/anza-xyz/agave/blob/2316fea4c0852e59c071f72d72db020017ffd7d0/runtime/src/bank/partitioned_epoch_rewards/calculation.rs#L566 */
     FD_LOG_NOTICE(( "epoch rewards is active" ));
 
-    fd_epoch_schedule_t * epoch_schedule = &fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx )->epoch_schedule;
+    fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
     ulong epoch          = fd_slot_to_epoch( epoch_schedule, slot_ctx->slot, NULL );
     ulong rewarded_epoch = fd_ulong_sat_sub( epoch, 1UL );
 

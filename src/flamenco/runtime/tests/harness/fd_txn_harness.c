@@ -129,8 +129,10 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
                                                 .exemption_threshold         = 2.0,
                                                 .burn_percent                = 50
                                                };
-  epoch_bank->epoch_schedule      = default_epoch_schedule;
-  epoch_bank->rent_epoch_schedule = default_epoch_schedule;
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_modify( slot_ctx->bank_mgr );
+  *epoch_schedule = default_epoch_schedule;
+  fd_bank_mgr_epoch_schedule_save( slot_ctx->bank_mgr );
+
   epoch_bank->rent                = default_rent;
 
   double * slots_per_year = fd_bank_mgr_slots_per_year_modify( slot_ctx->bank_mgr );
@@ -140,8 +142,9 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   // Override default values if provided
   if( slot_ctx->sysvar_cache->has_epoch_schedule ) {
     uchar * val_epoch_schedule      = fd_wksp_laddr_fast( runner->wksp, slot_ctx->sysvar_cache->gaddr_epoch_schedule );
-    epoch_bank->epoch_schedule      = *(fd_epoch_schedule_t *)fd_type_pun_const( val_epoch_schedule );
-    epoch_bank->rent_epoch_schedule = *(fd_epoch_schedule_t *)fd_type_pun_const( val_epoch_schedule );
+    fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_modify( slot_ctx->bank_mgr );
+    *epoch_schedule = *(fd_epoch_schedule_t *)fd_type_pun_const( val_epoch_schedule );
+    fd_bank_mgr_epoch_schedule_save( slot_ctx->bank_mgr );
   }
 
   if( slot_ctx->sysvar_cache->has_rent ) {

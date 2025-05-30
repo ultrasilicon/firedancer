@@ -7,6 +7,7 @@
 #include "../../flamenco/runtime/fd_runtime_public.h"
 #include "../../flamenco/stakes/fd_stakes.h"
 #include "../../flamenco/runtime/sysvar/fd_sysvar_epoch_schedule.h"
+#include "../../flamenco/runtime/fd_bank_mgr.h"
 
 /* Follows message structure in fd_stake_ci_stake_msg_init */
 struct fd_stake_weight_msg_t {
@@ -26,7 +27,6 @@ generate_stake_weight_msg( fd_exec_slot_ctx_t * slot_ctx,
                            fd_spad_t          * runtime_spad,
                            ulong                epoch,
                            ulong              * stake_weight_msg_out ) {
-  fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
 
   fd_stake_weight_msg_t * stake_weight_msg = (fd_stake_weight_msg_t *)fd_type_pun( stake_weight_msg_out );
   fd_stake_weight_t     * stake_weights    = (fd_stake_weight_t *)&stake_weight_msg_out[5];
@@ -34,10 +34,12 @@ generate_stake_weight_msg( fd_exec_slot_ctx_t * slot_ctx,
                                                                        stake_weights,
                                                                        runtime_spad );
 
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+
   stake_weight_msg->epoch          = epoch;
   stake_weight_msg->staked_cnt     = stake_weight_idx;                           /* staked_cnt */
-  stake_weight_msg->start_slot     = fd_epoch_slot0( &epoch_bank->epoch_schedule, stake_weight_msg_out[0] ); /* start_slot */
-  stake_weight_msg->slot_cnt       = epoch_bank->epoch_schedule.slots_per_epoch; /* slot_cnt */
+  stake_weight_msg->start_slot     = fd_epoch_slot0( epoch_schedule, stake_weight_msg_out[0] ); /* start_slot */
+  stake_weight_msg->slot_cnt       = epoch_schedule->slots_per_epoch; /* slot_cnt */
   stake_weight_msg->excluded_stake = 0UL;                                        /* excluded stake */
 
   return 5*sizeof(ulong) + (stake_weight_idx * sizeof(fd_stake_weight_t));
@@ -53,8 +55,10 @@ generate_replay_exec_epoch_msg( fd_exec_slot_ctx_t * slot_ctx,
                                 fd_bank_hash_cmp_t * bank_hash_cmp,
                                 fd_runtime_public_epoch_msg_t * epoch_msg_out ) {
 
+    fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+
     epoch_msg_out->features            = slot_ctx->epoch_ctx->features;
-    epoch_msg_out->epoch_schedule      = slot_ctx->epoch_ctx->epoch_bank.epoch_schedule;
+    epoch_msg_out->epoch_schedule      = *epoch_schedule;
     epoch_msg_out->rent                = slot_ctx->epoch_ctx->epoch_bank.rent;
     epoch_msg_out->bank_hash_cmp_gaddr = fd_wksp_gaddr_fast( runtime_public_wksp,
                                                          fd_bank_hash_cmp_leave( bank_hash_cmp ) );

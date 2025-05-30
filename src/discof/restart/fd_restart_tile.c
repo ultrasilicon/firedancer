@@ -442,11 +442,12 @@ after_credit( fd_restart_tile_ctx_t * ctx,
     uchar * buf   = fd_chunk_to_laddr( ctx->gossip_out_mem, ctx->gossip_out_chunk );
 
     /* FIXME: this has an invalid slot number. */
+    fd_epoch_schedule_t * epoch_schedule = NULL;
     fd_restart_init( ctx->restart,
                      0UL,
                      NULL,
                      epoch_stakes,
-                     &ctx->epoch_bank.epoch_schedule,
+                     epoch_schedule,
                      ctx->tower_checkpt_fileno,
                      slot_history,
                      &ctx->identity,

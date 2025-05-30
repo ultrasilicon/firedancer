@@ -272,8 +272,8 @@ fd_calculate_stake_weighted_timestamp( fd_exec_slot_ctx_t * slot_ctx,
       }
 
       ulong slot_delta = fd_ulong_sat_sub(slot_ctx->slot, vote_slot);
-      fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
-      if( slot_delta > epoch_bank->epoch_schedule.slots_per_epoch ) {
+      fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+      if( slot_delta > epoch_schedule->slots_per_epoch ) {
         continue;
       }
 
@@ -318,8 +318,8 @@ fd_calculate_stake_weighted_timestamp( fd_exec_slot_ctx_t * slot_ctx,
   FD_LOG_DEBUG(( "stake weighted timestamp: %ld total stake %lu", *result_timestamp, total_stake ));
 
   // Bound estimate by `max_allowable_drift` since the start of the epoch
-  fd_epoch_schedule_t schedule         = slot_ctx->epoch_ctx->epoch_bank.epoch_schedule;
-  ulong               epoch_start_slot = fd_epoch_slot0( &schedule, clock->epoch );
+  fd_epoch_schedule_t * epoch_schedule   = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+  ulong                 epoch_start_slot = fd_epoch_slot0( epoch_schedule, clock->epoch );
   FD_LOG_DEBUG(( "Epoch start slot %lu", epoch_start_slot ));
   ulong poh_estimate_offset = fd_ulong_sat_mul( slot_duration, fd_ulong_sat_sub( slot_ctx->slot, epoch_start_slot ) );
   ulong estimate_offset     = fd_ulong_sat_mul( NS_IN_S, (fix_estimate_into_u64) ? fd_ulong_sat_sub( (ulong)*result_timestamp, (ulong)clock->epoch_start_timestamp ) : (ulong)(*result_timestamp - clock->epoch_start_timestamp));
@@ -405,9 +405,11 @@ fd_sysvar_clock_update( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad 
 
   clock->slot  = slot_ctx->slot;
 
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+
   ulong             epoch_old  = clock->epoch;
   fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( slot_ctx->epoch_ctx );
-  ulong             epoch_new  = fd_slot_to_epoch( &epoch_bank->epoch_schedule,
+  ulong             epoch_new  = fd_slot_to_epoch( epoch_schedule,
                                                    clock->slot,
                                                    NULL );
   FD_LOG_DEBUG(("Epoch old %lu new %lu slot %lu", epoch_old, epoch_new, clock->slot));
@@ -420,7 +422,7 @@ fd_sysvar_clock_update( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad 
                                            runtime_spad );
     clock->unix_timestamp        = fd_long_max( timestamp_estimate, ancestor_timestamp );
     clock->epoch_start_timestamp = clock->unix_timestamp;
-    clock->leader_schedule_epoch = fd_slot_to_leader_schedule_epoch( &epoch_bank->epoch_schedule, slot_ctx->slot );
+    clock->leader_schedule_epoch = fd_slot_to_leader_schedule_epoch( epoch_schedule, slot_ctx->slot );
   }
 
   FD_LOG_DEBUG(( "Updated clock at slot %lu", slot_ctx->slot ));

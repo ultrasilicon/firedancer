@@ -145,12 +145,14 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
 
   /* Finish init epoch bank sysvars */
   uchar * val_epoch_schedule = fd_wksp_laddr_fast( runner->wksp, slot_ctx->sysvar_cache->gaddr_epoch_schedule );
-  fd_memcpy( &epoch_bank->epoch_schedule, val_epoch_schedule, sizeof(fd_epoch_schedule_t) );
-  fd_memcpy( &epoch_bank->rent_epoch_schedule, val_epoch_schedule, sizeof(fd_epoch_schedule_t) );
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_modify( bank_mgr );
+  *epoch_schedule = *(fd_epoch_schedule_t *)fd_type_pun_const( val_epoch_schedule );
+  fd_bank_mgr_epoch_schedule_save( bank_mgr );
+
   uchar * val_rent = fd_wksp_laddr_fast( runner->wksp, slot_ctx->sysvar_cache->gaddr_rent );
   fd_memcpy( &epoch_bank->rent, val_rent, sizeof(fd_rent_t) );
   prev_slot = fd_bank_mgr_prev_slot_query( bank_mgr );
-  epoch_bank->stakes.epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, *prev_slot, NULL );
+  epoch_bank->stakes.epoch = fd_slot_to_epoch( epoch_schedule, *prev_slot, NULL );
 
   /* Update stake cache for epoch T */
   for( uint i=0U; i<test_ctx->epoch_ctx.stake_accounts_count; i++ ) {

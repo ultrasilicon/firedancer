@@ -240,10 +240,8 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Copy over fields */
 
-  fd_memcpy( &epoch_bank->epoch_schedule, &oldbank->epoch_schedule, sizeof(fd_epoch_schedule_t) );
   epoch_bank->rent = oldbank->rent_collector.rent;
   fd_memcpy( &epoch_bank->rent, &oldbank->rent_collector.rent, sizeof(fd_rent_t) );
-  fd_memcpy( &epoch_bank->rent_epoch_schedule, &oldbank->rent_collector.epoch_schedule, sizeof(fd_epoch_schedule_t) );
 
   /* Block Hash Queue */
 
@@ -420,6 +418,12 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
   *prev_bank_hash = oldbank->parent_hash;
   fd_bank_mgr_prev_bank_hash_save( slot_ctx->bank_mgr );
 
+  /* Epoch Schedule */
+
+  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_modify( slot_ctx->bank_mgr );
+  *epoch_schedule = oldbank->epoch_schedule;
+  fd_bank_mgr_epoch_schedule_save( slot_ctx->bank_mgr );
+
   /* Last Restart Slot */
 
   /* Update last restart slot
@@ -476,7 +480,9 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Move EpochStakes */
   do {
-    ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, slot_ctx->slot, NULL );
+
+    fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
+    ulong epoch = fd_slot_to_epoch( epoch_schedule, slot_ctx->slot, NULL );
 
     /* We need to save the vote accounts for the current epoch and the next
        epoch as it is used to calculate the leader schedule at the epoch
