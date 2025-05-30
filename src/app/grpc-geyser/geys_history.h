@@ -2,9 +2,11 @@
 #define HEADER_fd_src_app_geys_history_h
 
 #include "../../util/fd_util.h"
-#include "../../ballet/txn/fd_txn.h"
-#include "../../flamenco/runtime/fd_blockstore.h"
-#include "../../discof/replay/fd_replay_notif.h"
+
+typedef struct fd_blockstore fd_blockstore_t;
+typedef struct fd_replay_notif_msg fd_replay_notif_msg_t;
+typedef union fd_hash fd_hash_t;
+typedef union fd_hash fd_pubkey_t;
 
 struct geys_history_args {
   uint                 block_index_max;
@@ -21,7 +23,7 @@ struct geys_history;
 typedef struct geys_history geys_history_t;
 
 struct geys_txn_key {
-  ulong v[FD_ED25519_SIG_SZ / sizeof( ulong )];
+  ulong v[64U / sizeof( ulong )];
 };
 typedef struct geys_txn_key geys_txn_key_t;
 

@@ -14,8 +14,8 @@
 #include "geyser.grpc.pb.h"
 
 extern "C" {
-#include "../../util/fd_util.h"
 #include "geys_fd_loop.h"
+#include "../firedancer/version.h"
 }
 
 using grpc::Server;
@@ -107,10 +107,10 @@ int main(int argc, char** argv) {
   loop_args.history.block_index_max = absl::GetFlag(FLAGS_max_block_idx);
   loop_args.history.txn_index_max = absl::GetFlag(FLAGS_max_txn_idx);
   loop_args.history.acct_index_max = absl::GetFlag(FLAGS_max_acct_idx);
-  strncpy(loop_args.history.history_file, absl::GetFlag(FLAGS_history_file).c_str(), PATH_MAX);
-  strncpy(loop_args.funk_file, absl::GetFlag(FLAGS_funk_file).c_str(), PATH_MAX);
-  strncpy(loop_args.blockstore_wksp, absl::GetFlag(FLAGS_blockstore_wksp).c_str(), 32);
-  strncpy(loop_args.notify_wksp, absl::GetFlag(FLAGS_notify_wksp).c_str(), 32);
+  strncpy(loop_args.history.history_file, absl::GetFlag(FLAGS_history_file).c_str(), PATH_MAX-1);
+  strncpy(loop_args.funk_file, absl::GetFlag(FLAGS_funk_file).c_str(), PATH_MAX-1);
+  strncpy(loop_args.blockstore_wksp, absl::GetFlag(FLAGS_blockstore_wksp).c_str(), 32-1);
+  strncpy(loop_args.notify_wksp, absl::GetFlag(FLAGS_notify_wksp).c_str(), 32-1);
 
   RunServer(absl::GetFlag(FLAGS_port));
 

@@ -5,6 +5,8 @@
 #include "../../tango/fd_tango_base.h"
 #include "../../util/wksp/fd_wksp_private.h"
 #include "../../disco/topo/fd_topo.h"
+#include "../../flamenco/runtime/fd_blockstore.h"
+#include "../../discof/replay/fd_replay_notif.h"
 
 struct geys_fd_ctx {
   fd_funk_t * funk;

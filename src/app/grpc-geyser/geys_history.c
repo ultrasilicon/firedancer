@@ -1,6 +1,9 @@
 #include "geys_history.h"
-#include <unistd.h>
 #include "../../flamenco/runtime/fd_system_ids.h"
+#include "../../ballet/txn/fd_txn.h"
+#include "../../flamenco/runtime/fd_blockstore.h"
+#include "../../discof/replay/fd_replay_notif.h"
+#include <unistd.h>
 
 struct geys_block {
   ulong slot;
