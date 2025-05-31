@@ -4,6 +4,21 @@
 #define FD_CRDS_ALIGN 8UL
 #define FD_CRDS_MAGIC (0xf17eda2c37c7d50UL) /* firedancer crds version 0*/
 
+#define FD_CRDS_TAG_LEGACY_CONTACT_INFO           ( 0)
+#define FD_CRDS_TAG_VOTE                          ( 1)
+#define FD_CRDS_TAG_LOWEST_SLOT                   ( 2)
+#define FD_CRDS_TAG_SNAPSHOT_HASHES               ( 3)
+#define FD_CRDS_TAG_ACCOUNT_HASHES                ( 4)
+#define FD_CRDS_TAG_EPOCH_SLOTS                   ( 5)
+#define FD_CRDS_TAG_LEGACY_VERSION_V1             ( 6)
+#define FD_CRDS_TAG_LEGACY_VERSION_V2             ( 7)
+#define FD_CRDS_TAG_NODE_INSTANCE                 ( 8)
+#define FD_CRDS_TAG_DUPLICATE_SHRED               ( 9)
+#define FD_CRDS_TAG_INC_SNAPSHOT_HASHES           (10)
+#define FD_CRDS_TAG_CONTACT_INFO                  (11)
+#define FD_CRDS_TAG_RESTART_LAST_VOTED_FORK_SLOTS (12)
+#define FD_CRDS_TAG_RESTART_HEAVIEST_FORK         (13)
+
 struct fd_crds_purged {
   uchar hash[ 32UL ];
   long wallclock_nanos;
@@ -11,19 +26,68 @@ struct fd_crds_purged {
 
 typedef struct fd_crds_purged fd_crds_purged_t;
 
+struct fd_crds_key {
+  uchar tag;
+  uchar pubkey[ 32UL ];
+  union {
+    uchar  vote_index;
+    uchar  epoch_slots_index;
+    ushort duplicate_shred_index;
+  };
+};
+
+typedef struct fd_crds_key fd_crds_key_t;
+
 /* The CRDS at a high level is just a list of all the messages we have
    received over gossip.  These are called the CRDS values.  Values
    are not arbitrary, and must conform to a strictly typed schema of
    around 10 different messages. */
 
 struct fd_crds_entry_private {
-  /* value data (contains key) */
-  fd_crds_value_t value[1];
+  /* The core operation of the CRDS is to "upsert" a value.  Basically,
+    all of the message types are keyed by the originators public key,
+    and we only want to store the most recent message of each type.
+
+    So we have a ContactInfo message for example.  If a validator sends
+    us a new ContactInfo message, we want to replace the old one.  This
+    lookup is serviced by a hash table, keyed by the public key of the
+    originator, and in a few special cases an additional field.  For
+    example, votes are (originator_key, vote_index), since we need to
+    know about more than one vote from a given originator.
+
+    This key field is the key for the hash table. */
+  fd_crds_key_t key[1];
+
+  union{
+    struct {
+      long instance_creation_wallclock_nanos;
+    } contact_info;
+
+    struct {
+      /* offsets into data[] */
+      ushort token_offset;
+      ushort from_offset; /* TODO: Is this different from key->pubkey */
+    } node_instance;
+  };
+
+  /* When an originator creates a CRDS message, they attach their local
+    wallclock time to it.  This time is used to determine when a
+    message should be upserted.  If messages have the same key, the
+    newer one (as created by the originator) is used.
+
+    Messages encode wallclock in millis, firedancer converts
+    them into nanos internally. */
+  long   wallclock_nanos;
+
+  uchar  data[ 1232UL ];
+  ushort data_sz;
+
+  ulong num_duplicates;
 
   /* Pool fields. Not in use when pool element is acquired */
-  ulong pool_next;
-  int num_duplicates;
-
+  struct {
+    ulong next;
+  } pool;
   /* The CRDS needs to perform a variety of actions on the message table
      quickly, so there are various indexes woven through them values to
      support these actions.  They are ...
@@ -68,7 +132,7 @@ struct fd_crds_entry_private {
 
   /* Finally, a core operation on the CRDS is to to query for values by
      hash, to respond to pull requests.  This is done with a treap
-     sorted by the hash of the value. */
+     sorted by the hash of the encoded value. */
   struct {
     ulong parent;
     ulong left;
@@ -87,7 +151,7 @@ fd_crds_entry_wallclock( fd_crds_entry_t const * entry ){
 
 #define POOL_NAME   crds_pool
 #define POOL_T      fd_crds_entry_t
-#define POOL_NEXT   pool_next
+#define POOL_NEXT   pool.next
 
 #include "../../util/tmpl/fd_pool.c"
 
@@ -184,7 +248,7 @@ lookup_eq( fd_crds_key_t const * key0,
 #define MAP_NAME  lookup_map
 #define MAP_ELE_T fd_crds_entry_t
 #define MAP_KEY_T fd_crds_key_t
-#define MAP_KEY   value->key
+#define MAP_KEY   key
 #define MAP_IDX_T ulong
 #define MAP_NEXT  lookup.next
 #define MAP_PREV  lookup.prev
@@ -195,18 +259,18 @@ lookup_eq( fd_crds_key_t const * key0,
 #include "../../util/tmpl/fd_map_chain.c"
 
 struct fd_crds_private {
-  fd_crds_entry_t *        pool;
+  fd_crds_entry_t *         pool;
 
-  evict_treap_t *          evict_treap;
-  staked_expire_dlist_t *  staked_expire_dlist;
-  unstaked_expire_dlist_t *unstaked_expire_dlist;
-  hash_treap_t *           hash_treap;
-  lookup_map_t *           lookup_map;
+  evict_treap_t *           evict_treap;
+  staked_expire_dlist_t *   staked_expire_dlist;
+  unstaked_expire_dlist_t * unstaked_expire_dlist;
+  hash_treap_t *            hash_treap;
+  lookup_map_t *            lookup_map;
 
-  ulong                    purged_len;
-  ulong                    purged_idx;
-  ulong                    purged_cap;
-  fd_crds_purged_t *       purged_list;
+  ulong                     purged_len;
+  ulong                     purged_idx;
+  ulong                     purged_cap;
+  fd_crds_purged_t *        purged_list;
 
   int has_staked_node;
   ulong magic;
@@ -342,7 +406,7 @@ fd_crds_expire( fd_crds_t * crds,
 
     staked_expire_dlist_ele_pop_head( crds->staked_expire_dlist, crds->pool );
     hash_treap_ele_remove( crds->hash_treap, head, crds->pool );
-    lookup_map_ele_remove( crds->lookup_map, head->value->key, NULL, crds->pool );
+    lookup_map_ele_remove( crds->lookup_map, head->key, NULL, crds->pool );
     evict_treap_ele_remove( crds->evict_treap, head, crds->pool );
     crds_pool_ele_release( crds->pool, head );
   }
@@ -358,7 +422,7 @@ fd_crds_expire( fd_crds_t * crds,
 
     unstaked_expire_dlist_ele_pop_head( crds->unstaked_expire_dlist, crds->pool );
     hash_treap_ele_remove( crds->hash_treap, head, crds->pool );
-    lookup_map_ele_remove( crds->lookup_map, head->value->key, NULL, crds->pool );
+    lookup_map_ele_remove( crds->lookup_map, head->key, NULL, crds->pool );
     evict_treap_ele_remove( crds->evict_treap, head, crds->pool );
     crds_pool_ele_release( crds->pool, head );
   }
@@ -386,7 +450,7 @@ fd_crds_acquire( fd_crds_t * crds ) {
     }
 
     hash_treap_ele_remove( crds->hash_treap, evict, crds->pool );
-    lookup_map_ele_remove( crds->lookup_map, evict->value->key, NULL, crds->pool );
+    lookup_map_ele_remove( crds->lookup_map, evict->key, NULL, crds->pool );
 
     return evict;
   } else {
@@ -401,14 +465,14 @@ fd_crds_release( fd_crds_t *       crds,
 }
 
 static inline int
-overrides( fd_crds_entry_t const * value_entry,
-           fd_crds_entry_t const * candidate_entry ) {
-  long val_wc  = fd_crds_value_wallclock( value_entry->value );
-  long cand_wc = fd_crds_value_wallclock( candidate_entry->value );
-  long val_ci_onset  = value_entry->value->contact_info.instance_creation_wallclock_nanos;
-  long cand_ci_onset = candidate_entry->value->contact_info.instance_creation_wallclock_nanos;
+overrides( fd_crds_entry_t const * value,
+           fd_crds_entry_t const * candidate ) {
+  long val_wc         = value->wallclock_nanos;
+  long cand_wc        = candidate->wallclock_nanos;
+  long val_ci_onset   = value->contact_info.instance_creation_wallclock_nanos;
+  long cand_ci_onset  = candidate->contact_info.instance_creation_wallclock_nanos;
 
-  switch( fd_crds_value_tag( value_entry->value ) ) {
+  switch( value->key->tag ) {
     case FD_CRDS_TAG_CONTACT_INFO:
       if( FD_UNLIKELY( cand_ci_onset>val_ci_onset ) ) return 1;
       else if( FD_UNLIKELY( cand_ci_onset<val_ci_onset ) ) return 0;
@@ -416,24 +480,24 @@ overrides( fd_crds_entry_t const * value_entry,
       else if( FD_UNLIKELY( cand_wc<val_wc ) ) return 0;
       break;
     case FD_CRDS_TAG_NODE_INSTANCE:
-      if( FD_LIKELY( candidate_entry->value->node_instance.token==value_entry->value->node_instance.token ) ) break;
-      else if( FD_LIKELY( memcmp( candidate_entry->value->node_instance.from, value_entry->value->node_instance.from, 32UL ) ) ) break;
+      if( FD_LIKELY( !memcmp( candidate->data + candidate->node_instance.token_offset, value->data + value->node_instance.token_offset, 32UL ) ) ) break;
+      else if( FD_LIKELY( memcmp( candidate->data + candidate->node_instance.from_offset, value->data + value->node_instance.from_offset, 32UL ) ) ) break;
       else if( FD_UNLIKELY( cand_wc>val_wc ) ) return 1;
       else if( FD_UNLIKELY( cand_wc<val_wc ) ) return 0;
-      else return !!(candidate_entry->value->node_instance.token<value_entry->value->node_instance.token);
+      else return memcmp(candidate->data + candidate->node_instance.token_offset, value->data + value->node_instance.token_offset, 32UL) < 0;
     default:
       break;
   }
 
   if( FD_UNLIKELY( cand_wc>val_wc ) ) return 1;
   else if( FD_UNLIKELY( cand_wc<val_wc ) ) return 0;
-  else return !!candidate_entry->hash.hash<value_entry->hash.hash;
+  else return !!candidate->hash.hash<value->hash.hash;
 }
 
 int
 fd_crds_upserts( fd_crds_t *       crds,
                  fd_crds_entry_t * candidate ) {
-  fd_crds_entry_t const * value = lookup_map_ele_query_const( crds->lookup_map, candidate->value->key, NULL, crds->pool );
+  fd_crds_entry_t const * value = lookup_map_ele_query_const( crds->lookup_map, candidate->key, NULL, crds->pool );
   if( FD_UNLIKELY( !value ) ) return 1;
 
   return overrides( value, candidate );
@@ -454,11 +518,11 @@ fd_crds_insert( fd_crds_t *       crds,
                 fd_crds_entry_t * value,
                 int               from_push_message ) {
   /* TODO: Why Agave tracks route? PushRespose etc ... */
-  fd_crds_entry_t * replace = lookup_map_ele_query( crds->lookup_map, value->value->key, NULL, crds->pool );
+  fd_crds_entry_t * replace = lookup_map_ele_query( crds->lookup_map, value->key, NULL, crds->pool );
   if( FD_LIKELY( replace ) ) {
     if( FD_UNLIKELY( !overrides( replace, value ) ) ) {
       if( FD_UNLIKELY( replace->hash.hash!=value->hash.hash ) ) {
-        insert_purged( crds, fd_crds_value_hash( replace->value ), fd_crds_value_wallclock( replace->value ) );
+        insert_purged( crds, fd_crds_value_hash( replace->data ), replace->wallclock_nanos );
         return -1;
       }
 
@@ -467,11 +531,11 @@ fd_crds_insert( fd_crds_t *       crds,
          so we can send out proper prune messages. */
       if( FD_UNLIKELY( !from_push_message ) ) return -1;
 
-      return replace->num_duplicates++;
+      return (int)(replace->num_duplicates++);
     }
     replace->num_duplicates = 0;
 
-    insert_purged( crds, fd_crds_value_hash( replace->value ), fd_crds_value_wallclock( replace->value ) );
+    insert_purged( crds, fd_crds_value_hash( replace->data ), replace->wallclock_nanos );
 
     evict_treap_ele_remove( crds->evict_treap, replace, crds->pool );
     if( FD_LIKELY( replace->evict.stake ) ) {
@@ -480,7 +544,7 @@ fd_crds_insert( fd_crds_t *       crds,
       unstaked_expire_dlist_ele_remove( crds->unstaked_expire_dlist, replace, crds->pool );
     }
     hash_treap_ele_remove( crds->hash_treap, replace, crds->pool );
-    lookup_map_ele_remove( crds->lookup_map, replace->value->key, NULL, crds->pool );
+    lookup_map_ele_remove( crds->lookup_map, replace->key, NULL, crds->pool );
     crds_pool_ele_release( crds->pool, replace );
   }
 

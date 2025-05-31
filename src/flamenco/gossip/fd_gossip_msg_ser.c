@@ -1,4 +1,4 @@
-#include "fd_gossip_msg.h"
+#include "fd_gossip_private.h"
 
 #define CHECK_INIT( payload, payload_sz )         \
   uchar const * _payload = (payload);             \

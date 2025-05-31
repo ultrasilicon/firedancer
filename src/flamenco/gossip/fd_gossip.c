@@ -49,7 +49,7 @@ fd_gossip_footprint( ulong max_values ) {
 void *
 fd_gossip_new( void *                shmem,
                fd_rng_t *            rng,
-               ulong                 max_values,
+               ulong                 max_values FD_PARAM_UNUSED,
                int                   has_expected_shred_version,
                ushort                expected_shred_version,
                ulong                 entrypoints_cnt,

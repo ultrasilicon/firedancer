@@ -1,16 +1,18 @@
-#include "fd_gossip_msg.h"
+#include "fd_gossip_private.h"
 // #include "../../ballet/txn/fd_compact_u16.h"
 #include "../../disco/fd_disco_base.h"
 
 
 /* Adapted from fd_txn_parse.c */
-#define CHECK_INIT( payload, payload_sz )         \
-  uchar const * _payload = (payload);             \
-  ulong _payload_sz = (payload_sz);               \
-  ulong _bytes_consumed = 0;                      \
-  ulong i = 0;                                    \
-  (void) _payload;                                \
-  (void) _bytes_consumed;                         \
+#define CHECK_INIT( payload, payload_sz, offset )   \
+  uchar const * _payload        = (payload);        \
+  ulong const   _payload_sz     = (payload_sz);     \
+  ulong         _bytes_consumed = 0;                \
+  ulong const   _offset         = (offset);         \
+  ulong         i               = (offset);         \
+  (void)        _payload;                           \
+  (void)        _bytes_consumed;                    \
+  (void)        _offset;                            \
 
 #define CHECK( cond ) do {              \
   if( FD_UNLIKELY( !(cond) ) ) {        \
@@ -19,6 +21,8 @@
 } while( 0 )
 
 #define CHECK_LEFT( n ) CHECK( (n)<=(_payload_sz-i) )
+
+#define GET_OFFSET( i ) (ushort)(i)
 
 // #define READ_CHECKED_COMPACT_U16( out_sz, var_name, where )                 \
 //   do {                                                                      \
@@ -29,115 +33,79 @@
 //     (out_sz)   = _out_sz;                                                   \
 //   } while( 0 )
 
-FD_FN_UNUSED
 static ulong
-fd_gossip_msg_crds_arr_parse( fd_gossip_message_t * msg,
-                              uchar const *         payload,
-                              ulong                 payload_sz,
-                              ulong                 crds_cnt ) {
-  /* TODO */
-  msg->crds_cnt = crds_cnt;
-  if( FD_UNLIKELY( crds_cnt>FD_GOSSIP_MSG_MAX_CRDS ) ) {
-    FD_LOG_ERR(( "Too many CRDS values in message: %lu. Possibly need to recompute FD_GOSSIP_MSG_MAX_CRDS", crds_cnt ));
-  }
-
-
-  (void)payload;
-  return payload_sz;
-}
-
-static ulong
-fd_gossip_msg_ping_pong_parse( fd_gossip_message_t * msg,
-                               uchar const *         payload,
-                               ulong                 payload_sz ) {
-  CHECK_INIT( payload, payload_sz );
-  fd_gossip_ping_pong_t * piong = msg->piong;
-  CHECK_LEFT( 32UL                ); memcpy( piong->from,      payload+i, 32UL ); i+=32UL; /* Pubkey */
-  CHECK_LEFT( 32UL                ); memcpy( piong->hash,      payload+i, 32UL ); i+=32UL; /* Token/Hash */
-  CHECK_LEFT( 64UL                ); memcpy( piong->signature, payload+i, 64UL ); i+=64UL; /* Signature */
-
-  /* metadata */
-  fd_memcpy( msg->pubkey, piong->from, 32UL );
-  fd_memcpy( msg->signature, piong->signature, 64UL );
-
-  msg->signable_data_offset = 32UL;
-  msg->signable_sz          = 32UL;
-
+fd_gossip_msg_ping_pong_parse( fd_gossip_view_t * view,
+                               uchar const *      payload,
+                               ulong              payload_sz,
+                               ulong              start_offset ) {
+  CHECK_INIT( payload, payload_sz, start_offset );
+  /* Ping/Pong share the same memory layout */
+  fd_gossip_view_ping_t * ping = view->ping;
+  CHECK_LEFT( 32UL ); ping->from_off  = GET_OFFSET(i); i+=32UL; /* Pubkey */
+  CHECK_LEFT( 32UL ); ping->token_off = GET_OFFSET(i); i+=32UL; /* Token/Hash */
+  CHECK_LEFT( 64UL ); ping->token_off = GET_OFFSET(i); i+=64UL; /* Signature */
   return i;
 }
 
 static ulong
-fd_gossip_pull_req_parse( fd_gossip_message_t * msg,
-                          uchar const *         payload,
-                          ulong                 payload_sz ) {
-  CHECK_INIT( payload, payload_sz );
-  fd_gossip_pull_request_t * pull_request = msg->pull_request;
+fd_gossip_pull_req_parse( fd_gossip_view_t * view,
+                          uchar const *      payload,
+                          ulong              payload_sz,
+                          ulong              start_offset ) {
+  CHECK_INIT( payload, payload_sz, start_offset );
+  fd_gossip_view_pull_request_t * pr = view->pull_request;
 
-  /* Parse filter
-     FIXME: can we avoid memcpy and just pass offsets here? */
-  fd_gossip_crds_filter_t * filter = pull_request->filter;
-  fd_gossip_bloom_t * bloom = filter->bloom;
-  CHECK_LEFT( 8UL                 ); bloom->keys_len = FD_LOAD( ulong, payload+i );            i+=8UL;
-  CHECK_LEFT( bloom->keys_len*8UL ); fd_memcpy( bloom->keys, payload+i, bloom->keys_len*8UL ); i+=bloom->keys_len*8UL;
+  CHECK_LEFT(                      8UL ); pr->bloom_keys_len    = FD_LOAD( ulong, payload+i ) ; i+=8UL;
+  CHECK_LEFT(   pr->bloom_keys_len*8UL ); pr->bloom_keys_offset = GET_OFFSET(i)               ; i+=pr->bloom_keys_len*8UL;
 
   uchar has_bits = 0;
-  CHECK_LEFT( 1UL                 ); has_bits = FD_LOAD( uchar, payload+i );                   i++;
+  CHECK_LEFT(                      1UL ); has_bits = FD_LOAD( uchar, payload+i )              ; i++;
   if( has_bits ) {
-    CHECK_LEFT( 8UL                 ); bloom->bits_len = FD_LOAD( ulong, payload+i );            i+=8UL;
-    CHECK_LEFT( bloom->bits_len*8UL ); fd_memcpy( bloom->bits, payload+i, bloom->bits_len*8UL ); i+=bloom->bits_len*8UL;
-    CHECK_LEFT( 8UL                 ); /* bits_len (TODO: check this vs bitvec len above?) */;   i+=8UL;
+    CHECK_LEFT(                    8UL ); pr->bloom_bits_len = FD_LOAD( ulong, payload+i )    ; i+=8UL;
+    CHECK_LEFT( pr->bloom_bits_len*8UL ); pr->bloom_bits_offset = GET_OFFSET(i)               ; i+=pr->bloom_bits_offset*8UL;
+    /* bits_len (TODO: check this vs bitvec len above?) */
+    CHECK_LEFT(                    8UL ); pr->bloom_len = FD_LOAD( ulong, payload+i )         ; i+=8UL;
   } else {
-    bloom->bits_len = 0UL;
+    pr->bloom_bits_len = 0UL;
   }
-  CHECK_LEFT( 8UL                 ); bloom->num_bits_set = FD_LOAD( ulong, payload+i );        i+=8UL;
+  CHECK_LEFT(                      8UL ); pr->bloom_num_bits_set = FD_LOAD( ulong, payload+i );        i+=8UL;
 
-  CHECK_LEFT( 8UL                 ); filter->mask       = FD_LOAD( ulong, payload+i );         i+=8UL;
-  CHECK_LEFT( 4UL                 ); filter->mask_bits  = FD_LOAD( uint, payload+i );          i+=4UL;
+  CHECK_LEFT(                      8UL ); pr->mask      = FD_LOAD( ulong, payload+i )         ;        i+=8UL;
+  CHECK_LEFT(                      4UL ); pr->mask_bits = FD_LOAD( uint, payload+i )          ;        i+=4UL;
 
-  /* Parse contact info */
-  i+=fd_gossip_msg_crds_arr_parse( msg, payload+i, payload_sz-i, 1UL );
+  /* TODO: Parse contact info */
 
-  /* No signable data in pull request outside of contact info CRDS, which is handled separately */
-  msg->signable_sz = 0UL;
   return i;
 }
 
 ulong
-fd_gossip_msg_parse( fd_gossip_message_t * msg,
-                     uchar const *         payload,
-                     ulong                 payload_sz ) {
-  CHECK_INIT( payload, payload_sz            );
-  CHECK(      payload_sz<=FD_GOSSIP_MTU  );
+fd_gossip_msg_parse( fd_gossip_view_t *   view,
+                     uchar const *        payload,
+                     ulong                payload_sz ) {
+  CHECK_INIT( payload, payload_sz, 0UL );
+  CHECK(     payload_sz<=FD_GOSSIP_MTU );
 
   /* Extract enum discriminant/tag (4b encoded) */
   uint tag = 0;
-  CHECK_LEFT( 4UL                            );   tag = payload[ i ];     i+=4;
-  CHECK(      tag<=FD_GOSSIP_MESSAGE_LAST     );
-  msg->tag = (uchar)tag;
+  CHECK_LEFT(                      4UL );   tag = payload[ i ];     i+=4;
+  CHECK(   tag<=FD_GOSSIP_MESSAGE_LAST );
+  view->tag = (uchar)tag;
 
-  ulong inner_decoded_sz = 0UL;
-  switch( msg->tag ){
+  switch( view->tag ){
     case FD_GOSSIP_MESSAGE_PULL_REQUEST:
     case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
     case FD_GOSSIP_MESSAGE_PUSH:
     case FD_GOSSIP_MESSAGE_PRUNE:
-      FD_LOG_ERR(( "Gossip message type %d parser not implemented", msg->tag ));
+      FD_LOG_ERR(( "Gossip message type %d parser not implemented", view->tag ));
       break;
     case FD_GOSSIP_MESSAGE_PING:
-      inner_decoded_sz = fd_gossip_msg_ping_pong_parse( msg, payload+i, payload_sz-i );
-      CHECK( inner_decoded_sz==payload_sz-i );
+    case FD_GOSSIP_MESSAGE_PONG:
+      i = fd_gossip_msg_ping_pong_parse( view, payload, payload_sz, i );
+      CHECK( payload_sz==i ); /* should be fully parsed at this point */
       break;
     default:
       return 0;
   }
-  i += inner_decoded_sz;
   CHECK( i<=payload_sz );
-
-  /* Need to increment inner offsets by 4b to account for tag
-     TODO: make this less error prone (at this point message is technically validated) */
-  msg->signable_data_offset += 4UL;
-  for( ulong j=0; j<msg->crds_cnt; j++ ) {
-    msg->crds[j].offset += 4UL;
-  }
   return i;
 }
