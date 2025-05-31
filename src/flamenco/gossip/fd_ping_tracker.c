@@ -253,7 +253,7 @@ find_entrypoint( fd_ping_tracker_t const * ping_tracker,
 /* promote_entrypoint promotes an entrypoint to a
    regular ping tracker entry once we acquire the pubkey of the
    entrypoint.  This should be called when a pong message is received
-   from an entrypoint, or when the entrypoint's contact info is received
+   from the entrypoint, or when the entrypoint's contact info is received
    (ie., fd_ping_tracker_register and fd_ping_tracker_track respectively).
 
    The entrypoint must have been previously tracked with
@@ -261,9 +261,11 @@ find_entrypoint( fd_ping_tracker_t const * ping_tracker,
 static void
 promote_entrypoint( fd_ping_tracker_t * ping_tracker,
                     fd_ping_peer_t *    peer,
-                    uchar const * pubkey ) {
+                    uchar const *       pubkey ) {
   fd_memcpy( peer->identity_pubkey.b, pubkey, 32UL );
 
+  /* TODO: Might be worth keeping this list to quickly access entrypoints,
+           regardless if resolved or not. */
   entrypt_list_ele_remove( ping_tracker->entrypt, peer, ping_tracker->pool );
 
   peer_map_ele_insert( ping_tracker->peers, peer, ping_tracker->pool );
@@ -332,10 +334,10 @@ fd_ping_tracker_track( fd_ping_tracker_t *   ping_tracker,
       hash_ping_token( peer->ping_token, peer->expected_pong_token, ping_tracker->sha );
       invalid_list_ele_push_head( ping_tracker->invalid, peer, ping_tracker->pool );
     }
-    peer->last_rx_nanos = now;
-    lru_list_ele_remove( ping_tracker->lru, peer, ping_tracker->pool );
-    lru_list_ele_push_tail( ping_tracker->lru, peer, ping_tracker->pool );
   }
+  peer->last_rx_nanos = now;
+  lru_list_ele_remove( ping_tracker->lru, peer, ping_tracker->pool );
+  lru_list_ele_push_tail( ping_tracker->lru, peer, ping_tracker->pool );
 }
 
 void
@@ -344,7 +346,7 @@ fd_ping_tracker_entrypoint_track( fd_ping_tracker_t *   ping_tracker,
                                   fd_ip4_port_t const*  peer_address ) {
   entrypt_list_iter_t it = find_entrypoint( ping_tracker, peer_address );
 
-  /* TODO: also need a way to check for promoted entrypoints */
+  /* TODO: also need a way to check for promoted entrypoints (see todo in promote_entrypoint) */
   if( FD_UNLIKELY( !entrypt_list_iter_done( it, ping_tracker->entrypt, ping_tracker->pool ) ) ) return;
 
   fd_ping_peer_t * peer = NULL;
