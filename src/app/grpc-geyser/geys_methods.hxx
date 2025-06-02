@@ -3,9 +3,17 @@
 #include <grpcpp/health_check_service_interface.h>
 #include "geyser.grpc.pb.h"
 
+extern "C" {
+#include "geys_fd_loop.h"
+#include "geys_history.h"
+}
+
 class GeyserServiceImpl final : public geyser::Geyser::Service {
+    geys_fd_ctx_t * _loop_ctx;
+    geys_history_t * _hist_ctx;
+
   public:
-    GeyserServiceImpl();
+    GeyserServiceImpl(geys_fd_ctx_t * loop_ctx);
 
     virtual ~GeyserServiceImpl() override;
 

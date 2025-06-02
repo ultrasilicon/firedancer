@@ -18,4 +18,6 @@ geys_fd_ctx_t * geys_fd_init( geys_fd_loop_args_t * args );
 
 void geys_fd_loop( geys_fd_ctx_t * ctx );
 
+geys_history_t * geys_fd_get_history( geys_fd_ctx_t * ctx );
+
 #endif /* HEADER_fd_src_app_geys_fd_loop_h */

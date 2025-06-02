@@ -24,9 +24,10 @@ ABSL_FLAG(int, max_txn_idx, 1048576, "Max number of transactions which can be in
 ABSL_FLAG(int, max_acct_idx, 1048576, "Max number of accounts which can be indexed");
 ABSL_FLAG(std::string, history_file, "geyser_history", "Storage for geyser history");
 
-void RunServer(uint16_t port) {
+void
+RunServer(uint16_t port, geys_fd_ctx_t * loop_ctx) {
   std::string server_address = absl::StrFormat("0.0.0.0:%d", port);
-  GeyserServiceImpl service;
+  GeyserServiceImpl service( loop_ctx );
 
   grpc::EnableDefaultHealthCheckService(true);
   grpc::reflection::InitProtoReflectionServerBuilderPlugin();
@@ -65,7 +66,6 @@ int main(int argc, char** argv) {
   strncpy(loop_args.funk_file, absl::GetFlag(FLAGS_funk_file).c_str(), PATH_MAX-1);
   strncpy(loop_args.blockstore_wksp, absl::GetFlag(FLAGS_blockstore_wksp).c_str(), 32-1);
   strncpy(loop_args.notify_wksp, absl::GetFlag(FLAGS_notify_wksp).c_str(), 32-1);
-
   geys_fd_ctx_t * loop_ctx = geys_fd_init( &loop_args );
 
   pthread_t tid;
@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  RunServer(absl::GetFlag(FLAGS_port));
+  RunServer(absl::GetFlag(FLAGS_port), loop_ctx);
 
   pthread_join(tid, NULL);
 

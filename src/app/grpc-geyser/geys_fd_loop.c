@@ -22,6 +22,11 @@ struct geys_fd_ctx {
 };
 typedef struct geys_fd_ctx geys_fd_ctx_t;
 
+geys_history_t *
+geys_fd_get_history( geys_fd_ctx_t * ctx ) {
+  return ctx->hist;
+}
+
 geys_fd_ctx_t *
 geys_fd_init( geys_fd_loop_args_t * args ) {
   geys_fd_ctx_t * ctx = (geys_fd_ctx_t *)malloc(sizeof(geys_fd_ctx_t));
