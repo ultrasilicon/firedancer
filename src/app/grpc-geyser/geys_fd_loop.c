@@ -8,22 +8,23 @@
 #include "../../flamenco/runtime/fd_blockstore.h"
 #include "../../discof/replay/fd_replay_notif.h"
 
-struct geys_fd_ctx {
-  fd_funk_t * funk;
-  fd_blockstore_t blockstore_ljoin;
-  fd_blockstore_t * blockstore;
-  geys_history_t * hist;
-};
-typedef struct geys_fd_ctx geys_fd_ctx_t;
-
 #define SHAM_LINK_CONTEXT geys_fd_ctx_t
 #define SHAM_LINK_STATE   fd_replay_notif_msg_t
 #define SHAM_LINK_NAME    replay_sham_link
 #include "sham_link.h"
 
-void
-geys_fd_loop( geys_fd_loop_args_t * args ) {
-  geys_fd_ctx_t ctx[1];
+struct geys_fd_ctx {
+  fd_funk_t * funk;
+  fd_blockstore_t blockstore_ljoin;
+  fd_blockstore_t * blockstore;
+  geys_history_t * hist;
+  replay_sham_link_t * rep_notify;
+};
+typedef struct geys_fd_ctx geys_fd_ctx_t;
+
+geys_fd_ctx_t *
+geys_fd_init( geys_fd_loop_args_t * args ) {
+  geys_fd_ctx_t * ctx = (geys_fd_ctx_t *)malloc(sizeof(geys_fd_ctx_t));
 
   FD_LOG_NOTICE(( "attaching to funk file \"%s\"", args->funk_file ));
   fd_funk_t funk_join[1];
@@ -49,8 +50,6 @@ geys_fd_loop( geys_fd_loop_args_t * args ) {
   FD_LOG_NOTICE(( "blockstore has slot root=%lu", ctx->blockstore->shmem->wmk ));
   fd_wksp_mprotect( wksp, 1 );
 
-  replay_sham_link_t * rep_notify = replay_sham_link_new( aligned_alloc( replay_sham_link_align(), replay_sham_link_footprint() ), args->notify_wksp );
-
 #define SMAX 1LU<<30
   uchar * smem = aligned_alloc( FD_SPAD_ALIGN, SMAX );
   args->history.spad = fd_spad_join( fd_spad_new( smem, SMAX ) );
@@ -58,10 +57,17 @@ geys_fd_loop( geys_fd_loop_args_t * args ) {
 
   ctx->hist = geys_history_create( &args->history );
 
-  replay_sham_link_start( rep_notify );
+  ctx->rep_notify = replay_sham_link_new( aligned_alloc( replay_sham_link_align(), replay_sham_link_footprint() ), args->notify_wksp );
+
+  return ctx;
+}
+
+void
+geys_fd_loop( geys_fd_ctx_t * ctx ) {
+  replay_sham_link_start( ctx->rep_notify );
   while( 1 ) {
     fd_replay_notif_msg_t msg;
-    replay_sham_link_poll( rep_notify, ctx, &msg );
+    replay_sham_link_poll( ctx->rep_notify, ctx, &msg );
   }
 }
 

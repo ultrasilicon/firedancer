@@ -47,8 +47,7 @@ void RunServer(uint16_t port) {
 
 void*
 fd_thread_fun(void* arg) {
-  geys_fd_loop_args_t * loop_args = (geys_fd_loop_args_t *)arg;
-  geys_fd_loop( loop_args );
+  geys_fd_loop( (geys_fd_ctx_t*) arg );
   return NULL;
 }
 
@@ -67,14 +66,18 @@ int main(int argc, char** argv) {
   strncpy(loop_args.blockstore_wksp, absl::GetFlag(FLAGS_blockstore_wksp).c_str(), 32-1);
   strncpy(loop_args.notify_wksp, absl::GetFlag(FLAGS_notify_wksp).c_str(), 32-1);
 
+  geys_fd_ctx_t * loop_ctx = geys_fd_init( &loop_args );
+
   pthread_t tid;
-  int result = pthread_create(&tid, NULL, fd_thread_fun, &loop_args);
+  int result = pthread_create(&tid, NULL, fd_thread_fun, loop_ctx);
   if( result != 0 ) {
     perror("pthread_create failed");
     return 1;
   }
 
   RunServer(absl::GetFlag(FLAGS_port));
+
+  pthread_join(tid, NULL);
 
   fd_halt();
   return 0;
