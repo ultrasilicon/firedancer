@@ -4,8 +4,7 @@
 #include "../fd_disco_base.h"
 
 #include "../pack/fd_microblock.h"
-#include "../../ballet/http/fd_http_server.h"
-#include "../../flamenco/types/fd_types.h"
+#include "../../waltz/http/fd_http_server.h"
 #include "../../flamenco/leaders/fd_leaders.h"
 
 #include "../topo/fd_topo.h"
@@ -357,6 +356,7 @@ struct fd_gui {
     int has_block_engine;
     char name[ 16 ];
     char url[ 256 ];
+    char ip_cstr[ 40 ]; /* IPv4 or IPv6 cstr */
     int status;
   } block_engine;
 

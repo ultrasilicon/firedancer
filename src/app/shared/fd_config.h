@@ -218,6 +218,10 @@ struct fd_config {
   struct {
     ushort port;
     int    extended_tx_metadata_storage;
+    uint   block_index_max;
+    uint   txn_index_max;
+    uint   acct_index_max;
+    char   history_file[ PATH_MAX ];
   } rpc;
 
   struct {
@@ -284,6 +288,12 @@ struct fd_config {
     } bench;
 
     struct {
+      char ssl_key_log_file[ PATH_MAX ];
+      uint buffer_size_kib;
+      uint ssl_heap_size_mib;
+    } bundle;
+
+    struct {
       char affinity[ AFFINITY_SZ ];
       char fake_dst_ip[ 16 ];
     } pktgen;
@@ -325,6 +335,7 @@ struct fd_config {
       char tip_payment_program_addr[ FD_BASE58_ENCODED_32_SZ ];
       char tip_distribution_authority[ FD_BASE58_ENCODED_32_SZ ];
       uint commission_bps;
+      ulong keepalive_interval_millis;
     } bundle;
 
     struct {

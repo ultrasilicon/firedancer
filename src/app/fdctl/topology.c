@@ -5,8 +5,8 @@
 #include "../../disco/tiles.h"
 #include "../../disco/topo/fd_topob.h"
 #include "../../disco/topo/fd_cpu_topo.h"
-#include "../../disco/topo/fd_pod_format.h"
 #include "../../disco/plugin/fd_plugin.h"
+#include "../../util/pod/fd_pod_format.h"
 #include "../../util/net/fd_ip4.h"
 #include "../../util/tile/fd_tile_private.h"
 
@@ -379,9 +379,14 @@ fd_topo_initialize( config_t * config ) {
 
     } else if( FD_UNLIKELY( !strcmp( tile->name, "bundle" ) ) ) {
       strncpy( tile->bundle.url, config->tiles.bundle.url, sizeof(tile->bundle.url) );
-      strncpy( tile->bundle.tls_domain_name, config->tiles.bundle.tls_domain_name, sizeof(tile->bundle.tls_domain_name) );
+      tile->bundle.url_len = strnlen( tile->bundle.url, 255 );
+      strncpy( tile->bundle.sni, config->tiles.bundle.tls_domain_name, 256 );
+      tile->bundle.sni_len = strnlen( tile->bundle.sni, 255 );
       strncpy( tile->bundle.identity_key_path, config->paths.identity_key, sizeof(tile->bundle.identity_key_path) );
-
+      strncpy( tile->bundle.key_log_path, config->development.bundle.ssl_key_log_file, sizeof(tile->bundle.key_log_path) );
+      tile->bundle.buf_sz = config->development.bundle.buffer_size_kib<<10;
+      tile->bundle.ssl_heap_sz = config->development.bundle.ssl_heap_size_mib<<20;
+      tile->bundle.keepalive_interval_nanos = config->tiles.bundle.keepalive_interval_millis * (ulong)1e6;
     } else if( FD_UNLIKELY( !strcmp( tile->name, "verify" ) ) ) {
       tile->verify.tcache_depth = config->tiles.verify.signature_cache_size;
 

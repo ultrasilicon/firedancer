@@ -1,5 +1,5 @@
 #include "../shared/fd_config.h"
-#include "../../disco/topo/fd_pod_format.h"
+#include "../../util/pod/fd_pod_format.h"
 
 #include "../../flamenco/runtime/fd_txncache.h"
 #include "../../flamenco/runtime/fd_blockstore.h"
@@ -60,6 +60,31 @@ fd_topo_obj_callbacks_t fd_obj_cb_blockstore = {
   .footprint = blockstore_footprint,
   .align     = blockstore_align,
   .new       = blockstore_new,
+};
+
+static ulong
+fec_sets_footprint( fd_topo_t const *     topo,
+                    fd_topo_obj_t const * obj ) {
+  return VAL("sz");
+}
+
+static ulong
+fec_sets_align( fd_topo_t const *     topo FD_FN_UNUSED,
+                  fd_topo_obj_t const * obj  FD_FN_UNUSED ) {
+  return fd_dcache_align();
+}
+
+static void
+fec_sets_new( FD_PARAM_UNUSED fd_topo_t const *     topo,
+              FD_PARAM_UNUSED fd_topo_obj_t const * obj ) {
+  FD_TEST( fd_topo_obj_laddr( topo, obj->id ) );
+}
+
+fd_topo_obj_callbacks_t fd_obj_cb_fec_sets = {
+  .name      = "fec_sets",
+  .footprint = fec_sets_footprint,
+  .align     = fec_sets_align,
+  .new       = fec_sets_new,
 };
 
 static ulong

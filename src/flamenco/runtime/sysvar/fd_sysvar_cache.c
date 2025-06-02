@@ -122,22 +122,13 @@ fd_sysvar_cache_restore_##name(                                                 
       type##_decode() does not do heap allocations on failure */                          \
     fd_bincode_decode_ctx_t decode = {                                                    \
       .data    = account->vt->get_data( account ),                                        \
-      .dataend = account->vt->get_data( account ) + account->vt->get_data_len( account ), \
-      .wksp    = wksp                                                                     \
+      .dataend = account->vt->get_data( account ) + account->vt->get_data_len( account )  \
     };                                                                                    \
     ulong total_sz    = 0UL;                                                              \
     int   err         = type##_decode_footprint( &decode, &total_sz );                    \
     cache->has_##name = (err==FD_BINCODE_SUCCESS);                                        \
-    if( FD_UNLIKELY( err ) ) {                                                            \
-      FD_LOG_WARNING(( "failed to decode footprint" ));                                   \
-      break;                                                                              \
-    }                                                                                     \
-    type##_t * mem = fd_spad_alloc( runtime_spad,                                         \
-                                    type##_align(),                                       \
-                                    total_sz );                                           \
-    if( FD_UNLIKELY( !mem ) ) {                                                           \
-      FD_LOG_ERR(( "memory allocation failed" ));                                         \
-    }                                                                                     \
+    if( FD_UNLIKELY( err ) ) break;                                                       \
+    type##_t * mem = fd_spad_alloc_check( runtime_spad,  type##_align(),  total_sz );     \
     HANDLE_GLOBAL_##is_global( type, mem, decode )                                        \
     cache->gaddr_##name = fd_wksp_gaddr_fast( wksp, mem );                                \
   } while(0);                                                                             \

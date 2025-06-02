@@ -537,6 +537,9 @@ fd_txn_to_json_full( fd_webserver_t * ws,
     return NULL;
   }
 
+  const char * err = fd_txn_meta_to_json( ws, NULL, 0 );
+  if ( err ) return err;
+
   EMIT_SIMPLE("\"transaction\":{\"message\":{\"accountKeys\":[");
 
   ushort acct_cnt = txn->acct_addr_cnt;
@@ -797,17 +800,6 @@ fd_block_to_json( fd_webserver_t * ws,
         } else
           EMIT_SIMPLE(",{");
 
-        /* FIXME
-        uchar const * sig_p = raw + ((fd_txn_t *)txn_out)->signature_off;
-        fd_txn_map_t elem;
-        uchar flags;
-        if( !fd_blockstore_txn_query_volatile( blockstore, blockstore_fd, sig_p, &elem, NULL, &flags, NULL ) ) {
-          const void * meta = fd_wksp_laddr_fast( blockstore_wksp, elem.meta_gaddr );
-          const char * err = fd_txn_meta_to_json( ws, meta, elem.meta_sz );
-          if ( err ) return err;
-        }
-        */
-
         const char * err = fd_txn_to_json( ws, (fd_txn_t *)txn_out, raw, pay_sz, encoding, maxvers, detail, spad );
         if ( err ) return err;
 
@@ -889,6 +881,8 @@ fd_account_to_json( fd_webserver_t * ws,
     encstr = "base64+zstd";
     break;
   }
+# else
+  (void)spad;
 # endif /* FD_HAS_ZSTD */
   default:
     return "unsupported encoding";

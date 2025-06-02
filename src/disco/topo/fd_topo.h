@@ -191,9 +191,15 @@ typedef struct {
     } dedup;
 
     struct {
-      char url[ 256 ];
-      char tls_domain_name[ 256 ];
-      char identity_key_path[ PATH_MAX ];
+      char  url[ 256 ];
+      ulong url_len;
+      char  sni[ 256 ];
+      ulong sni_len;
+      char  identity_key_path[ PATH_MAX ];
+      char  key_log_path[ PATH_MAX ];
+      ulong buf_sz;
+      ulong ssl_heap_sz;
+      ulong keepalive_interval_nanos;
     } bundle;
 
     struct {
@@ -234,9 +240,9 @@ typedef struct {
       int    larger_shred_limits_per_block;
       ulong  expected_shred_version;
       struct {
-        uint   ip;
-        ushort port;
-      } adtl_dest;
+        uint   ip;   /* in network byte order */
+        ushort port; /* in host byte order */
+      } adtl_dest; /* be careful ip and host are in different byte order */
     } shred;
 
     struct {
@@ -410,6 +416,10 @@ typedef struct {
       ushort  tpu_port;
       uint    tpu_ip_addr;
       char    identity_key_path[ PATH_MAX ];
+      uint    block_index_max;
+      uint    txn_index_max;
+      uint    acct_index_max;
+      char    history_file[ PATH_MAX ];
     } rpcserv;
 
     struct {
@@ -587,9 +597,9 @@ fd_topo_find_tile_in_link( fd_topo_t const *      topo,
 
 FD_FN_PURE static inline ulong
 fd_topo_find_tile_out_link( fd_topo_t const *      topo,
-                           fd_topo_tile_t const * tile,
-                           char const *           name,
-                           ulong                  kind_id ) {
+                            fd_topo_tile_t const * tile,
+                            char const *           name,
+                            ulong                  kind_id ) {
   for( ulong i=0; i<tile->out_cnt; i++ ) {
     if( FD_UNLIKELY( !strcmp( topo->links[ tile->out_link_id[ i ] ].name, name ) )
         && topo->links[ tile->out_link_id[ i ] ].kind_id == kind_id ) return i;

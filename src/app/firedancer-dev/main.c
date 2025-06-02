@@ -20,6 +20,7 @@ extern fd_topo_obj_callbacks_t fd_obj_cb_keyswitch;
 extern fd_topo_obj_callbacks_t fd_obj_cb_tile;
 extern fd_topo_obj_callbacks_t fd_obj_cb_runtime_pub;
 extern fd_topo_obj_callbacks_t fd_obj_cb_blockstore;
+extern fd_topo_obj_callbacks_t fd_obj_cb_fec_sets;
 extern fd_topo_obj_callbacks_t fd_obj_cb_txncache;
 extern fd_topo_obj_callbacks_t fd_obj_cb_exec_spad;
 
@@ -37,6 +38,7 @@ fd_topo_obj_callbacks_t * CALLBACKS[] = {
   &fd_obj_cb_tile,
   &fd_obj_cb_runtime_pub,
   &fd_obj_cb_blockstore,
+  &fd_obj_cb_fec_sets,
   &fd_obj_cb_txncache,
   &fd_obj_cb_exec_spad,
   NULL,
@@ -79,10 +81,10 @@ extern fd_topo_run_tile_t fd_tile_plugin;
 extern fd_topo_run_tile_t fd_tile_bencho;
 extern fd_topo_run_tile_t fd_tile_benchg;
 extern fd_topo_run_tile_t fd_tile_benchs;
+extern fd_topo_run_tile_t fd_tile_bundle;
 
 extern fd_topo_run_tile_t fd_tile_gossip;
 extern fd_topo_run_tile_t fd_tile_repair;
-extern fd_topo_run_tile_t fd_tile_storei;
 extern fd_topo_run_tile_t fd_tile_replay;
 extern fd_topo_run_tile_t fd_tile_execor;
 extern fd_topo_run_tile_t fd_tile_writer;
@@ -119,9 +121,9 @@ fd_topo_run_tile_t * TILES[] = {
   &fd_tile_bencho,
   &fd_tile_benchg,
   &fd_tile_benchs,
+  &fd_tile_bundle,
   &fd_tile_gossip,
   &fd_tile_repair,
-  &fd_tile_storei,
   &fd_tile_replay,
   &fd_tile_execor,
   &fd_tile_writer,
@@ -134,7 +136,9 @@ fd_topo_run_tile_t * TILES[] = {
   &fd_tile_archiver_feeder,
   &fd_tile_archiver_writer,
   &fd_tile_archiver_playback,
+#if FD_HAS_ROCKSDB
   &fd_tile_archiver_backtest,
+#endif
   &fd_tile_bencho,
   &fd_tile_benchg,
   &fd_tile_benchs,
@@ -152,6 +156,7 @@ extern action_t fd_action_netconf;
 extern action_t fd_action_set_identity;
 extern action_t fd_action_version;
 extern action_t fd_action_bench;
+extern action_t fd_action_bundle_client;
 extern action_t fd_action_dev;
 extern action_t fd_action_dump;
 extern action_t fd_action_flame;
@@ -178,6 +183,7 @@ action_t * ACTIONS[] = {
   &fd_action_help,
   &fd_action_version,
   &fd_action_bench,
+  &fd_action_bundle_client,
   &fd_action_dev,
   &fd_action_dump,
   &fd_action_flame,

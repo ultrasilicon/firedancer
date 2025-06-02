@@ -1,5 +1,5 @@
 #include "fd_prometheus.h"
-#include "../../ballet/http/fd_http_server.h"
+#include "../../waltz/http/fd_http_server.h"
 #include "../../util/net/fd_ip4.h"
 
 #include <sys/types.h>
@@ -8,7 +8,7 @@
 #include <string.h>
 
 #if defined(__aarch64__)
-#include "generated/fd_metric_tile.arm64_seccomp.h"
+#include "generated/fd_metric_tile_arm64_seccomp.h"
 #else
 #include "generated/fd_metric_tile_seccomp.h"
 #endif

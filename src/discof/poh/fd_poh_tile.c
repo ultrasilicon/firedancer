@@ -309,11 +309,11 @@
 #include "../bank/fd_bank_abi.h"
 
 #include "../../disco/tiles.h"
-#include "../../disco/plugin/fd_bundle_crank.h"
+#include "../../disco/bundle/fd_bundle_crank.h"
 #include "../../disco/pack/fd_pack.h"
 #include "../../ballet/sha256/fd_sha256.h"
 #include "../../disco/metrics/fd_metrics.h"
-#include "../../disco/topo/fd_pod_format.h"
+#include "../../util/pod/fd_pod_format.h"
 #include "../../disco/shred/fd_shredder.h"
 #include "../../disco/shred/fd_stake_ci.h"
 #include "../../disco/keyguard/fd_keyload.h"

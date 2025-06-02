@@ -1,240 +1,6 @@
+#include "../platform/fd_config_extract.h"
+#include "../platform/fd_config_macros.c"
 #include "fd_config_private.h"
-#include "../../util/pod/fd_pod.h"
-
-/* Pod query utils ****************************************************/
-
-static int
-fdctl_cfg_get_cstr_( char *                out,
-                     ulong                 out_sz,
-                     fd_pod_info_t const * info,
-                     char const *          path ) {
-  if( FD_UNLIKELY( info->val_type != FD_POD_VAL_TYPE_CSTR ) ) {
-    FD_LOG_WARNING(( "invalid value for `%s`", path ));
-    return 0;
-  }
-  char const * str = info->val;
-  ulong        sz  = strlen( str ) + 1;
-  if( FD_UNLIKELY( sz > out_sz ) ) {
-    FD_LOG_WARNING(( "`%s`: too long (max %ld)", path, (long)out_sz-1L ));
-    return 0;
-  }
-  fd_memcpy( out, str, sz );
-  return 1;
-}
-
-#define fdctl_cfg_get_cstr( out, out_sz, info, path ) \
-  fdctl_cfg_get_cstr_( *out, out_sz, info, path )
-
-static int
-fdctl_cfg_get_ulong( ulong *               out,
-                     ulong                 out_sz FD_PARAM_UNUSED,
-                     fd_pod_info_t const * info,
-                     char const *          path ) {
-
-  ulong num;
-  switch( info->val_type ) {
-  case FD_POD_VAL_TYPE_LONG:
-    fd_ulong_svw_dec( (uchar const *)info->val, &num );
-    long snum = fd_long_zz_dec( num );
-    if( snum < 0L ) {
-      FD_LOG_WARNING(( "`%s` cannot be negative", path ));
-      return 0;
-    }
-    num = (ulong)snum;
-    break;
-  case FD_POD_VAL_TYPE_ULONG:
-    fd_ulong_svw_dec( (uchar const *)info->val, &num );
-    break;
-  default:
-    FD_LOG_WARNING(( "invalid value for `%s`", path ));
-    return 0;
-  }
-
-  *out = num;
-  return 1;
-}
-
-static int
-fdctl_cfg_get_uint( uint *                out,
-                    ulong                 out_sz FD_PARAM_UNUSED,
-                    fd_pod_info_t const * info,
-                    char const *          path ) {
-  ulong num;
-  if( FD_UNLIKELY( !fdctl_cfg_get_ulong( &num, sizeof(num), info, path ) ) ) return 0;
-  if( num > UINT_MAX ) {
-    FD_LOG_WARNING(( "`%s` is out of bounds (%lx)", path, num ));
-    return 0;
-  }
-  *out = (uint)num;
-  return 1;
-}
-
-static int
-fdctl_cfg_get_ushort( ushort *              out,
-                      ulong                 out_sz FD_PARAM_UNUSED,
-                      fd_pod_info_t const * info,
-                      char const *          path ) {
-  ulong num;
-  if( FD_UNLIKELY( !fdctl_cfg_get_ulong( &num, sizeof(num), info, path ) ) ) return 0;
-  if( num > USHORT_MAX ) {
-    FD_LOG_WARNING(( "`%s` is out of bounds (%lx)", path, num ));
-    return 0;
-  }
-  *out = (ushort)num;
-  return 1;
-}
-
-static int
-fdctl_cfg_get_bool( int *                 out,
-                    ulong                 out_sz FD_PARAM_UNUSED,
-                    fd_pod_info_t const * info,
-                    char const *          path ) {
-  if( FD_UNLIKELY( info->val_type != FD_POD_VAL_TYPE_INT ) ) {
-    FD_LOG_WARNING(( "invalid value for `%s`", path ));
-    return 0;
-  }
-  ulong u; fd_ulong_svw_dec( (uchar const *)info->val, &u );
-  *out = fd_int_zz_dec( (uint)u );
-  return 1;
-}
-
-/* Find leftover ******************************************************/
-
-/* fdctl_pod_find_leftover recursively searches for non-subpod keys in
-   pod.  Prints to the warning log if it finds any.  Used to detect
-   config keys that were not recognized by fdctl.  Returns 0 if no
-   leftover key was found.  Otherwise, returns a non-zero number of
-   segments of the leftover key.  The key can be reassembled by joining
-   stack[0] .. stack[depth-1].
-
-   Not thread safe (uses global buffer). */
-
-# define FDCTL_CFG_MAX_DEPTH (16)
-
-static ulong
-fdctl_pod_find_leftover_recurse( uchar *       pod,
-                                 char const ** stack,
-                                 ulong         depth ) {
-
-  if( FD_UNLIKELY( depth+1 >= FDCTL_CFG_MAX_DEPTH ) ) {
-    FD_LOG_WARNING(( "configuration file has too many nested keys" ));
-    return depth;
-  }
-
-  for( fd_pod_iter_t iter = fd_pod_iter_init( pod ); !fd_pod_iter_done( iter ); iter = fd_pod_iter_next( iter ) ) {
-    fd_pod_info_t info = fd_pod_iter_info( iter );
-    stack[ depth ] = info.key;
-    depth++;
-    if( FD_LIKELY( info.val_type == FD_POD_VAL_TYPE_SUBPOD ) ) {
-      ulong sub_depth = fdctl_pod_find_leftover_recurse( (uchar *)info.val, stack, depth );
-      if( FD_UNLIKELY( sub_depth ) ) return sub_depth;
-    } else {
-      return depth;
-    }
-    depth--;
-  }
-
-  return 0;
-}
-
-static int
-fdctl_pod_find_leftover( uchar * pod ) {
-
-  static char const * stack[ FDCTL_CFG_MAX_DEPTH ];
-  ulong depth = fdctl_pod_find_leftover_recurse( pod, stack, 0UL );
-  if( FD_LIKELY( !depth ) ) return 1;
-
-  static char path[ 64*FDCTL_CFG_MAX_DEPTH + 4 ];
-  char * c   = fd_cstr_init( path );
-  char * end = path + 64*FDCTL_CFG_MAX_DEPTH - 1;
-  for( ulong j=0UL; j<depth; j++ ) {
-    char const * key     = stack[j];
-    ulong        key_len = strlen( key );
-    if( c+key_len+1 >= end ) {
-      c = fd_cstr_append_text( c, "...", 3UL );
-      break;
-    }
-    c = fd_cstr_append_text( c, key, key_len );
-    c = fd_cstr_append_char( c, '.' );
-  }
-  c -= 1;
-  fd_cstr_fini( c );
-
-  FD_LOG_WARNING(( "Config file contains unrecognized key `%s`", path ));
-  return 0;
-}
-
-/* Converter **********************************************************/
-
-#define CFG_POP( type, cfg_path )                                      \
-  do {                                                                 \
-    char const * key = #cfg_path;                                      \
-    fd_pod_info_t info[1];                                             \
-    if( fd_pod_query( pod, key, info ) ) break;                        \
-    if( FD_UNLIKELY( !fdctl_cfg_get_##type( &config->cfg_path, sizeof(config->cfg_path), \
-        info, key ) ) )                                                \
-      return NULL;                                                     \
-    fd_pod_remove( pod, key );                                         \
-  } while(0)
-
-#define CFG_POP1( type, toml_path, cfg_path )                          \
-  do {                                                                 \
-    char const * key = #toml_path;                                      \
-    fd_pod_info_t info[1];                                             \
-    if( fd_pod_query( pod, key, info ) ) break;                        \
-    if( FD_UNLIKELY( !fdctl_cfg_get_##type( &config->cfg_path, sizeof(config->cfg_path), \
-        info, key ) ) )                                                \
-      return NULL;                                                     \
-    fd_pod_remove( pod, key );                                         \
-  } while(0)
-
-#define CFG_POP_ARRAY( type, cfg_path )                                \
-  do {                                                                 \
-    char const * key = #cfg_path;                                      \
-    fd_pod_info_t info[1];                                             \
-    if( fd_pod_query( pod, key, info ) ) break;                        \
-    if( FD_UNLIKELY( info->val_type!=FD_POD_VAL_TYPE_SUBPOD ) ) {      \
-      FD_LOG_WARNING(( "`%s`: expected array", key ));                 \
-      return NULL;                                                     \
-    }                                                                  \
-    ulong  arr_len = sizeof( config->cfg_path ) / sizeof( config->cfg_path[ 0 ] ); \
-    ulong  j       = 0UL;                                              \
-    for( fd_pod_iter_t iter = fd_pod_iter_init( info->val ); !fd_pod_iter_done( iter ); iter = fd_pod_iter_next( iter ) ) { \
-      if( FD_UNLIKELY( j>=arr_len ) ) {                                \
-        FD_LOG_WARNING(( "`%s`: too many values (max %lu)", key, arr_len )); \
-        return NULL;                                                   \
-      }                                                                \
-      fd_pod_info_t sub_info = fd_pod_iter_info( iter );               \
-      fdctl_cfg_get_##type( &config->cfg_path[j], sizeof(config->cfg_path[j]), &sub_info, key ); \
-      j++;                                                             \
-    }                                                                  \
-    config->cfg_path ## _cnt = j;                                      \
-    fd_pod_remove( pod, key );                                         \
-  } while(0)
-
-#define CFG_POP1_ARRAY( type, toml_path, cfg_path )                    \
-  do {                                                                 \
-    char const * key = #toml_path;                                     \
-    fd_pod_info_t info[1];                                             \
-    if( fd_pod_query( pod, key, info ) ) break;                        \
-    if( FD_UNLIKELY( info->val_type!=FD_POD_VAL_TYPE_SUBPOD ) ) {      \
-      FD_LOG_WARNING(( "`%s`: expected array", key ));                 \
-      return NULL;                                                     \
-    }                                                                  \
-    ulong  arr_len = sizeof( config->cfg_path ) / sizeof( config->cfg_path[ 0 ] ); \
-    ulong  j       = 0UL;                                              \
-    for( fd_pod_iter_t iter = fd_pod_iter_init( info->val ); !fd_pod_iter_done( iter ); iter = fd_pod_iter_next( iter ) ) { \
-      if( FD_UNLIKELY( j>=arr_len ) ) {                                \
-        FD_LOG_WARNING(( "`%s`: too many values (max %lu)", key, arr_len )); \
-        return NULL;                                                   \
-      }                                                                \
-      fd_pod_info_t sub_info = fd_pod_iter_info( iter );               \
-      fdctl_cfg_get_##type( &config->cfg_path[j], sizeof(config->cfg_path[j]), &sub_info, key ); \
-      j++;                                                             \
-    }                                                                  \
-    config->cfg_path ## _cnt = j;                                      \
-    fd_pod_remove( pod, key );                                         \
-  } while(0)
 
 static void
 fd_config_check_configf( fd_config_t *  config,
@@ -366,6 +132,12 @@ fd_config_extract_pod( uchar *       pod,
 
   CFG_POP      ( ushort, rpc.port                                         );
   CFG_POP      ( bool,   rpc.extended_tx_metadata_storage                 );
+  if( FD_UNLIKELY( config->is_firedancer ) ) {
+    CFG_POP      ( uint,   rpc.block_index_max                            );
+    CFG_POP      ( uint,   rpc.txn_index_max                              );
+    CFG_POP      ( uint,   rpc.acct_index_max                             );
+    CFG_POP      ( cstr,   rpc.history_file                               );
+  }
 
   CFG_POP      ( cstr,   layout.affinity                                  );
   CFG_POP      ( uint,   layout.net_tile_count                            );
@@ -416,6 +188,7 @@ fd_config_extract_pod( uchar *       pod,
   CFG_POP      ( cstr,   tiles.bundle.tip_payment_program_addr            );
   CFG_POP      ( cstr,   tiles.bundle.tip_distribution_authority          );
   CFG_POP      ( uint,   tiles.bundle.commission_bps                      );
+  CFG_POP      ( ulong,  tiles.bundle.keepalive_interval_millis           );
 
   CFG_POP      ( uint,   tiles.pack.max_pending_transactions              );
   CFG_POP      ( bool,   tiles.pack.use_consumed_cus                      );
@@ -507,6 +280,10 @@ fd_config_extract_pod( uchar *       pod,
   CFG_POP      ( bool,   development.bench.larger_shred_limits_per_block  );
   CFG_POP      ( ulong,  development.bench.disable_blockstore_from_slot   );
   CFG_POP      ( bool,   development.bench.disable_status_cache           );
+
+  CFG_POP      ( cstr,   development.bundle.ssl_key_log_file              );
+  CFG_POP      ( uint,   development.bundle.buffer_size_kib               );
+  CFG_POP      ( uint,   development.bundle.ssl_heap_size_mib             );
 
   CFG_POP      ( cstr,   development.pktgen.affinity                      );
   CFG_POP      ( cstr,   development.pktgen.fake_dst_ip                   );
