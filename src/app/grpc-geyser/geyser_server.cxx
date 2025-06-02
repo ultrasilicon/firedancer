@@ -15,8 +15,8 @@ extern "C" {
 #include "geys_fd_loop.h"
 }
 
-ABSL_FLAG(uint16_t, port, 8123, "Server port for the service");
-ABSL_FLAG(std::string, funk_file, "/data/asiegel/testnet.funk", "Funk database file");
+ABSL_FLAG(uint16_t, port, 8754, "Server port for the service");
+ABSL_FLAG(std::string, funk_file, "/data/asiegel/ledger/funk_db", "Funk database file");
 ABSL_FLAG(std::string, blockstore_wksp, "fd1_blockstore.wksp", "Blockstore workspace");
 ABSL_FLAG(std::string, notify_wksp, "fd1_replay_notif.wksp", "Notification link workspace");
 ABSL_FLAG(int, max_block_idx, 65536, "Max number of blocks which can be indexed");

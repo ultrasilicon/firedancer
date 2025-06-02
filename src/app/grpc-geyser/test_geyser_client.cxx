@@ -9,7 +9,7 @@
 
 #include "geyser.grpc.pb.h"
 
-ABSL_FLAG(std::string, target, "localhost:8123", "Server address");
+ABSL_FLAG(std::string, target, "localhost:8754", "Server address");
 
 using grpc::Channel;
 using grpc::ClientContext;
