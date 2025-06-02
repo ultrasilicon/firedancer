@@ -9115,6 +9115,10 @@ int fd_partitioned_stake_rewards_encode( fd_partitioned_stake_rewards_t const * 
   }
   return FD_BINCODE_SUCCESS;
 }
+int fd_partitioned_stake_rewards_encode_global( fd_partitioned_stake_rewards_global_t const * self, fd_bincode_encode_ctx_t * ctx ) {
+  int err;
+  return FD_BINCODE_SUCCESS;
+}
 static int fd_partitioned_stake_rewards_decode_footprint_inner( fd_bincode_decode_ctx_t * ctx, ulong * total_sz ) {
   if( ctx->data>=ctx->dataend ) { return FD_BINCODE_ERR_OVERFLOW; };
   int err = 0;
@@ -9170,6 +9174,38 @@ void * fd_partitioned_stake_rewards_decode( void * mem, fd_bincode_decode_ctx_t 
   void * alloc_region = (uchar *)mem + sizeof(fd_partitioned_stake_rewards_t);
   void * * alloc_mem = &alloc_region;
   fd_partitioned_stake_rewards_decode_inner( mem, alloc_mem, ctx );
+  return self;
+}
+static void fd_partitioned_stake_rewards_decode_inner_global( void * struct_mem, void * * alloc_mem, fd_bincode_decode_ctx_t * ctx ) {
+  fd_partitioned_stake_rewards_global_t * self = (fd_partitioned_stake_rewards_global_t *)struct_mem;
+  fd_bincode_uint64_decode_unsafe( &self->partitions_len, ctx );
+  ulong total_count = 0UL;
+  for( ulong i=0; i < 4096; i++ ) {
+    fd_bincode_uint64_decode_unsafe( self->partitions_lengths + i, ctx );
+    total_count += self->partitions_lengths[ i ];
+  }
+  *alloc_mem = (void*)fd_ulong_align_up( (ulong)*alloc_mem, fd_partitioned_stake_rewards_pool_align() );
+  fd_stake_reward_t * pool = fd_partitioned_stake_rewards_pool_join_new( alloc_mem, total_count );
+  *alloc_mem = (void*)fd_ulong_align_up( (ulong)*alloc_mem, fd_partitioned_stake_rewards_dlist_align() );
+  fd_partitioned_stake_rewards_dlist_t * partitions = fd_partitioned_stake_rewards_dlist_join_new( alloc_mem, self->partitions_len );
+  for( ulong i=0; i < self->partitions_len; i++ ) {
+    fd_partitioned_stake_rewards_dlist_new( &partitions[ i ] );
+    for( ulong j=0; j < self->partitions_lengths[ i ]; j++ ) {
+      fd_stake_reward_t * ele = fd_partitioned_stake_rewards_pool_ele_acquire( pool );
+      fd_stake_reward_new( ele );
+      fd_stake_reward_decode_inner( ele, alloc_mem, ctx );
+      fd_partitioned_stake_rewards_dlist_ele_push_tail( &partitions[ i ], ele, pool );
+    }
+  }
+  self->pool_offset  = (ulong)fd_partitioned_stake_rewards_pool_leave( pool ) - (ulong)struct_mem;
+  self->partitions_offset = (ulong)fd_partitioned_stake_rewards_dlist_leave( partitions ) - (ulong)struct_mem;
+}
+void * fd_partitioned_stake_rewards_decode_global( void * mem, fd_bincode_decode_ctx_t * ctx ) {
+  fd_partitioned_stake_rewards_global_t * self = (fd_partitioned_stake_rewards_global_t *)mem;
+  fd_partitioned_stake_rewards_new( (fd_partitioned_stake_rewards_t *)self );
+  void * alloc_region = (uchar *)mem + sizeof(fd_partitioned_stake_rewards_global_t);
+  void * * alloc_mem = &alloc_region;
+  fd_partitioned_stake_rewards_decode_inner_global( mem, alloc_mem, ctx );
   return self;
 }
 void fd_partitioned_stake_rewards_new(fd_partitioned_stake_rewards_t * self) {
@@ -9728,6 +9764,14 @@ int fd_start_block_height_and_rewards_encode( fd_start_block_height_and_rewards_
   if( FD_UNLIKELY( err ) ) return err;
   return FD_BINCODE_SUCCESS;
 }
+int fd_start_block_height_and_rewards_encode_global( fd_start_block_height_and_rewards_global_t const * self, fd_bincode_encode_ctx_t * ctx ) {
+  int err;
+  err = fd_bincode_uint64_encode( self->distribution_starting_block_height, ctx );
+  if( FD_UNLIKELY( err ) ) return err;
+  err = fd_partitioned_stake_rewards_encode_global( &self->partitioned_stake_rewards, ctx );
+  if( FD_UNLIKELY( err ) ) return err;
+  return FD_BINCODE_SUCCESS;
+}
 static int fd_start_block_height_and_rewards_decode_footprint_inner( fd_bincode_decode_ctx_t * ctx, ulong * total_sz ) {
   if( ctx->data>=ctx->dataend ) { return FD_BINCODE_ERR_OVERFLOW; };
   int err = 0;
@@ -9756,6 +9800,19 @@ void * fd_start_block_height_and_rewards_decode( void * mem, fd_bincode_decode_c
   void * alloc_region = (uchar *)mem + sizeof(fd_start_block_height_and_rewards_t);
   void * * alloc_mem = &alloc_region;
   fd_start_block_height_and_rewards_decode_inner( mem, alloc_mem, ctx );
+  return self;
+}
+static void fd_start_block_height_and_rewards_decode_inner_global( void * struct_mem, void * * alloc_mem, fd_bincode_decode_ctx_t * ctx ) {
+  fd_start_block_height_and_rewards_global_t * self = (fd_start_block_height_and_rewards_global_t *)struct_mem;
+  fd_bincode_uint64_decode_unsafe( &self->distribution_starting_block_height, ctx );
+  fd_partitioned_stake_rewards_decode_inner_global( &self->partitioned_stake_rewards, alloc_mem, ctx );
+}
+void * fd_start_block_height_and_rewards_decode_global( void * mem, fd_bincode_decode_ctx_t * ctx ) {
+  fd_start_block_height_and_rewards_global_t * self = (fd_start_block_height_and_rewards_global_t *)mem;
+  fd_start_block_height_and_rewards_new( (fd_start_block_height_and_rewards_t *)self );
+  void * alloc_region = (uchar *)mem + sizeof(fd_start_block_height_and_rewards_global_t);
+  void * * alloc_mem = &alloc_region;
+  fd_start_block_height_and_rewards_decode_inner_global( mem, alloc_mem, ctx );
   return self;
 }
 void fd_start_block_height_and_rewards_new(fd_start_block_height_and_rewards_t * self) {
@@ -9870,6 +9927,17 @@ static void fd_epoch_reward_status_inner_decode_inner( fd_epoch_reward_status_in
   }
   }
 }
+static void fd_epoch_reward_status_inner_decode_inner_global( fd_epoch_reward_status_inner_global_t * self, void * * alloc_mem, uint discriminant, fd_bincode_decode_ctx_t * ctx ) {
+  switch (discriminant) {
+  case 0: {
+    fd_start_block_height_and_rewards_decode_inner_global( &self->Active, alloc_mem, ctx );
+    break;
+  }
+  case 1: {
+    break;
+  }
+  }
+}
 static void fd_epoch_reward_status_decode_inner( void * struct_mem, void * * alloc_mem, fd_bincode_decode_ctx_t * ctx ) {
   fd_epoch_reward_status_t * self = (fd_epoch_reward_status_t *)struct_mem;
   fd_bincode_uint32_decode_unsafe( &self->discriminant, ctx );
@@ -9881,6 +9949,36 @@ void * fd_epoch_reward_status_decode( void * mem, fd_bincode_decode_ctx_t * ctx 
   void * alloc_region = (uchar *)mem + sizeof(fd_epoch_reward_status_t);
   void * * alloc_mem = &alloc_region;
   fd_epoch_reward_status_decode_inner( mem, alloc_mem, ctx );
+  return self;
+}
+static int fd_epoch_reward_status_inner_encode_global( fd_epoch_reward_status_inner_global_t const * self, uint discriminant, fd_bincode_encode_ctx_t * ctx ) {
+  int err;
+  switch (discriminant) {
+  case 0: {
+    err = fd_start_block_height_and_rewards_encode_global( &self->Active, ctx );
+    if( FD_UNLIKELY( err ) ) return err;
+    break;
+  }
+  }
+  return FD_BINCODE_SUCCESS;
+}
+int fd_epoch_reward_status_encode_global( fd_epoch_reward_status_global_t const * self, fd_bincode_encode_ctx_t * ctx ) {
+  int err = fd_bincode_uint32_encode( self->discriminant, ctx );
+  if( FD_UNLIKELY( err ) ) return err;
+  return fd_epoch_reward_status_inner_encode_global( &self->inner, self->discriminant, ctx );
+}
+
+static void fd_epoch_reward_status_decode_inner_global( void * struct_mem, void * * alloc_mem, fd_bincode_decode_ctx_t * ctx ) {
+  fd_epoch_reward_status_global_t * self = (fd_epoch_reward_status_global_t *)struct_mem;
+  fd_bincode_uint32_decode_unsafe( &self->discriminant, ctx );
+  fd_epoch_reward_status_inner_decode_inner_global( &self->inner, alloc_mem, self->discriminant, ctx );
+}
+void * fd_epoch_reward_status_decode_global( void * mem, fd_bincode_decode_ctx_t * ctx ) {
+  fd_epoch_reward_status_t * self = (fd_epoch_reward_status_t *)mem;
+  fd_epoch_reward_status_new( self );
+  void * alloc_region = (uchar *)mem + sizeof(fd_epoch_reward_status_t);
+  void * * alloc_mem = &alloc_region;
+  fd_epoch_reward_status_decode_inner_global( mem, alloc_mem, ctx );
   return self;
 }
 void fd_epoch_reward_status_inner_new( fd_epoch_reward_status_inner_t * self, uint discriminant ) {

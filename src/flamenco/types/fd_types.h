@@ -1620,6 +1620,15 @@ struct fd_partitioned_stake_rewards {
 typedef struct fd_partitioned_stake_rewards fd_partitioned_stake_rewards_t;
 #define FD_PARTITIONED_STAKE_REWARDS_ALIGN alignof(fd_partitioned_stake_rewards_t)
 
+struct fd_partitioned_stake_rewards_global {
+  ulong partitions_len;
+  ulong partitions_lengths[4096];
+  ulong partitions_offset;
+  ulong pool_offset;
+};
+typedef struct fd_partitioned_stake_rewards_global fd_partitioned_stake_rewards_global_t;
+#define FD_PARTITIONED_STAKE_REWARDS_GLOBAL_ALIGN alignof(fd_partitioned_stake_rewards_global_t)
+
 /* https://github.com/anza-xyz/agave/blob/7117ed9653ce19e8b2dea108eff1f3eb6a3378a7/runtime/src/bank/partitioned_epoch_rewards/mod.rs#L131 */
 /* Encoded Size: Dynamic */
 struct fd_stake_reward_calculation_partitioned {
@@ -1738,6 +1747,13 @@ struct fd_start_block_height_and_rewards {
 typedef struct fd_start_block_height_and_rewards fd_start_block_height_and_rewards_t;
 #define FD_START_BLOCK_HEIGHT_AND_REWARDS_ALIGN alignof(fd_start_block_height_and_rewards_t)
 
+struct fd_start_block_height_and_rewards_global {
+  ulong distribution_starting_block_height;
+  fd_partitioned_stake_rewards_global_t partitioned_stake_rewards;
+};
+typedef struct fd_start_block_height_and_rewards_global fd_start_block_height_and_rewards_global_t;
+#define FD_START_BLOCK_HEIGHT_AND_REWARDS_GLOBAL_ALIGN alignof(fd_start_block_height_and_rewards_global_t)
+
 /* Encoded Size: Dynamic */
 struct fd_fd_epoch_reward_status_inner {
   fd_start_block_height_and_rewards_t Active;
@@ -1750,6 +1766,11 @@ union fd_epoch_reward_status_inner {
 };
 typedef union fd_epoch_reward_status_inner fd_epoch_reward_status_inner_t;
 
+union fd_epoch_reward_status_inner_global {
+  fd_start_block_height_and_rewards_global_t Active;
+};
+typedef union fd_epoch_reward_status_inner_global fd_epoch_reward_status_inner_global_t;
+
 /* https://github.com/anza-xyz/agave/blob/7117ed9653ce19e8b2dea108eff1f3eb6a3378a7/runtime/src/bank/partitioned_epoch_rewards/mod.rs#L70 */
 struct fd_epoch_reward_status {
   uint discriminant;
@@ -1757,6 +1778,12 @@ struct fd_epoch_reward_status {
 };
 typedef struct fd_epoch_reward_status fd_epoch_reward_status_t;
 #define FD_EPOCH_REWARD_STATUS_ALIGN alignof(fd_epoch_reward_status_t)
+struct fd_epoch_reward_status_global {
+  uint discriminant;
+  fd_epoch_reward_status_inner_global_t inner;
+};
+typedef struct fd_epoch_reward_status_global fd_epoch_reward_status_global_t;
+#define FD_EPOCH_REWARD_STATUS_GLOBAL_ALIGN alignof(fd_epoch_reward_status_global_t)
 
 /* Encoded Size: Dynamic */
 struct __attribute__((aligned(128UL))) fd_slot_bank {
@@ -4359,6 +4386,8 @@ ulong fd_partitioned_stake_rewards_size( fd_partitioned_stake_rewards_t const * 
 static inline ulong fd_partitioned_stake_rewards_align( void ) { return FD_PARTITIONED_STAKE_REWARDS_ALIGN; }
 int fd_partitioned_stake_rewards_decode_footprint( fd_bincode_decode_ctx_t * ctx, ulong * total_sz );
 void * fd_partitioned_stake_rewards_decode( void * mem, fd_bincode_decode_ctx_t * ctx );
+void * fd_partitioned_stake_rewards_decode_global( void * mem, fd_bincode_decode_ctx_t * ctx );
+int fd_partitioned_stake_rewards_encode_global( fd_partitioned_stake_rewards_global_t const * self, fd_bincode_encode_ctx_t * ctx );
 
 void fd_stake_reward_calculation_partitioned_new( fd_stake_reward_calculation_partitioned_t * self );
 int fd_stake_reward_calculation_partitioned_encode( fd_stake_reward_calculation_partitioned_t const * self, fd_bincode_encode_ctx_t * ctx );
@@ -4415,6 +4444,8 @@ ulong fd_start_block_height_and_rewards_size( fd_start_block_height_and_rewards_
 static inline ulong fd_start_block_height_and_rewards_align( void ) { return FD_START_BLOCK_HEIGHT_AND_REWARDS_ALIGN; }
 int fd_start_block_height_and_rewards_decode_footprint( fd_bincode_decode_ctx_t * ctx, ulong * total_sz );
 void * fd_start_block_height_and_rewards_decode( void * mem, fd_bincode_decode_ctx_t * ctx );
+void * fd_start_block_height_and_rewards_decode_global( void * mem, fd_bincode_decode_ctx_t * ctx );
+int fd_start_block_height_and_rewards_encode_global( fd_start_block_height_and_rewards_global_t const * self, fd_bincode_encode_ctx_t * ctx );
 
 void fd_fd_epoch_reward_status_inner_new( fd_fd_epoch_reward_status_inner_t * self );
 int fd_fd_epoch_reward_status_inner_encode( fd_fd_epoch_reward_status_inner_t const * self, fd_bincode_encode_ctx_t * ctx );
@@ -4432,6 +4463,8 @@ ulong fd_epoch_reward_status_size( fd_epoch_reward_status_t const * self );
 static inline ulong fd_epoch_reward_status_align( void ) { return FD_EPOCH_REWARD_STATUS_ALIGN; }
 int fd_epoch_reward_status_decode_footprint( fd_bincode_decode_ctx_t * ctx, ulong * total_sz );
 void * fd_epoch_reward_status_decode( void * mem, fd_bincode_decode_ctx_t * ctx );
+void * fd_epoch_reward_status_decode_global( void * mem, fd_bincode_decode_ctx_t * ctx );
+int fd_epoch_reward_status_encode_global( fd_epoch_reward_status_global_t const * self, fd_bincode_encode_ctx_t * ctx );
 
 FD_FN_PURE uchar fd_epoch_reward_status_is_Active( fd_epoch_reward_status_t const * self );
 FD_FN_PURE uchar fd_epoch_reward_status_is_Inactive( fd_epoch_reward_status_t const * self );

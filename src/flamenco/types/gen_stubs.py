@@ -1808,8 +1808,8 @@ class PartitionMember(TypeNode):
         else:
             print(f'  ulong {self.name}_len;', file=header)
         print(f'  ulong {self.name}_lengths[{self.dlist_max}];', file=header)
+        print(f'  ulong {self.name}_offset;', file=header)
         print(f'  ulong pool_offset;', file=header)
-        print(f'  ulong dlist_offset;', file=header)
 
     def emitNew(self, indent=''):
         pass
@@ -1899,7 +1899,7 @@ class PartitionMember(TypeNode):
         print('    }', file=body)
         print('  }', file=body)
         print(f'  self->pool_offset  = (ulong){pool_name}_leave( pool ) - (ulong)struct_mem;', file=body)
-        print(f'  self->dlist_offset = (ulong){dlist_name}_leave( {self.name} ) - (ulong)struct_mem;', file=body)
+        print(f'  self->{self.name}_offset = (ulong){dlist_name}_leave( {self.name} ) - (ulong)struct_mem;', file=body)
 
 
     def emitEncode(self):
@@ -3018,6 +3018,8 @@ def extract_sub_type(member):
         return type_map[member.element] if member.element in type_map else None
     if hasattr(member, "type"):
         return type_map[member.type] if member.type in type_map else None
+    if hasattr(member, "dlist_t"):
+        return type_map[member.dlist_t] if member.dlist_t in type_map else None
     raise ValueError(f"Unknown type {member} in extract_sub_type")
 
 def extract_member_type(member):
@@ -3032,6 +3034,8 @@ def extract_member_type(member):
     if hasattr(member, "element"):
         return member
     if hasattr(member, "type"):
+        return member
+    if hasattr(member, "dlist_t"):
         return member
     raise ValueError(f"Unknown type {member} in extract_member_type")
 

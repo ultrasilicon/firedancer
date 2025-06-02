@@ -1217,6 +1217,7 @@
     {
       "name": "epoch_reward_status",
       "type": "enum",
+      "global": true,
       "variants": [
         { "name": "Active", "type": "start_block_height_and_rewards" },
         { "name": "Inactive" }
