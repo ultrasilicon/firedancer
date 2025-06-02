@@ -65,6 +65,28 @@ class GeyserClient {
       }
     }
 
+    void testGetSlot() {
+      // Data we are sending to the server.
+      ::geyser::GetSlotRequest request;
+
+      // Container for the data we expect from the server.
+      ::geyser::GetSlotResponse reply;
+
+      // Context for the client. It could be used to convey extra information to
+      // the server and/or tweak certain RPC behaviors.
+      ClientContext context;
+
+      // The actual RPC.
+      Status status = stub_->GetSlot(&context, request, &reply);
+
+      // Act upon its status.
+      if (status.ok()) {
+        std::cout << "slot=" << reply.slot() << std::endl;
+      } else {
+        std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+      }
+    }
+
   private:
     std::unique_ptr<geyser::Geyser::Stub> stub_;
 };
@@ -81,6 +103,7 @@ int main(int argc, char** argv) {
 
   geyser.testGetVersion();
   geyser.testPing();
+  geyser.testGetSlot();
 
   return 0;
 }
