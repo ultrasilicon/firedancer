@@ -44,8 +44,8 @@
 struct fd_gossip_view_contact_info {
   long   instance_creation_wallclock_nanos;
   ushort shred_version;
-  ushort pubkey_offset;
-  ushort signature_offset; /* within full message payload, not CRDS */
+  ushort pubkey_off;
+  ushort signature_off; /* within full message payload, not CRDS */
 };
 
 typedef struct fd_gossip_view_contact_info fd_gossip_view_contact_info_t;
@@ -101,17 +101,21 @@ void
 fd_gossip_msg_init( fd_gossip_view_t * msg );
 
 int
-fd_gossip_view_signable_data_offset( fd_gossip_view_t * view,
-                                     uchar const *      payload,
-                                     ulong              payload_sz,
-                                     ulong              out_signable_data_offsets[static 16UL],
-                                     ulong              out_signable_data_offsets_lengths[static 16UL],
-                                     ulong *            out_signable_data_count );
+fd_gossip_view_signable_data_offsets( fd_gossip_view_t const * view,
+                                     uchar const *            payload,
+                                    //  ulong                    payload_sz,
+                                     ulong                    out_signature_offsets[static 16],
+                                     ulong                    out_signable_data_offsets[static 16],
+                                     ulong                    out_signable_data_offsets_lengths[static 16],
+                                     ulong *                  out_signable_data_count );
+
+ulong
+fd_gossip_view_pubkey_offset( fd_gossip_view_t const * view );
 
 ulong
 fd_gossip_msg_parse( fd_gossip_view_t *   view,
-                      uchar const *       payload,
-                      ulong               payload_sz );
+                     uchar const *        payload,
+                     ulong                payload_sz );
 
 /* Initializes a payload buffer for a gossip message with tag encoded.
    Returns offset into the buffer after tag, where the inner message

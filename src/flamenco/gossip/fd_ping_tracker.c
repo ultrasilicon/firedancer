@@ -486,8 +486,8 @@ fd_ping_tracker_pop_request( fd_ping_tracker_t *    ping_tracker,
 }
 
 void
-fd_ping_tracker_hash_ping_token(  uchar const * token,
-                                  uchar *       out_hash ) {
+fd_ping_tracker_hash_ping_token( uchar const * token,
+                                 uchar *       out_hash ) {
   fd_sha256_t sha[1];
   hash_ping_token( token, out_hash, sha );
 }

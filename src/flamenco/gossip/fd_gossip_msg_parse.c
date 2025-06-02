@@ -24,14 +24,61 @@
 
 #define GET_OFFSET( i ) (ushort)(i)
 
-// #define READ_CHECKED_COMPACT_U16( out_sz, var_name, where )                 \
-//   do {                                                                      \
-//     ulong _where = (where);                                                 \
-//     ulong _out_sz = fd_cu16_dec_sz( _payload+_where, _payload_sz-_where );  \
-//     CHECK( _out_sz );                                                       \
-//     (var_name) = fd_cu16_dec_fixed( _payload+_where, _out_sz );             \
-//     (out_sz)   = _out_sz;                                                   \
-//   } while( 0 )
+/*
+#define READ_CHECKED_COMPACT_U16( out_sz, var_name, where )                 \
+  do {                                                                      \
+    ulong _where = (where);                                                 \
+    ulong _out_sz = fd_cu16_dec_sz( _payload+_where, _payload_sz-_where );  \
+    CHECK( _out_sz );                                                       \
+    (var_name) = fd_cu16_dec_fixed( _payload+_where, _out_sz );             \
+    (out_sz)   = _out_sz;                                                   \
+  } while( 0 )
+*/
+
+ulong
+fd_gossip_view_pubkey_offset( fd_gossip_view_t const * view ) {
+  switch( view->tag ){
+    case FD_GOSSIP_MESSAGE_PULL_REQUEST:
+    case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
+    case FD_GOSSIP_MESSAGE_PUSH:
+      break;
+    case FD_GOSSIP_MESSAGE_PRUNE:
+      return view->pull_request->contact_info->pubkey_off;
+    case FD_GOSSIP_MESSAGE_PING:
+      return view->ping->from_off;
+    case FD_GOSSIP_MESSAGE_PONG:
+      return view->pong->from_off;
+  }
+  return 0UL;
+}
+
+int
+fd_gossip_view_signable_data_offsets( fd_gossip_view_t const * view,
+                                       uchar const *           payload,
+                                       ulong                   out_signature_offsets[static 16],
+                                       ulong                   out_signable_data_offsets[static 16],
+                                       ulong                   out_signable_data_lengths[static 16],
+                                       ulong *                 out_signable_data_count ) {
+  (void)payload;
+  switch( view->tag ){
+    case FD_GOSSIP_MESSAGE_PULL_REQUEST:
+    case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
+    case FD_GOSSIP_MESSAGE_PUSH:
+    case FD_GOSSIP_MESSAGE_PING:
+      out_signature_offsets[ 0 ]     = view->ping->signature_off;
+      out_signable_data_offsets[ 0 ] = view->ping->token_off;
+      out_signable_data_lengths[ 0 ] = 32UL; /* https://github.com/anza-xyz/agave/blob/540d5bc56cd44e3cc61b179bd52e9a782a2c99e4/gossip/src/protocol.rs#L44 */
+      *out_signable_data_count       = 1UL;
+      break;
+    case FD_GOSSIP_MESSAGE_PONG:
+      out_signature_offsets[ 0 ]     = view->pong->signature_off;
+      out_signable_data_offsets[ 0 ] = view->pong->hash_off;
+      out_signable_data_lengths[ 0 ] = 32UL; /* https://github.com/anza-xyz/agave/blob/540d5bc56cd44e3cc61b179bd52e9a782a2c99e4/gossip/src/protocol.rs#L44 */
+      *out_signable_data_count       = 1UL;
+      break;
+    }
+  return 0;
+}
 
 static ulong
 fd_gossip_msg_ping_pong_parse( fd_gossip_view_t * view,
@@ -93,6 +140,8 @@ fd_gossip_msg_parse( fd_gossip_view_t *   view,
 
   switch( view->tag ){
     case FD_GOSSIP_MESSAGE_PULL_REQUEST:
+      fd_gossip_pull_req_parse( view, payload, payload_sz, i );
+      break;
     case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
     case FD_GOSSIP_MESSAGE_PUSH:
     case FD_GOSSIP_MESSAGE_PRUNE:

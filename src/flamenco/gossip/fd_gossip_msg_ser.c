@@ -18,8 +18,8 @@
 
 ulong
 fd_gossip_init_msg_payload( uchar * payload,
-                        ulong   payload_sz,
-                        uchar   tag ) {
+                            ulong   payload_sz,
+                            uchar   tag ) {
   CHECK_INIT( payload, payload_sz );
   CHECK_LEFT( 4UL ); /* Tag/Discriminant is actually 4b */
   if( FD_UNLIKELY( tag>FD_GOSSIP_MESSAGE_LAST ) ) {

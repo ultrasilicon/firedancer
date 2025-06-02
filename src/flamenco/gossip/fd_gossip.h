@@ -78,10 +78,12 @@ typedef void (*fd_gossip_send_fn)( void *                 ctx,
                                    ulong                  sz,
                                    fd_ip4_port_t const *  peer_address,
                                    ulong                  now );
+
 typedef void (*fd_gossip_sign_fn)( void *         ctx,
                                    uchar const *  data,
                                    ulong          sz,
-                                   uchar *        signature );
+                                   int            sign_type,
+                                   uchar *        out_signature );
 
 FD_PROTOTYPES_BEGIN
 
@@ -145,7 +147,6 @@ fd_gossip_set_identity( fd_gossip_t * gossip,
       periodically rotated, with one new peer entering and one old peer
       leaving, based on stake weights.
 
-   now is the current time in nanoseconds.
 
    Only actions which are necessary and useful will be performed, and
    the function is idempotent and fast otherwise.  advance should be
