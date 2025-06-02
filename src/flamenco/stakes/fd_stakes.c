@@ -11,14 +11,14 @@
    => (active stake) ordered by node identity).  Returns the tree root. */
 
 static fd_stake_weight_t_mapnode_t *
-fd_stakes_accum_by_node( fd_vote_accounts_t const *    in,
-                         fd_stake_weight_t_mapnode_t * out_pool,
-                         fd_spad_t *                   runtime_spad ) {
+fd_stakes_accum_by_node( fd_vote_accounts_global_t const * in,
+                         fd_stake_weight_t_mapnode_t *     out_pool,
+                         fd_spad_t *                       runtime_spad ) {
 
   /* Stakes::staked_nodes(&self: Stakes) -> HashMap<Pubkey, u64> */
 
-  fd_vote_accounts_pair_t_mapnode_t * in_pool = in->vote_accounts_pool;
-  fd_vote_accounts_pair_t_mapnode_t * in_root = in->vote_accounts_root;
+  fd_vote_accounts_pair_global_t_mapnode_t * in_pool = fd_vote_accounts_vote_accounts_pool_join( in );
+  fd_vote_accounts_pair_global_t_mapnode_t * in_root = fd_vote_accounts_vote_accounts_root_join( in );
 
   /* VoteAccounts::staked_nodes(&self: VoteAccounts) -> HashMap<Pubkey, u64> */
 
@@ -27,18 +27,22 @@ fd_stakes_accum_by_node( fd_vote_accounts_t const *    in,
 
   fd_stake_weight_t_mapnode_t * out_root = NULL;
 
-  for( fd_vote_accounts_pair_t_mapnode_t * n = fd_vote_accounts_pair_t_map_minimum( in_pool, in_root );
+  for( fd_vote_accounts_pair_global_t_mapnode_t * n = fd_vote_accounts_pair_global_t_map_minimum( in_pool, in_root );
                                            n;
-                                           n = fd_vote_accounts_pair_t_map_successor( in_pool, n ) ) {
+                                           n = fd_vote_accounts_pair_global_t_map_successor( in_pool, n ) ) {
 
     /* ... filter(|(stake, _)| *stake != 0u64) */
     if( n->elem.stake == 0UL ) continue;
 
     int err;
+    // FD_LOG_WARNING(("OFFSET %lu", n->elem.value.data_offset));
+    uchar * data     = (uchar *)in_pool + n->elem.value.data_offset;
+    ulong   data_len = n->elem.value.data_len;
+
     fd_vote_state_versioned_t * vsv = fd_bincode_decode_spad(
         vote_state_versioned, runtime_spad,
-        n->elem.value.data,
-        n->elem.value.data_len,
+        data,
+        data_len,
         &err );
     if( FD_UNLIKELY( err ) ) {
       FD_LOG_ERR(( "Failed to decode vote account %s (%d)", FD_BASE58_ENC_32_ALLOCA( n->elem.key.key ), err ));
@@ -74,6 +78,7 @@ fd_stakes_accum_by_node( fd_vote_accounts_t const *    in,
     }
 
     query->elem.key = node_pubkey;
+
     fd_stake_weight_t_mapnode_t * node = fd_stake_weight_t_map_find( out_pool, out_root, query );
 
     if( FD_UNLIKELY( node ) ) {
@@ -87,6 +92,8 @@ fd_stakes_accum_by_node( fd_vote_accounts_t const *    in,
       fd_stake_weight_t_map_insert( out_pool, &out_root, node );
     }
   }
+
+  FD_LOG_WARNING(("SIZE %lu", fd_stake_weight_t_map_size( out_pool, out_root )));
 
   return out_root;
 }
@@ -134,14 +141,18 @@ fd_stakes_export( fd_stake_weight_t_mapnode_t const * const in_pool,
 }
 
 ulong
-fd_stake_weights_by_node( fd_vote_accounts_t const * accs,
-                          fd_stake_weight_t *        weights,
-                          fd_spad_t *                runtime_spad ) {
+fd_stake_weights_by_node( fd_vote_accounts_global_t const * accs,
+                          fd_stake_weight_t *               weights,
+                          fd_spad_t *                       runtime_spad ) {
 
   /* Estimate size required to store temporary data structures */
 
+  fd_vote_accounts_pair_global_t_mapnode_t * vote_acc_pool = fd_vote_accounts_vote_accounts_pool_join( accs );
+  fd_vote_accounts_pair_global_t_mapnode_t * vote_acc_root = fd_vote_accounts_vote_accounts_root_join( accs );
+
   /* TODO size is the wrong method name for this */
-  ulong vote_acc_cnt = fd_vote_accounts_pair_t_map_size( accs->vote_accounts_pool, accs->vote_accounts_root );
+  ulong vote_acc_cnt = fd_vote_accounts_pair_global_t_map_size( vote_acc_pool, vote_acc_root );
+  FD_LOG_WARNING(("vote_acc_cnt=%lu", vote_acc_cnt));
 
   ulong rb_align     = fd_stake_weight_t_map_align();
   ulong rb_footprint = fd_stake_weight_t_map_footprint( vote_acc_cnt );

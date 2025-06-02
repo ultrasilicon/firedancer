@@ -350,7 +350,11 @@ publish_stake_weights( fd_replay_tile_ctx_t * ctx,
                        fd_stem_context_t *    stem,
                        fd_exec_slot_ctx_t *   slot_ctx ) {
   fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
-  if( slot_ctx->slot_bank.epoch_stakes.vote_accounts_root!=NULL ) {
+
+  fd_vote_accounts_global_t * epoch_stakes = fd_bank_mgr_epoch_stakes_query( slot_ctx->bank_mgr );
+  fd_vote_accounts_pair_global_t_mapnode_t * epoch_stakes_root = fd_vote_accounts_vote_accounts_root_join( epoch_stakes );
+
+  if( epoch_stakes_root!=NULL ) {
     ulong *             stake_weights_msg = fd_chunk_to_laddr( ctx->stake_weights_out->mem,
                                                                ctx->stake_weights_out->chunk );
     ulong epoch = fd_slot_to_leader_schedule_epoch( epoch_schedule, slot_ctx->slot );
@@ -2030,22 +2034,26 @@ publish_votes_to_plugin( fd_replay_tile_ctx_t * ctx,
 
   fd_fork_t * fork = fd_fork_frontier_ele_query( ctx->forks->frontier, &ctx->curr_slot, NULL, ctx->forks->pool );
   if( FD_UNLIKELY ( !fork  ) ) return;
-  fd_vote_accounts_t * accts = &fork->slot_ctx->slot_bank.epoch_stakes;
-  fd_vote_accounts_pair_t_mapnode_t * root = accts->vote_accounts_root;
-  fd_vote_accounts_pair_t_mapnode_t * pool = accts->vote_accounts_pool;
+
+  fd_vote_accounts_global_t * epoch_stakes = fd_bank_mgr_epoch_stakes_query( ctx->slot_ctx->bank_mgr );
+  fd_vote_accounts_pair_global_t_mapnode_t * epoch_stakes_pool = fd_vote_accounts_pair_global_t_map_join( epoch_stakes );
+  fd_vote_accounts_pair_global_t_mapnode_t * epoch_stakes_root = fd_vote_accounts_pair_global_t_map_join( epoch_stakes );
 
   ulong i = 0;
   FD_SPAD_FRAME_BEGIN( ctx->runtime_spad ) {
-  for( fd_vote_accounts_pair_t_mapnode_t const * n = fd_vote_accounts_pair_t_map_minimum_const( pool, root );
+  for( fd_vote_accounts_pair_global_t_mapnode_t const * n = fd_vote_accounts_pair_global_t_map_minimum_const( epoch_stakes_pool, epoch_stakes_root );
        n && i < FD_CLUSTER_NODE_CNT;
-       n = fd_vote_accounts_pair_t_map_successor_const( pool, n ) ) {
+       n = fd_vote_accounts_pair_global_t_map_successor_const( epoch_stakes_pool, n ) ) {
     if( n->elem.stake == 0 ) continue;
+
+    uchar * data     = (uchar *)epoch_stakes_pool + n->elem.value.data_offset;
+    ulong   data_len = n->elem.value.data_len;
 
     int err;
     fd_vote_state_versioned_t * vsv = fd_bincode_decode_spad(
         vote_state_versioned, ctx->runtime_spad,
-        n->elem.value.data,
-        n->elem.value.data_len,
+        data,
+        data_len,
         &err );
     if( FD_UNLIKELY( err ) ) {
       FD_LOG_ERR(( "Unexpected failure in decoding vote state" ));

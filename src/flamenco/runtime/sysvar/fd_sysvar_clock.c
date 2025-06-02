@@ -211,6 +211,7 @@ fd_calculate_stake_weighted_timestamp( fd_exec_slot_ctx_t * slot_ctx,
 
   fd_clock_timestamp_votes_global_t * clock_timestamp_votes = fd_bank_mgr_clock_timestamp_votes_query( bank_mgr );
   if( FD_UNLIKELY( !clock_timestamp_votes ) ) {
+    FD_LOG_WARNING(("NO CLOCK TIMESTAMP VOTES"));
     *result_timestamp = 0;
     return;
   }
@@ -218,11 +219,13 @@ fd_calculate_stake_weighted_timestamp( fd_exec_slot_ctx_t * slot_ctx,
   fd_clock_timestamp_vote_t_mapnode_t * timestamp_votes_pool = fd_clock_timestamp_votes_votes_pool_join( clock_timestamp_votes );
   fd_clock_timestamp_vote_t_mapnode_t * timestamp_votes_root = fd_clock_timestamp_votes_votes_root_join( clock_timestamp_votes );
 
-  fd_vote_accounts_pair_t_mapnode_t *   vote_acc_root        = slot_ctx->slot_bank.epoch_stakes.vote_accounts_root;
-  fd_vote_accounts_pair_t_mapnode_t *   vote_acc_pool        = slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool;
-  for( fd_vote_accounts_pair_t_mapnode_t * n = fd_vote_accounts_pair_t_map_minimum(vote_acc_pool, vote_acc_root);
+  fd_vote_accounts_global_t * epoch_stakes = fd_bank_mgr_epoch_stakes_query( bank_mgr );
+  fd_vote_accounts_pair_global_t_mapnode_t * vote_acc_pool = fd_vote_accounts_vote_accounts_pool_join( epoch_stakes );
+  fd_vote_accounts_pair_global_t_mapnode_t * vote_acc_root = fd_vote_accounts_vote_accounts_root_join( epoch_stakes );
+
+  for( fd_vote_accounts_pair_global_t_mapnode_t * n = fd_vote_accounts_pair_global_t_map_minimum(vote_acc_pool, vote_acc_root);
        n;
-       n = fd_vote_accounts_pair_t_map_successor( vote_acc_pool, n ) ) {
+       n = fd_vote_accounts_pair_global_t_map_successor( vote_acc_pool, n ) ) {
 
     /* get timestamp */
     fd_pubkey_t const * vote_pubkey = &n->elem.key;
@@ -239,10 +242,14 @@ fd_calculate_stake_weighted_timestamp( fd_exec_slot_ctx_t * slot_ctx,
       ulong vote_slot = 0;
       if( vote_acc_node == NULL ) {
         int err;
+
+        uchar * data     = (uchar *)vote_acc_pool + n->elem.value.data_offset;
+        ulong   data_len = n->elem.value.data_len;
+
         fd_vote_state_versioned_t * vsv = fd_bincode_decode_spad(
             vote_state_versioned, runtime_spad,
-            n->elem.value.data,
-            n->elem.value.data_len,
+            data,
+            data_len,
             &err );
         if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) {
           FD_LOG_WARNING(( "Vote state versioned decode failed" ));
@@ -299,6 +306,7 @@ fd_calculate_stake_weighted_timestamp( fd_exec_slot_ctx_t * slot_ctx,
 
   *result_timestamp = 0;
   if( total_stake == 0 ) {
+    FD_LOG_WARNING(("NO STAKE"));
     return;
   }
 
@@ -371,6 +379,7 @@ fd_sysvar_clock_update( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad 
                                            &new_timestamp,
                                            FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, warp_timestamp_again ),
                                            runtime_spad );
+    FD_LOG_WARNING(("NEW TIMESTAMP %ld", new_timestamp));
 
     /* If the timestamp was successfully calculated, use it. It not keep the old one.
        https://github.com/anza-xyz/agave/blob/v2.1.14/runtime/src/bank.rs#L1947-L1954 */
@@ -419,6 +428,7 @@ fd_sysvar_clock_update( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad 
                                            &timestamp_estimate,
                                            FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, warp_timestamp_again ),
                                            runtime_spad );
+    FD_LOG_WARNING(("TIMESTAMP ESTIMATE %ld", timestamp_estimate));
     clock->unix_timestamp        = fd_long_max( timestamp_estimate, ancestor_timestamp );
     clock->epoch_start_timestamp = clock->unix_timestamp;
     clock->leader_schedule_epoch = fd_slot_to_leader_schedule_epoch( epoch_schedule, slot_ctx->slot );

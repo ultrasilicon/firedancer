@@ -173,7 +173,10 @@ fd_runtime_update_leaders( fd_exec_slot_ctx_t * slot_ctx,
   FD_LOG_INFO(( "schedule->first_normal_epoch = %lu", epoch_schedule->first_normal_epoch ));
   FD_LOG_INFO(( "schedule->first_normal_slot = %lu", epoch_schedule->first_normal_slot ));
 
-  fd_vote_accounts_t const * epoch_vaccs = &slot_ctx->slot_bank.epoch_stakes;
+  FD_LOG_WARNING(("UPDATE LEADERS"));
+  fd_vote_accounts_global_t *                epoch_vaccs   = fd_bank_mgr_epoch_stakes_query( slot_ctx->bank_mgr );
+  fd_vote_accounts_pair_global_t_mapnode_t * vote_acc_pool = fd_vote_accounts_vote_accounts_pool_join( epoch_vaccs );
+  fd_vote_accounts_pair_global_t_mapnode_t * vote_acc_root = fd_vote_accounts_vote_accounts_root_join( epoch_vaccs );
 
   ulong epoch    = fd_slot_to_epoch( epoch_schedule, slot, NULL );
   ulong slot0    = fd_epoch_slot0( epoch_schedule, epoch );
@@ -181,10 +184,11 @@ fd_runtime_update_leaders( fd_exec_slot_ctx_t * slot_ctx,
 
   fd_runtime_update_slots_per_epoch( slot_ctx, fd_epoch_slot_cnt( epoch_schedule, epoch ) );
 
-  ulong               vote_acc_cnt  = fd_vote_accounts_pair_t_map_size( epoch_vaccs->vote_accounts_pool, epoch_vaccs->vote_accounts_root );
+  ulong               vote_acc_cnt  = fd_vote_accounts_pair_global_t_map_size( vote_acc_pool, vote_acc_root );
   fd_stake_weight_t * epoch_weights = fd_spad_alloc_check( runtime_spad, alignof(fd_stake_weight_t), vote_acc_cnt * sizeof(fd_stake_weight_t) );
 
   ulong stake_weight_cnt = fd_stake_weights_by_node( epoch_vaccs, epoch_weights, runtime_spad );
+  FD_LOG_WARNING(("stake_weight_cnt=%lu", stake_weight_cnt));
 
   if( FD_UNLIKELY( stake_weight_cnt == ULONG_MAX ) ) {
     FD_LOG_ERR(( "fd_stake_weights_by_node() failed" ));
@@ -2296,14 +2300,19 @@ static void
 fd_update_epoch_stakes( fd_exec_slot_ctx_t * slot_ctx ) {
 
   /* Copy epoch_bank->next_epoch_stakes into slot_ctx->slot_bank.epoch_stakes */
-  fd_vote_accounts_pair_t_map_release_tree(
-    slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool,
-    slot_ctx->slot_bank.epoch_stakes.vote_accounts_root );
-  slot_ctx->slot_bank.epoch_stakes.vote_accounts_root = NULL;
 
   fd_vote_accounts_global_t * next_epoch_stakes = fd_bank_mgr_next_epoch_stakes_query( slot_ctx->bank_mgr );
   fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_pool = fd_vote_accounts_vote_accounts_pool_join( next_epoch_stakes );
   fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_root = fd_vote_accounts_vote_accounts_root_join( next_epoch_stakes );
+
+  fd_vote_accounts_global_t * epoch_stakes = fd_bank_mgr_epoch_stakes_modify( slot_ctx->bank_mgr );
+
+  uchar * epoch_stakes_pool_mem = (uchar *)fd_ulong_align_up( (ulong)epoch_stakes + sizeof(fd_vote_accounts_global_t), fd_vote_accounts_pair_global_t_map_align() );
+  fd_vote_accounts_pair_global_t_mapnode_t * epoch_stakes_pool      = fd_vote_accounts_pair_global_t_map_join( fd_vote_accounts_pair_global_t_map_new( epoch_stakes_pool_mem, 100000UL ) );
+  fd_vote_accounts_pair_global_t_mapnode_t * epoch_stakes_root = NULL;
+
+  uchar * acc_region_start = (uchar *)fd_ulong_align_up( (ulong)epoch_stakes_pool + fd_vote_accounts_pair_global_t_map_footprint( 100000UL ), 8UL );
+  ulong   curr_offset      = (ulong)acc_region_start - (ulong)epoch_stakes_pool;
 
   for( fd_vote_accounts_pair_global_t_mapnode_t * n = fd_vote_accounts_pair_global_t_map_minimum(
         next_epoch_stakes_pool,
@@ -2316,10 +2325,9 @@ fd_update_epoch_stakes( fd_exec_slot_ctx_t * slot_ctx ) {
       continue;
     }
 
-    fd_vote_accounts_pair_t_mapnode_t * elem = fd_vote_accounts_pair_t_map_acquire(
-      slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool );
-    if( FD_UNLIKELY( fd_vote_accounts_pair_t_map_free( slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool ) == 0 ) ) {
-      FD_LOG_ERR(( "slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool full" ));
+    fd_vote_accounts_pair_global_t_mapnode_t * elem = fd_vote_accounts_pair_global_t_map_acquire( epoch_stakes_pool );
+    if( FD_UNLIKELY( fd_vote_accounts_pair_global_t_map_free( epoch_stakes_pool ) == 0 ) ) {
+      FD_LOG_ERR(( "epoch_stakes_pool full" ));
     }
 
     elem->elem.stake = n->elem.stake;
@@ -2330,13 +2338,19 @@ fd_update_epoch_stakes( fd_exec_slot_ctx_t * slot_ctx ) {
     elem->elem.value.executable  = n->elem.value.executable;
     elem->elem.value.rent_epoch  = n->elem.value.rent_epoch;
 
+    elem->elem.value.data_offset = curr_offset;
     elem->elem.value.data_len    = n->elem.value.data_len;
-    elem->elem.value.data        = (uchar *)next_epoch_stakes_pool + n->elem.value.data_offset;
+    memcpy( (uchar *)epoch_stakes_pool + curr_offset, (uchar *)next_epoch_stakes_pool + n->elem.value.data_offset, n->elem.value.data_len );
 
-    fd_vote_accounts_pair_t_map_insert( slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool,
-                                        &slot_ctx->slot_bank.epoch_stakes.vote_accounts_root,
-                                        elem );
+    curr_offset += n->elem.value.data_len;
+
+    fd_vote_accounts_pair_global_t_map_insert( epoch_stakes_pool, &epoch_stakes_root, elem );
   }
+
+  fd_vote_accounts_vote_accounts_pool_update( epoch_stakes, epoch_stakes_pool );
+  fd_vote_accounts_vote_accounts_root_update( epoch_stakes, epoch_stakes_root );
+  fd_bank_mgr_epoch_stakes_save( slot_ctx->bank_mgr );
+
 }
 
 /* Copy epoch_bank->stakes.vote_accounts into epoch_bank->next_epoch_stakes. */
@@ -3713,25 +3727,25 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
     }
   }
 
-  uchar * pool_mem = fd_spad_alloc( runtime_spad, fd_vote_accounts_pair_t_map_align(), fd_vote_accounts_pair_t_map_footprint( FD_HASH_FOOTPRINT * 400 ) );
+  // uchar * pool_mem = fd_spad_alloc( runtime_spad, fd_vote_accounts_pair_t_map_align(), fd_vote_accounts_pair_t_map_footprint( FD_HASH_FOOTPRINT * 400 ) );
 
-  slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool = fd_vote_accounts_pair_t_map_join( fd_vote_accounts_pair_t_map_new( pool_mem, FD_HASH_FOOTPRINT * 400 ) );
-  slot_ctx->slot_bank.epoch_stakes.vote_accounts_root = NULL;
+  // slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool = fd_vote_accounts_pair_t_map_join( fd_vote_accounts_pair_t_map_new( pool_mem, FD_HASH_FOOTPRINT * 400 ) );
+  // slot_ctx->slot_bank.epoch_stakes.vote_accounts_root = NULL;
 
-  fd_vote_accounts_pair_t_mapnode_t * next_pool = fd_exec_epoch_ctx_next_epoch_stakes_join( slot_ctx->epoch_ctx );
-  fd_vote_accounts_pair_t_mapnode_t * next_root = NULL;
+  // fd_vote_accounts_pair_t_mapnode_t * next_pool = fd_exec_epoch_ctx_next_epoch_stakes_join( slot_ctx->epoch_ctx );
+  // fd_vote_accounts_pair_t_mapnode_t * next_root = NULL;
 
-  for( fd_vote_accounts_pair_t_mapnode_t *n = fd_vote_accounts_pair_t_map_minimum( vacc_pool, vacc_root );
-       n;
-       n = fd_vote_accounts_pair_t_map_successor( vacc_pool, n )) {
-    fd_vote_accounts_pair_t_mapnode_t * e = fd_vote_accounts_pair_t_map_acquire( slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool );
-    e->elem = n->elem;
-    fd_vote_accounts_pair_t_map_insert( slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool, &slot_ctx->slot_bank.epoch_stakes.vote_accounts_root, e );
+  // for( fd_vote_accounts_pair_t_mapnode_t *n = fd_vote_accounts_pair_t_map_minimum( vacc_pool, vacc_root );
+  //      n;
+  //      n = fd_vote_accounts_pair_t_map_successor( vacc_pool, n )) {
+  //   fd_vote_accounts_pair_t_mapnode_t * e = fd_vote_accounts_pair_t_map_acquire( slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool );
+  //   e->elem = n->elem;
+  //   fd_vote_accounts_pair_t_map_insert( slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool, &slot_ctx->slot_bank.epoch_stakes.vote_accounts_root, e );
 
-    fd_vote_accounts_pair_t_mapnode_t * next_e = fd_vote_accounts_pair_t_map_acquire( next_pool );
-    next_e->elem = n->elem;
-    fd_vote_accounts_pair_t_map_insert( next_pool, &next_root, next_e );
-  }
+  //   fd_vote_accounts_pair_t_mapnode_t * next_e = fd_vote_accounts_pair_t_map_acquire( next_pool );
+  //   next_e->elem = n->elem;
+  //   fd_vote_accounts_pair_t_map_insert( next_pool, &next_root, next_e );
+  // }
 
   for( fd_delegation_pair_t_mapnode_t *n = fd_delegation_pair_t_map_minimum( sacc_pool, sacc_root );
        n;

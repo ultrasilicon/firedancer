@@ -444,10 +444,14 @@ create_block_context_protobuf_from_block( fd_exec_test_block_context_t * block_c
   fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_pool = fd_vote_accounts_pair_global_t_map_join( next_epoch_stakes );
   fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_root = fd_vote_accounts_pair_global_t_map_join( next_epoch_stakes );
 
+  fd_vote_accounts_global_t * epoch_stakes = fd_bank_mgr_epoch_stakes_query( bank_mgr );
+  fd_vote_accounts_pair_global_t_mapnode_t * epoch_stakes_pool = fd_vote_accounts_pair_global_t_map_join( epoch_stakes );
+  fd_vote_accounts_pair_global_t_mapnode_t * epoch_stakes_root = fd_vote_accounts_pair_global_t_map_join( epoch_stakes );
+
   ulong vote_account_t_1_cnt  = fd_vote_accounts_pair_global_t_map_size( next_epoch_stakes_pool,
                                                                          next_epoch_stakes_root );
-  ulong vote_account_t_2_cnt  = fd_vote_accounts_pair_t_map_size( slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool,
-                                                                  slot_ctx->slot_bank.epoch_stakes.vote_accounts_root );
+  ulong vote_account_t_2_cnt  = fd_vote_accounts_pair_global_t_map_size( epoch_stakes_pool,
+                                                                         epoch_stakes_root );
 
   ulong total_num_accounts    = num_sysvar_entries +
                                 num_loaded_builtins +
@@ -632,13 +636,13 @@ create_block_context_protobuf_from_block( fd_exec_test_block_context_t * block_c
   //                     &block_context->acct_states_count );
 
   // BlockContext -> EpochContext -> vote_accounts_t_2 (vote accounts at epoch T-2)
-  dump_vote_accounts( slot_ctx,
-                      &slot_ctx->slot_bank.epoch_stakes,
-                      spad,
-                      &block_context->epoch_ctx.vote_accounts_t_2,
-                      &block_context->epoch_ctx.vote_accounts_t_2_count,
-                      block_context->acct_states,
-                      &block_context->acct_states_count );
+  // dump_vote_accounts( slot_ctx,
+  //                     &slot_ctx->slot_bank.epoch_stakes,
+  //                     spad,
+  //                     &block_context->epoch_ctx.vote_accounts_t_2,
+  //                     &block_context->epoch_ctx.vote_accounts_t_2_count,
+  //                     block_context->acct_states,
+  //                     &block_context->acct_states_count );
 }
 
 static void

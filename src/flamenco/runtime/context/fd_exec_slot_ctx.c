@@ -556,28 +556,50 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
     }
 
     /* Move current EpochStakes */
-    uchar * pool_mem = fd_spad_alloc_check( runtime_spad, fd_vote_accounts_pair_t_map_align(), fd_vote_accounts_pair_t_map_footprint( 100000 ) );
-    slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool =
-      fd_vote_accounts_pair_t_map_join( fd_vote_accounts_pair_t_map_new( pool_mem, 100000 ) ); /* FIXME: Remove magic constant */
-    slot_ctx->slot_bank.epoch_stakes.vote_accounts_root = NULL;
 
-    for ( fd_vote_accounts_pair_t_mapnode_t * n = fd_vote_accounts_pair_t_map_minimum(
+    fd_vote_accounts_global_t * epoch_stakes = fd_bank_mgr_epoch_stakes_modify( slot_ctx->bank_mgr );
+    uchar * epoch_stakes_pool_mem = (uchar *)fd_ulong_align_up( (ulong)epoch_stakes + sizeof(fd_vote_accounts_global_t), fd_vote_accounts_pair_global_t_map_align() );
+    fd_vote_accounts_pair_global_t_mapnode_t * epoch_stakes_pool = fd_vote_accounts_pair_global_t_map_join( fd_vote_accounts_pair_global_t_map_new( epoch_stakes_pool_mem, 100000UL ) );
+    fd_vote_accounts_pair_global_t_mapnode_t * epoch_stakes_root = NULL;
+
+    uchar * acc_region_start = (uchar *)fd_ulong_align_up( (ulong)epoch_stakes_pool + fd_vote_accounts_pair_global_t_map_footprint( 100000UL ), 8UL );
+    ulong   curr_offset      = (ulong)acc_region_start - (ulong)epoch_stakes_pool;
+
+    for( fd_vote_accounts_pair_t_mapnode_t * n = fd_vote_accounts_pair_t_map_minimum(
           curr_stakes.vote_accounts_pool,
           curr_stakes.vote_accounts_root );
           n;
           n = fd_vote_accounts_pair_t_map_successor( curr_stakes.vote_accounts_pool, n ) ) {
 
-        fd_vote_accounts_pair_t_mapnode_t * elem = fd_vote_accounts_pair_t_map_acquire(
-          slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool );
-        FD_TEST( elem );
+      fd_vote_accounts_pair_global_t_mapnode_t * elem = fd_vote_accounts_pair_global_t_map_acquire(
+        epoch_stakes_pool );
+      FD_TEST( elem );
 
-        elem->elem = n->elem;
+      elem->elem.stake = n->elem.stake;
+      elem->elem.key   = n->elem.key;
 
-        fd_vote_accounts_pair_t_map_insert(
-          slot_ctx->slot_bank.epoch_stakes.vote_accounts_pool,
-          &slot_ctx->slot_bank.epoch_stakes.vote_accounts_root,
-          elem );
+      elem->elem.value.lamports    = n->elem.value.lamports;
+      elem->elem.value.data_len    = 0UL;
+      elem->elem.value.data_offset = 0UL;
+      elem->elem.value.owner       = n->elem.value.owner;
+      elem->elem.value.executable  = n->elem.value.executable;
+      elem->elem.value.rent_epoch  = n->elem.value.rent_epoch;
+
+      elem->elem.value.data_offset = curr_offset;
+      elem->elem.value.data_len = n->elem.value.data_len;
+      memcpy( (uchar *)epoch_stakes_pool + curr_offset, n->elem.value.data, n->elem.value.data_len );
+
+      curr_offset += n->elem.value.data_len;
+
+      fd_vote_accounts_pair_global_t_map_insert(
+        epoch_stakes_pool,
+        &epoch_stakes_root,
+        elem );
     }
+
+    fd_vote_accounts_vote_accounts_pool_update( epoch_stakes, epoch_stakes_pool );
+    fd_vote_accounts_vote_accounts_root_update( epoch_stakes, epoch_stakes_root );
+    fd_bank_mgr_epoch_stakes_save( slot_ctx->bank_mgr );
 
     /* Move next EpochStakes */
 
@@ -589,8 +611,8 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
     fd_vote_accounts_pair_t_mapnode_t * pool = next_stakes.vote_accounts_pool;
     fd_vote_accounts_pair_t_mapnode_t * root = next_stakes.vote_accounts_root;
 
-    uchar * acc_region_start = (uchar *)fd_ulong_align_up( (ulong)next_epoch_stakes_pool + fd_vote_accounts_pair_global_t_map_footprint( 100000UL ), 8UL );
-    ulong   curr_offset      = (ulong)acc_region_start - (ulong)next_epoch_stakes_pool;
+    acc_region_start = (uchar *)fd_ulong_align_up( (ulong)next_epoch_stakes_pool + fd_vote_accounts_pair_global_t_map_footprint( 100000UL ), 8UL );
+    curr_offset      = (ulong)acc_region_start - (ulong)next_epoch_stakes_pool;
 
     FD_LOG_WARNING(("MIN OFFSET %lu", curr_offset));
 
@@ -613,13 +635,10 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
       elem->elem.value.executable  = n->elem.value.executable;
       elem->elem.value.rent_epoch  = n->elem.value.rent_epoch;
 
-      //FD_LOG_HEXDUMP_WARNING(("ASDF", n->elem.value.data, n->elem.value.data_len));
 
       elem->elem.value.data_offset = curr_offset;
       elem->elem.value.data_len = n->elem.value.data_len;
       memcpy( (uchar *)next_epoch_stakes_pool + curr_offset, n->elem.value.data, n->elem.value.data_len );
-
-      // FD_LOG_HEXDUMP_WARNING(("ASDF2", (uchar *)next_epoch_stakes_pool + elem->elem.value.data_offset , n->elem.value.data_len));
 
       curr_offset += n->elem.value.data_len;
 

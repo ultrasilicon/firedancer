@@ -1227,7 +1227,6 @@
       "name": "slot_bank",
       "type": "struct",
       "fields": [
-        { "name": "epoch_stakes",                "type": "vote_accounts" },
         { "name": "lthash",                      "type": "slot_lthash" },
         { "name": "epoch_reward_status",         "type": "epoch_reward_status" }
       ]

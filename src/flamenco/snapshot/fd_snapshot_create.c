@@ -601,7 +601,7 @@ static inline void
 fd_snapshot_create_populate_bank( fd_snapshot_ctx_t *   snapshot_ctx,
                                   fd_versioned_bank_t * bank ) {
 
-  fd_slot_bank_t  * slot_bank  = &snapshot_ctx->slot_bank;
+  // fd_slot_bank_t  * slot_bank  = &snapshot_ctx->slot_bank;
   fd_epoch_bank_t * epoch_bank = &snapshot_ctx->epoch_bank;
 
   /* The blockhash queue has to be copied over along with all of its entries.
@@ -693,7 +693,7 @@ fd_snapshot_create_populate_bank( fd_snapshot_ctx_t *   snapshot_ctx,
   fd_memset( &relevant_epoch_stakes[0], 0UL, sizeof(fd_epoch_epoch_stakes_pair_t) );
   fd_memset( &relevant_epoch_stakes[1], 0UL, sizeof(fd_epoch_epoch_stakes_pair_t) );
   relevant_epoch_stakes[0].key                        = bank->epoch;
-  relevant_epoch_stakes[0].value.stakes.vote_accounts = slot_bank->epoch_stakes;
+  // relevant_epoch_stakes[0].value.stakes.vote_accounts = slot_bank->epoch_stakes;
   relevant_epoch_stakes[1].key                        = bank->epoch+1UL;
   // relevant_epoch_stakes[1].value.stakes.vote_accounts = epoch_bank->next_epoch_stakes;
 

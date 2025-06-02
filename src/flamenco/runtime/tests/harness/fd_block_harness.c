@@ -201,13 +201,13 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   uchar * pool_mem                           = fd_spad_alloc( runner->spad,
                                                               fd_vote_accounts_pair_t_map_align(),
                                                               fd_vote_accounts_pair_t_map_footprint( vote_acct_max ) );
-  slot_bank->epoch_stakes.vote_accounts_pool = fd_vote_accounts_pair_t_map_join( fd_vote_accounts_pair_t_map_new( pool_mem, vote_acct_max ) );
-  slot_bank->epoch_stakes.vote_accounts_root = NULL;
-  fd_runtime_fuzz_block_update_votes_cache( slot_bank->epoch_stakes.vote_accounts_pool,
-                                            &slot_bank->epoch_stakes.vote_accounts_root,
-                                            test_ctx->epoch_ctx.vote_accounts_t_2,
-                                            test_ctx->epoch_ctx.vote_accounts_t_2_count,
-                                            runner->spad );
+  // slot_bank->epoch_stakes.vote_accounts_pool = fd_vote_accounts_pair_t_map_join( fd_vote_accounts_pair_t_map_new( pool_mem, vote_acct_max ) );
+  // slot_bank->epoch_stakes.vote_accounts_root = NULL;
+  // fd_runtime_fuzz_block_update_votes_cache( slot_bank->epoch_stakes.vote_accounts_pool,
+  //                                           &slot_bank->epoch_stakes.vote_accounts_root,
+  //                                           test_ctx->epoch_ctx.vote_accounts_t_2,
+  //                                           test_ctx->epoch_ctx.vote_accounts_t_2_count,
+  //                                           runner->spad );
 
   /* Initialize the current running epoch stake and vote accounts */
   for( uint i=0U; i<test_ctx->epoch_ctx.new_stake_accounts_count; i++ ) {

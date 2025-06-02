@@ -1641,8 +1641,8 @@ method_getVoteAccounts(struct json_values* values, fd_rpc_ctx_t * ctx) {
 
     fd_clock_timestamp_vote_t_mapnode_t * timestamp_votes_root = NULL;
     fd_clock_timestamp_vote_t_mapnode_t * timestamp_votes_pool = NULL;
-    fd_vote_accounts_pair_t_mapnode_t *   vote_acc_root        = slot_bank->epoch_stakes.vote_accounts_root;
-    fd_vote_accounts_pair_t_mapnode_t *   vote_acc_pool        = slot_bank->epoch_stakes.vote_accounts_pool;
+    fd_vote_accounts_pair_t_mapnode_t *   vote_acc_root        = NULL; // slot_bank->epoch_stakes.vote_accounts_root;
+    fd_vote_accounts_pair_t_mapnode_t *   vote_acc_pool        = NULL; // slot_bank->epoch_stakes.vote_accounts_pool;
     for( fd_vote_accounts_pair_t_mapnode_t* n = fd_vote_accounts_pair_t_map_minimum(vote_acc_pool, vote_acc_root);
          n;
          n = fd_vote_accounts_pair_t_map_successor( vote_acc_pool, n ) ) {
