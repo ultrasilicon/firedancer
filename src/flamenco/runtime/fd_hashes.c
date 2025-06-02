@@ -284,7 +284,8 @@ fd_hash_bank( fd_exec_slot_ctx_t *    slot_ctx,
   if( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, accounts_lt_hash ) ) {
     fd_sha256_init( &sha );
     fd_sha256_append( &sha, (uchar const *) &hash->hash, sizeof( fd_hash_t ) );
-    fd_sha256_append( &sha, (uchar const *) &slot_ctx->slot_bank.lthash.lthash, sizeof( slot_ctx->slot_bank.lthash.lthash ) );
+    fd_slot_lthash_t * lthash = fd_bank_mgr_lthash_query( slot_ctx->bank_mgr );
+    fd_sha256_append( &sha, (uchar const *) lthash->lthash, sizeof( lthash->lthash ) );
     fd_sha256_fini( &sha, hash->hash );
   } else {
     if (fd_should_include_epoch_accounts_hash(slot_ctx)) {
@@ -300,7 +301,8 @@ fd_hash_bank( fd_exec_slot_ctx_t *    slot_ctx,
 
     if( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, accounts_lt_hash ) ) {
       lthash = (uchar *)fd_alloca_check( 1UL, 32UL );
-      fd_lthash_hash((fd_lthash_value_t *) slot_ctx->slot_bank.lthash.lthash, lthash);
+      fd_slot_lthash_t * lthash_val = fd_bank_mgr_lthash_query( slot_ctx->bank_mgr );
+      fd_lthash_hash((fd_lthash_value_t *) lthash_val->lthash, lthash);
     }
 
     fd_solcap_write_bank_preimage(
@@ -324,7 +326,7 @@ fd_hash_bank( fd_exec_slot_ctx_t *    slot_ctx,
                     slot_ctx->slot,
                     FD_BASE58_ENC_32_ALLOCA( hash->hash ),
                     FD_BASE58_ENC_32_ALLOCA( prev_bank_hash ),
-                    FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *) slot_ctx->slot_bank.lthash.lthash ),
+                    FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *) fd_bank_mgr_lthash_query( slot_ctx->bank_mgr )->lthash ),
                     signature_cnt,
                     FD_BASE58_ENC_32_ALLOCA( poh->hash ) ));
   } else {
@@ -340,7 +342,7 @@ fd_hash_bank( fd_exec_slot_ctx_t *    slot_ctx,
                     FD_BASE58_ENC_32_ALLOCA( hash->hash ),
                     FD_BASE58_ENC_32_ALLOCA( prev_bank_hash ),
                     FD_BASE58_ENC_32_ALLOCA( slot_ctx->account_delta_hash.hash ),
-                    FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *) slot_ctx->slot_bank.lthash.lthash ),
+                    FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *) fd_bank_mgr_lthash_query( slot_ctx->bank_mgr )->lthash ),
                     signature_cnt,
                     FD_BASE58_ENC_32_ALLOCA( poh->hash ) ));
   }
@@ -524,10 +526,11 @@ fd_update_hash_bank_exec_hash( fd_exec_slot_ctx_t *           slot_ctx,
   fd_funk_txn_t * txn  = slot_ctx->funk_txn;
 
   // Apply the lthash changes to the bank lthash
-  fd_lthash_value_t * lt_hash = (fd_lthash_value_t *)fd_type_pun( slot_ctx->slot_bank.lthash.lthash );
+  fd_slot_lthash_t * lthash_val = fd_bank_mgr_lthash_modify( slot_ctx->bank_mgr );
   for( ulong i = 0; i < lt_hashes_cnt; i++ ) {
-    fd_lthash_add( lt_hash, &lt_hashes[i] );
+    fd_lthash_add( (fd_lthash_value_t *)lthash_val->lthash, &lt_hashes[i] );
   }
+  fd_bank_mgr_lthash_save( slot_ctx->bank_mgr );
 
   for( ulong j=0UL; j<task_datas_cnt; j++ ) {
 
@@ -1405,7 +1408,8 @@ fd_accounts_check_lthash( fd_funk_t *      funk,
   }
 
   // Compare the accumulator to the slot
-  fd_lthash_value_t * acc = (fd_lthash_value_t *)fd_type_pun_const( slot_bank->lthash.lthash );
+  (void)slot_bank;
+  fd_lthash_value_t * acc = (fd_lthash_value_t *)fd_type_pun_const( NULL );
   if ( memcmp( acc, &acc_lthash, sizeof( fd_lthash_value_t ) ) == 0 ) {
     FD_LOG_NOTICE(("accounts_lthash %s == %s", FD_LTHASH_ENC_32_ALLOCA (acc), FD_LTHASH_ENC_32_ALLOCA (&acc_lthash)));
   } else {

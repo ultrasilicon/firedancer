@@ -259,8 +259,9 @@ fd_snapshot_load_fini( fd_snapshot_load_ctx_t * ctx ) {
 #endif
   // https://github.com/anza-xyz/agave/blob/766cd682423b8049ddeac3c0ec6cebe0a1356e9e/runtime/src/bank.rs#L1831
   if( accounts_lt_hash ) {
-    ulong *p = (ulong *) ctx->slot_ctx->slot_bank.lthash.lthash;
-    ulong *e = (ulong *) &ctx->slot_ctx->slot_bank.lthash.lthash[sizeof(ctx->slot_ctx->slot_bank.lthash.lthash)];
+    fd_slot_lthash_t * lthash = fd_bank_mgr_lthash_query( ctx->slot_ctx->bank_mgr );
+    ulong *p = (ulong *) lthash->lthash;
+    ulong *e = (ulong *) &lthash->lthash[sizeof(lthash->lthash)];
     while (p < e) {
       if ( 0 != *(p++) )
         break;
@@ -274,7 +275,7 @@ fd_snapshot_load_fini( fd_snapshot_load_ctx_t * ctx ) {
       FD_LOG_ERR(( "snapshot must have an accounts lt hash if the feature is enabled.. " ));
 #endif
     } else {
-      FD_LOG_NOTICE(( "accounts_lthash found %s", FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *)fd_type_pun(ctx->slot_ctx->slot_bank.lthash.lthash)  ) ));
+      FD_LOG_NOTICE(( "accounts_lthash found %s", FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *)lthash->lthash ) ));
     }
   }
 
@@ -294,14 +295,18 @@ fd_snapshot_load_fini( fd_snapshot_load_ctx_t * ctx ) {
 
       if ( snapshots_lt_hash ) {
 #ifdef FD_LTHASH_SNAPSHOT_HACK
-        if ( zero_lthash )
-          fd_memcpy( (fd_lthash_value_t *)fd_type_pun(ctx->slot_ctx->slot_bank.lthash.lthash), lthash, sizeof(lthash_buf) );
+        if ( zero_lthash ) {
+          fd_slot_lthash_t * lthash_val = fd_bank_mgr_lthash_modify( ctx->slot_ctx->bank_mgr );
+          fd_memcpy( (fd_lthash_value_t *)lthash_val->lthash, lthash, sizeof(lthash_buf) );
+          fd_bank_mgr_lthash_save( ctx->slot_ctx->bank_mgr );
+        }
 #endif
-        if( memcmp( (fd_lthash_value_t *)fd_type_pun(ctx->slot_ctx->slot_bank.lthash.lthash), lthash, sizeof(lthash_buf) ) ) {
+        fd_slot_lthash_t * lthash_val = fd_bank_mgr_lthash_query( ctx->slot_ctx->bank_mgr );
+        if( memcmp( (fd_lthash_value_t *)lthash_val->lthash, lthash, sizeof(lthash_buf) ) ) {
           FD_LOG_ERR(( "snapshot accounts_hash (calculated) %s != (expected) %s",
-              FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *)fd_type_pun(ctx->slot_ctx->slot_bank.lthash.lthash) ), FD_LTHASH_ENC_32_ALLOCA( lthash ) ));
+              FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *)lthash_val->lthash ), FD_LTHASH_ENC_32_ALLOCA( lthash ) ));
         } else {
-          FD_LOG_NOTICE(( "accounts_lthash found %s verified successfully", FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *)fd_type_pun(ctx->slot_ctx->slot_bank.lthash.lthash)  ) ));
+          FD_LOG_NOTICE(( "accounts_lthash found %s verified successfully", FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *)lthash_val->lthash ) ));
         }
       } else {
         if( memcmp( fhash->uc, accounts_hash.uc, sizeof(fd_hash_t) ) ) {
@@ -323,14 +328,18 @@ fd_snapshot_load_fini( fd_snapshot_load_ctx_t * ctx ) {
 
       if ( snapshots_lt_hash ) {
 #ifdef FD_LTHASH_SNAPSHOT_HACK
-        if ( zero_lthash )
-          fd_memcpy( (fd_lthash_value_t *)fd_type_pun(ctx->slot_ctx->slot_bank.lthash.lthash), lthash, sizeof(lthash_buf) );
+        if( zero_lthash ) {
+          fd_slot_lthash_t * lthash_val = fd_bank_mgr_lthash_modify( ctx->slot_ctx->bank_mgr );
+          fd_memcpy( (fd_lthash_value_t *)fd_type_pun(lthash_val->lthash), lthash, sizeof(lthash_buf) );
+          fd_bank_mgr_lthash_save( ctx->slot_ctx->bank_mgr );
+        }
 #endif
-        if( memcmp( (fd_lthash_value_t *)fd_type_pun(ctx->slot_ctx->slot_bank.lthash.lthash), lthash, sizeof(lthash_buf) ) ) {
+        fd_slot_lthash_t * lthash_val = fd_bank_mgr_lthash_query( ctx->slot_ctx->bank_mgr );
+        if( memcmp( (fd_lthash_value_t *)lthash_val->lthash, lthash, sizeof(lthash_buf) ) ) {
           FD_LOG_ERR(( "snapshot accounts_hash (calculated) %s != (expected) %s",
-              FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *)fd_type_pun(ctx->slot_ctx->slot_bank.lthash.lthash) ), FD_LTHASH_ENC_32_ALLOCA( lthash ) ));
+              FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *)lthash_val->lthash ), FD_LTHASH_ENC_32_ALLOCA( lthash ) ));
         } else {
-          FD_LOG_NOTICE(( "accounts_lthash found %s verified successfully", FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *)fd_type_pun(ctx->slot_ctx->slot_bank.lthash.lthash)  ) ));
+          FD_LOG_NOTICE(( "accounts_lthash found %s verified successfully", FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *)lthash_val->lthash ) ));
         }
       } else {
         if( memcmp( fhash->uc, accounts_hash.uc, sizeof(fd_hash_t) ) ) {

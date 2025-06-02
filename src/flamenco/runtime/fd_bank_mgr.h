@@ -4,6 +4,7 @@
 #include "../../funk/fd_funk.h"
 #include "../fd_flamenco_base.h"
 #include "../types/fd_types.h"
+#include "../../ballet/lthash/fd_lthash.h"
 
 FD_PROTOTYPES_BEGIN
 
@@ -155,7 +156,8 @@ if( FD_UNLIKELY( !bank_mgr ) ) {                                                
   X(fd_epoch_schedule_t,               epoch_schedule,              37UL, 40UL,        8UL   ) \
   X(fd_rent_t,                         rent,                        38UL, 24UL,        8UL   ) \
   X(fd_vote_accounts_global_t,         next_epoch_stakes,           39UL, 100000000UL, 1024UL) \
-  X(fd_vote_accounts_global_t,         epoch_stakes,                40UL, 100000000UL, 1024UL)
+  X(fd_vote_accounts_global_t,         epoch_stakes,                40UL, 100000000UL, 1024UL) \
+  X(fd_slot_lthash_t,                  lthash,                      41UL, 4096UL,      128UL )
 FD_BANK_MGR_ITER(BANK_MGR_FUNCTIONS)
 
 FD_PROTOTYPES_END

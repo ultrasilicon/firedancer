@@ -1820,7 +1820,6 @@ void *fd_slot_bank_generate( void *mem, void **alloc_mem, fd_rng_t * rng ) {
   fd_slot_bank_t *self = (fd_slot_bank_t *) mem;
   *alloc_mem = (uchar *) *alloc_mem + sizeof(fd_slot_bank_t);
   fd_slot_bank_new(mem);
-  fd_slot_lthash_generate( &self->lthash, alloc_mem, rng );
   fd_epoch_reward_status_generate( &self->epoch_reward_status, alloc_mem, rng );
   return mem;
 }

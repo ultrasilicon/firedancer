@@ -1759,12 +1759,11 @@ typedef struct fd_epoch_reward_status fd_epoch_reward_status_t;
 #define FD_EPOCH_REWARD_STATUS_ALIGN alignof(fd_epoch_reward_status_t)
 
 /* Encoded Size: Dynamic */
-struct fd_slot_bank {
-  fd_slot_lthash_t lthash;
+struct __attribute__((aligned(128UL))) fd_slot_bank {
   fd_epoch_reward_status_t epoch_reward_status;
 };
 typedef struct fd_slot_bank fd_slot_bank_t;
-#define FD_SLOT_BANK_ALIGN alignof(fd_slot_bank_t)
+#define FD_SLOT_BANK_ALIGN (128UL)
 
 /* Encoded Size: Fixed (32 bytes) */
 struct fd_prev_epoch_inflation_rewards {

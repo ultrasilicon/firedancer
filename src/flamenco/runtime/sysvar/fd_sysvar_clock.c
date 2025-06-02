@@ -211,7 +211,6 @@ fd_calculate_stake_weighted_timestamp( fd_exec_slot_ctx_t * slot_ctx,
 
   fd_clock_timestamp_votes_global_t * clock_timestamp_votes = fd_bank_mgr_clock_timestamp_votes_query( bank_mgr );
   if( FD_UNLIKELY( !clock_timestamp_votes ) ) {
-    FD_LOG_WARNING(("NO CLOCK TIMESTAMP VOTES"));
     *result_timestamp = 0;
     return;
   }
@@ -379,7 +378,6 @@ fd_sysvar_clock_update( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad 
                                            &new_timestamp,
                                            FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, warp_timestamp_again ),
                                            runtime_spad );
-    FD_LOG_WARNING(("NEW TIMESTAMP %ld", new_timestamp));
 
     /* If the timestamp was successfully calculated, use it. It not keep the old one.
        https://github.com/anza-xyz/agave/blob/v2.1.14/runtime/src/bank.rs#L1947-L1954 */
@@ -428,7 +426,6 @@ fd_sysvar_clock_update( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad 
                                            &timestamp_estimate,
                                            FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, warp_timestamp_again ),
                                            runtime_spad );
-    FD_LOG_WARNING(("TIMESTAMP ESTIMATE %ld", timestamp_estimate));
     clock->unix_timestamp        = fd_long_max( timestamp_estimate, ancestor_timestamp );
     clock->epoch_start_timestamp = clock->unix_timestamp;
     clock->leader_schedule_epoch = fd_slot_to_leader_schedule_epoch( epoch_schedule, slot_ctx->slot );

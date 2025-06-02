@@ -132,7 +132,8 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   // slot_bank->timestamp_votes.votes_pool = fd_clock_timestamp_vote_t_map_join( fd_clock_timestamp_vote_t_map_new( pool_mem, 10000UL ) );
   // slot_bank->timestamp_votes.votes_root = NULL;
 
-  fd_memcpy( slot_bank->lthash.lthash, test_ctx->slot_ctx.parent_lt_hash, FD_LTHASH_LEN_BYTES );
+  // fd_memcpy( slot_bank->lthash.lthash, test_ctx->slot_ctx.parent_lt_hash, FD_LTHASH_LEN_BYTES );
+  (void)slot_bank;
 
   /* Set up epoch context and epoch bank */
   /* TODO: Do we need any more of these? */
@@ -571,7 +572,8 @@ fd_runtime_fuzz_block_run( fd_runtime_fuzz_runner_t * runner,
 
     /* Capture hashes */
     uchar out_lt_hash[32];
-    fd_lthash_hash( (fd_lthash_value_t const *)slot_ctx->slot_bank.lthash.lthash, out_lt_hash );
+    fd_slot_lthash_t * lthash = fd_bank_mgr_lthash_query( slot_ctx->bank_mgr );
+    fd_lthash_hash( (fd_lthash_value_t const *)lthash->lthash, out_lt_hash );
     fd_hash_t * bank_hash = fd_bank_mgr_bank_hash_query( slot_ctx->bank_mgr );
     fd_memcpy( effects->bank_hash, bank_hash, sizeof(fd_hash_t) );
     fd_memcpy( effects->lt_hash, out_lt_hash, sizeof(fd_hash_t) );
