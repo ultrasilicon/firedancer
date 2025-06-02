@@ -691,7 +691,6 @@ fd_gui_handle_vote_account_update( fd_gui_t *    gui,
       fd_memcpy( removed[ removed_cnt++ ].uc, gui->vote_account.vote_accounts[ i ].vote_account->uc, 32UL );
       if( FD_LIKELY( i+1UL!=gui->vote_account.vote_account_cnt ) ) {
         gui->vote_account.vote_accounts[ i ] = gui->vote_account.vote_accounts[ gui->vote_account.vote_account_cnt-1UL ];
-        gui->vote_account.vote_accounts[ i ] = gui->vote_account.vote_accounts[ gui->vote_account.vote_account_cnt-1UL ];
         gui->vote_account.vote_account_cnt--;
         i--;
       }
@@ -1576,8 +1575,9 @@ fd_gui_handle_block_engine_update( fd_gui_t *    gui,
   fd_plugin_msg_block_engine_update_t const * update = (fd_plugin_msg_block_engine_update_t const *)msg;
 
   gui->block_engine.has_block_engine = 1;
-  strncpy( gui->block_engine.name, update->name, sizeof(gui->block_engine.name) );
-  strncpy( gui->block_engine.url, update->url, sizeof(gui->block_engine.url) );
+  memcpy( gui->block_engine.name,    update->name,    sizeof(gui->block_engine.name   )-1 );
+  memcpy( gui->block_engine.url,     update->url,     sizeof(gui->block_engine.url    )-1 );
+  memcpy( gui->block_engine.ip_cstr, update->ip_cstr, sizeof(gui->block_engine.ip_cstr)-1 );
   gui->block_engine.status = update->status;
 
   fd_gui_printf_block_engine( gui );

@@ -40,7 +40,6 @@
 #define MAX_SHRED_TILE_CNT (16UL)
 
 #define FD_FOREST_ELE_MAX  (2048) /* FIXME */
-#define MAX_SHRED_TILE_CNT (16UL)
 typedef union {
   struct {
     fd_wksp_t * mem;
@@ -949,13 +948,6 @@ after_frag( fd_repair_tile_ctx_t * ctx,
          through the idxs in interval [i, j). If j = next fec_set_idx
          then we know we can force complete the FEC set interval [i, j)
          (assuming it wasn't already completed based on `cmpl`). */
-
-      if( FD_UNLIKELY( ele->buffered_idx == ele->complete_idx && ele->complete_idx != UINT_MAX ) ) {
-        ele->buffered_idx = ele->complete_idx;
-        for( uint i = 0; i < ele->buffered_idx; i++ ) {
-          fd_forest_ele_idxs_insert( ele->cmpl, i );
-        }
-      }
 
       uint i = 0;
       for( uint j = 1; j < ele->buffered_idx + 1; j++ ) { /* TODO iterate by word */

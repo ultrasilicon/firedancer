@@ -188,6 +188,7 @@ fd_config_extract_pod( uchar *       pod,
   CFG_POP      ( cstr,   tiles.bundle.tip_payment_program_addr            );
   CFG_POP      ( cstr,   tiles.bundle.tip_distribution_authority          );
   CFG_POP      ( uint,   tiles.bundle.commission_bps                      );
+  CFG_POP      ( ulong,  tiles.bundle.keepalive_interval_millis           );
 
   CFG_POP      ( uint,   tiles.pack.max_pending_transactions              );
   CFG_POP      ( bool,   tiles.pack.use_consumed_cus                      );
@@ -279,6 +280,10 @@ fd_config_extract_pod( uchar *       pod,
   CFG_POP      ( bool,   development.bench.larger_shred_limits_per_block  );
   CFG_POP      ( ulong,  development.bench.disable_blockstore_from_slot   );
   CFG_POP      ( bool,   development.bench.disable_status_cache           );
+
+  CFG_POP      ( cstr,   development.bundle.ssl_key_log_file              );
+  CFG_POP      ( uint,   development.bundle.buffer_size_kib               );
+  CFG_POP      ( uint,   development.bundle.ssl_heap_size_mib             );
 
   CFG_POP      ( cstr,   development.pktgen.affinity                      );
   CFG_POP      ( cstr,   development.pktgen.fake_dst_ip                   );

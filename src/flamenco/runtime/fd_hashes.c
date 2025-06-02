@@ -855,7 +855,9 @@ fd_accounts_sorted_subrange_gather( fd_funk_t *             funk,
 
   *num_pairs_out = num_pairs;
 
-  fd_lthash_add( lthash_value_out, &accum  );
+  if (lthash_value_out) {
+    fd_lthash_add( lthash_value_out, &accum  );
+  }
 }
 
 static void
@@ -1300,7 +1302,6 @@ fd_accounts_check_lthash( fd_funk_t *      funk,
 
   // walk up the transactions...
   for (ulong idx = 0; idx < txn_cnt; idx++) {
-    FD_LOG_WARNING(("txn idx %lu", idx));
     for (fd_funk_rec_t const *rec = fd_funk_txn_first_rec( funk, txns[idx]);
          NULL != rec;
          rec = fd_funk_txn_next_rec(funk, rec)) {
