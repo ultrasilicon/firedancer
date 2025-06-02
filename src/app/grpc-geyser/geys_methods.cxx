@@ -39,6 +39,7 @@ GeyserServiceImpl::GetBlockHeight(::grpc::ServerContext* context, const ::geyser
 
 ::grpc::Status
 GeyserServiceImpl::GetSlot(::grpc::ServerContext* context, const ::geyser::GetSlotRequest* request, ::geyser::GetSlotResponse* response) {
+  response->set_slot( geys_history_latest_slot( _hist_ctx ) );
   return ::grpc::Status::OK;
 }
 
