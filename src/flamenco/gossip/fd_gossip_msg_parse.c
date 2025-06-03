@@ -88,9 +88,9 @@ fd_gossip_msg_ping_pong_parse( fd_gossip_view_t * view,
   CHECK_INIT( payload, payload_sz, start_offset );
   /* Ping/Pong share the same memory layout */
   fd_gossip_view_ping_t * ping = view->ping;
-  CHECK_LEFT( 32UL ); ping->from_off  = GET_OFFSET(i); i+=32UL; /* Pubkey */
-  CHECK_LEFT( 32UL ); ping->token_off = GET_OFFSET(i); i+=32UL; /* Token/Hash */
-  CHECK_LEFT( 64UL ); ping->token_off = GET_OFFSET(i); i+=64UL; /* Signature */
+  CHECK_LEFT( 32UL ); ping->from_off      = GET_OFFSET(i); i+=32UL; /* Pubkey */
+  CHECK_LEFT( 32UL ); ping->token_off     = GET_OFFSET(i); i+=32UL; /* Token/Hash */
+  CHECK_LEFT( 64UL ); ping->signature_off = GET_OFFSET(i); i+=64UL; /* Signature */
   return i;
 }
 
