@@ -116,20 +116,45 @@ class GeyserClient {
       // Container for the data we expect from the server.
       ::geyser::GetLatestBlockhashResponse reply;
 
-      // Context for the client. It could be used to convey extra information to
-      // the server and/or tweak certain RPC behaviors.
-      ClientContext context;
+      {
+        // Context for the client. It could be used to convey extra information to
+        // the server and/or tweak certain RPC behaviors.
+        ClientContext context;
 
-      // The actual RPC.
-      Status status = stub_->GetLatestBlockhash(&context, request, &reply);
+        // The actual RPC.
+        Status status = stub_->GetLatestBlockhash(&context, request, &reply);
 
-      // Act upon its status.
-      if (status.ok()) {
-        std::cout << "slot=" << reply.slot() << std::endl
-                  << "hash=" << reply.blockhash() << std::endl
-                  << "height=" << reply.last_valid_block_height() << std::endl;
-      } else {
-        std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+        // Act upon its status.
+        if (status.ok()) {
+          std::cout << "slot=" << reply.slot() << std::endl
+                    << "hash=" << reply.blockhash() << std::endl
+                    << "height=" << reply.last_valid_block_height() << std::endl;
+        } else {
+          std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+        }
+      }
+
+      {
+        // Data we are sending to the server.
+        ::geyser::IsBlockhashValidRequest request2;
+        request2.set_blockhash( reply.blockhash() );
+
+        // Container for the data we expect from the server.
+        ::geyser::IsBlockhashValidResponse reply2;
+
+        // Context for the client. It could be used to convey extra information to
+        // the server and/or tweak certain RPC behaviors.
+        ClientContext context;
+
+        // The actual RPC.
+        Status status = stub_->IsBlockhashValid(&context, request2, &reply2);
+
+        // Act upon its status.
+        if (status.ok()) {
+          std::cout << "valid=" << reply2.valid() << std::endl;
+        } else {
+          std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+        }
       }
     }
 

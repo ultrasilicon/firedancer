@@ -56,6 +56,17 @@ GeyserServiceImpl::GetSlot(::grpc::ServerContext* context, const ::geyser::GetSl
 
 ::grpc::Status
 GeyserServiceImpl::IsBlockhashValid(::grpc::ServerContext* context, const ::geyser::IsBlockhashValidRequest* request, ::geyser::IsBlockhashValidResponse* response) {
+  fd_hash_t hash;
+  if( fd_base58_decode_32( request->blockhash().c_str(), hash.uc ) == NULL ) {
+    return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "failed to decode hash");
+  }
+  fd_replay_notif_msg_t * info = geys_history_get_block_info_by_hash( _hist_ctx, &hash );
+  if( info == NULL ) {
+    response->set_valid(false);
+  } else {
+    response->set_slot(info->slot_exec.slot);
+    response->set_valid(true);
+  }
   return ::grpc::Status::OK;
 }
 
