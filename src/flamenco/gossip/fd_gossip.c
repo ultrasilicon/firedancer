@@ -120,20 +120,12 @@ fd_gossip_join( void * shgossip ) {
 }
 
 static int
-verify_crds_values( fd_gossip_view_crds_value_t const * values,
-                    ulong                               values_len,
-                    uchar const *                       payload,
-                    fd_sha512_t *                       sha ) {
-  for( ulong i=0UL; i<values_len; i++ ) {
-    fd_gossip_view_crds_value_t const * value = &values[ i ];
-    int err = fd_ed25519_verify( payload+value->signature_off+64UL, /* signable data begins after signature */
-                                 value->length-64UL,                /* signable data length */
-                                 payload+value->signature_off,
-                                 payload+value->pubkey_off,
-                                 sha );
-    if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err;
+is_entrypoint( fd_gossip_t const *   gossip,
+               fd_ip4_port_t const * peer_addr ) {
+  for( ulong i=0UL; i<gossip->entrypoints_cnt; i++ ) {
+    if( FD_UNLIKELY( peer_addr->l==gossip->entrypoints[i].l ) ) return 1;
   }
-  return FD_ED25519_SUCCESS;
+  return 0;
 }
 
 struct __attribute__((__packed__)) prune_sign_data_pre {
@@ -189,6 +181,23 @@ verify_prune( fd_gossip_view_prune_t const * view,
 }
 
 static int
+verify_crds_values( fd_gossip_view_crds_value_t const * values,
+                    ulong                               values_len,
+                    uchar const *                       payload,
+                    fd_sha512_t *                       sha ) {
+  for( ulong i=0UL; i<values_len; i++ ) {
+    fd_gossip_view_crds_value_t const * value = &values[ i ];
+    int err = fd_ed25519_verify( payload+value->signature_off+64UL, /* signable data begins after signature */
+                                 value->length-64UL,                /* signable data length */
+                                 payload+value->signature_off,
+                                 payload+value->pubkey_off,
+                                 sha );
+    if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err;
+  }
+  return FD_ED25519_SUCCESS;
+}
+
+static int
 verify_ping_pong( fd_gossip_view_t const * view,
                   uchar const *            payload,
                   fd_sha512_t *            sha ) {
@@ -217,9 +226,9 @@ verify_ping_pong( fd_gossip_view_t const * view,
 }
 
 static int
-verify_signatures( fd_gossip_view_t const *  view,
-                   uchar const *             payload,
-                   fd_sha512_t *             sha ) {
+verify_signatures( fd_gossip_view_t const * view,
+                   uchar const *            payload,
+                   fd_sha512_t *            sha ) {
   switch( view->tag ) {
     case FD_GOSSIP_MESSAGE_PULL_REQUEST:
       return verify_crds_values( view->pull_request->contact_info, 1UL, payload, sha );
@@ -366,6 +375,17 @@ verify_signatures( fd_gossip_view_t const *  view,
 //   return FD_GOSSIP_RX_OK;
 // }
 
+struct __attribute__((__packed__)) fd_gossip_pong_tx {
+  uchar tag; /* FD_GOSSIP_MESSAGE_PING */
+  uchar _pad[ 3UL ];
+
+  uchar pubkey[ 32UL ];
+  uchar ping_hash[ 32UL ];
+  uchar signature[ 64UL ];
+};
+
+typedef struct fd_gossip_pong_tx fd_gossip_pong_tx_t;
+
 static int
 rx_ping( fd_gossip_t *           gossip,
          fd_gossip_view_ping_t * ping,
@@ -373,14 +393,14 @@ rx_ping( fd_gossip_t *           gossip,
          long                    now,
          uchar const *           in_payload ) {
   /* Construct and send the pong response */
-  uchar out_payload[ 1232UL ];
-  ulong i = fd_gossip_init_msg_payload( out_payload, 1232UL, FD_GOSSIP_MESSAGE_PONG );
+  fd_gossip_pong_tx_t out_payload[1];
+  out_payload->tag = FD_GOSSIP_MESSAGE_PONG;
 
-  fd_memcpy( out_payload+i, gossip->identity_pubkey, 32UL )                   ; i+=32UL     ; /* Pubkey */
-  fd_ping_tracker_hash_ping_token( in_payload+ping->token_off, out_payload+i ); i+=32UL     ; /* Hash  */
-  gossip->sign_fn( gossip->sign_ctx, out_payload+i, 32UL, FD_KEYGUARD_SIGN_TYPE_SHA256_ED25519, out_payload+i+32UL ); i+=32UL+64UL; /* Signature (performed on hash) */
+  fd_memcpy( out_payload->pubkey, gossip->identity_pubkey, 32UL );
+  fd_ping_tracker_hash_ping_token( in_payload+ping->token_off, out_payload->ping_hash );
+  gossip->sign_fn( gossip->sign_ctx, out_payload->ping_hash, 32UL, FD_KEYGUARD_SIGN_TYPE_SHA256_ED25519, out_payload->signature );
 
-  gossip->send_fn( gossip->send_ctx, out_payload, i, peer_address, (ulong)now );
+  gossip->send_fn( gossip->send_ctx, (uchar *)out_payload, sizeof(fd_gossip_pong_tx_t), peer_address, (ulong)now );
   return FD_GOSSIP_RX_OK;
 }
 
@@ -390,6 +410,8 @@ rx_pong( fd_gossip_t *           gossip,
          fd_ip4_port_t *         peer_address,
          long                    now,
          uchar const *           in_payload ) {
+  if( FD_UNLIKELY( is_entrypoint( gossip, peer_address ) )) return 0;
+
   fd_ping_tracker_register( gossip->ping_tracker,
                             in_payload+pong->from_off,
                             0UL, /* FIXME: Get stake */
@@ -505,6 +527,17 @@ fd_gossip_rx( fd_gossip_t * gossip,
 //   }
 // }
 
+struct __attribute__((__packed__)) fd_gossip_ping_tx {
+  uchar tag; /* FD_GOSSIP_MESSAGE_PING */
+  uchar _pad[ 3UL ];
+
+  uchar pubkey[ 32UL ];
+  uchar ping_token[ 32UL ];
+  uchar signature[ 64UL ];
+};
+
+typedef struct fd_gossip_ping_tx fd_gossip_ping_tx_t;
+
 static void
 tx_ping( fd_gossip_t * gossip,
          long          now ) {
@@ -518,16 +551,14 @@ tx_ping( fd_gossip_t * gossip,
                                       &ping_token ) ) {
 
     /* Construct and send ping message */
-    uchar payload[ 1232UL ];
-    ulong i = fd_gossip_init_msg_payload( payload, 1232UL, FD_GOSSIP_MESSAGE_PING );
+    fd_gossip_ping_tx_t payload[ 1 ];
+    payload->tag = FD_GOSSIP_MESSAGE_PING;
 
-    ulong pre_img = i+16UL;
-    fd_memcpy( payload+pre_img, "SOLANA_PING_PONG", 16UL ) ; ; /* Ping token prefix */
-    fd_memcpy( payload+pre_img+16UL, ping_token, 32UL );             ; /* Ping token */
-    gossip->sign_fn( gossip->sign_ctx, payload+pre_img, 48UL, FD_KEYGUARD_SIGN_TYPE_SHA256_ED25519, payload+pre_img+16UL+32UL );
-    fd_memcpy( payload+i, gossip->identity_pubkey, 32UL );     ; /* Pubkey, this overwrites the token prefix part of the buffer */
+    fd_memcpy( payload->pubkey, gossip->identity_pubkey, 32UL );
+    fd_memcpy( payload->ping_token, ping_token, 32UL );
+    gossip->sign_fn( gossip->sign_ctx, payload->ping_token, 32UL, FD_KEYGUARD_SIGN_TYPE_SHA256_ED25519, payload->signature );
 
-    gossip->send_fn( gossip->send_ctx, payload, i+32+32+64, peer_address, (ulong)now );
+    gossip->send_fn( gossip->send_ctx, (uchar *)payload, sizeof(fd_gossip_ping_tx_t), peer_address, (ulong)now );
   }
 }
 
