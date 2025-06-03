@@ -1225,14 +1225,6 @@
       "comment": "https://github.com/anza-xyz/agave/blob/7117ed9653ce19e8b2dea108eff1f3eb6a3378a7/runtime/src/bank/partitioned_epoch_rewards/mod.rs#L70"
     },
     {
-      "name": "slot_bank",
-      "type": "struct",
-      "alignment": 128,
-      "fields": [
-        { "name": "filler",         "type": "ulong" }
-      ]
-    },
-    {
       "name": "prev_epoch_inflation_rewards",
       "type": "struct",
       "fields": [

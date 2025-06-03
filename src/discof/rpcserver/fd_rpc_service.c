@@ -165,45 +165,6 @@ read_epoch_bank( fd_rpc_ctx_t * ctx ) {
   return epoch_bank;
 }
 
-static fd_slot_bank_t *
-read_slot_bank( fd_rpc_ctx_t * ctx, ulong slot ) {
-  fd_funk_rec_key_t recid = fd_runtime_slot_bank_key();
-  ulong vallen;
-
-  fd_replay_notif_msg_t * info = fd_rpc_history_get_block_info( ctx->global->history, slot );
-  if( FD_UNLIKELY( info == NULL ) ) {
-    FD_LOG_WARNING( ( "get_slot_info failed" ) );
-    return NULL;
-  }
-  fd_funk_txn_xid_t xid;
-  xid.ul[0] = xid.ul[1] = slot;
-  const void * val = read_account_with_xid(ctx, &recid, &xid, &vallen);
-  if( FD_UNLIKELY( !val ) ) {
-    val = read_account(ctx, &recid, &vallen);
-    if( FD_UNLIKELY( !val ) ) {
-      FD_LOG_WARNING(( "failed to decode slot_bank" ));
-      return NULL;
-    }
-  }
-
-  uint magic = *(uint*)val;
-  if( FD_UNLIKELY( magic != FD_RUNTIME_ENC_BINCODE ) ) {
-    FD_LOG_ERR(( "failed to read banks record: invalid magic number" ));
-  }
-
-  fd_slot_bank_t * slot_bank = fd_bincode_decode_spad(
-      slot_bank,
-      ctx->global->spad,
-      val    + sizeof(uint),
-      vallen - sizeof(uint),
-      NULL );
-  if( !slot_bank ) {
-    FD_LOG_WARNING(( "failed to decode slot_bank" ));
-    return NULL;
-  }
-  return slot_bank;
-}
-
 /*
 static const char *
 block_flags_to_confirmation_status( uchar flags ) {
@@ -1418,18 +1379,10 @@ method_getStakeMinimumDelegation(struct json_values* values, fd_rpc_ctx_t * ctx)
 // TODO
 static int
 method_getSupply(struct json_values* values, fd_rpc_ctx_t * ctx) {
-  FD_SPAD_FRAME_BEGIN( ctx->global->spad ) {
-    ulong                 slot      = get_slot_from_commitment_level( values, ctx );
-    fd_slot_bank_t *      slot_bank = read_slot_bank( ctx, slot );
-    if( FD_UNLIKELY( !slot_bank ) ) {
-      fd_method_error( ctx, -1, "slot bank %lu not found", slot );
-      return 0;
-    }
-    fd_webserver_t * ws = &ctx->global->ws;
-    ulong capitalization = ULONG_MAX; /* FIXME: This is broken */
-    fd_web_reply_sprintf( ws, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" FIREDANCER_VERSION "\",\"slot\":%lu},\"value\":{\"circulating\":%lu,\"nonCirculating\":%lu,\"nonCirculatingAccounts\":[],\"total\":%lu}},\"id\":%s}",
-                          slot, capitalization, 0UL, capitalization, ctx->call_id);
-  } FD_SPAD_FRAME_END;
+  (void)values;
+  (void)ctx;
+  FD_LOG_WARNING(( "getSupply is not implemented" ));
+  fd_method_error(ctx, -1, "getSupply is not implemented");
   return 0;
 }
 
@@ -1630,12 +1583,12 @@ method_getVoteAccounts(struct json_values* values, fd_rpc_ctx_t * ctx) {
     const void* arg = json_get_value(values, path, 4, &arg_sz);
     (void)arg; // Ignore for now
 
-    ulong                 slot      = get_slot_from_commitment_level( values, ctx );
-    fd_slot_bank_t *      slot_bank = read_slot_bank( ctx, slot );
-    if( FD_UNLIKELY( !slot_bank ) ) {
-      fd_method_error( ctx, -1, "slot bank %lu not found", slot );
-      return 0;
-    }
+    // ulong                 slot      = get_slot_from_commitment_level( values, ctx );
+    // fd_slot_bank_t *      slot_bank = read_slot_bank( ctx, slot );
+    // if( FD_UNLIKELY( !slot_bank ) ) {
+    //   fd_method_error( ctx, -1, "slot bank %lu not found", slot );
+    //   return 0;
+    // }
 
     int needcomma = 0;
 

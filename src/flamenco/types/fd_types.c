@@ -10046,40 +10046,6 @@ int fd_epoch_reward_status_encode( fd_epoch_reward_status_t const * self, fd_bin
   return fd_epoch_reward_status_inner_encode( &self->inner, self->discriminant, ctx );
 }
 
-int fd_slot_bank_encode( fd_slot_bank_t const * self, fd_bincode_encode_ctx_t * ctx ) {
-  int err;
-  err = fd_bincode_uint64_encode( self->filler, ctx );
-  if( FD_UNLIKELY( err ) ) return err;
-  return FD_BINCODE_SUCCESS;
-}
-static inline int fd_slot_bank_decode_footprint_inner( fd_bincode_decode_ctx_t * ctx, ulong * total_sz ) {
-  if( (ulong)ctx->data + 8UL > (ulong)ctx->dataend ) { return FD_BINCODE_ERR_OVERFLOW; };
-  ctx->data = (void *)( (ulong)ctx->data + 8UL );
-  return 0;
-}
-static void fd_slot_bank_decode_inner( void * struct_mem, void * * alloc_mem, fd_bincode_decode_ctx_t * ctx ) {
-  fd_slot_bank_t * self = (fd_slot_bank_t *)struct_mem;
-  fd_bincode_uint64_decode_unsafe( &self->filler, ctx );
-}
-void * fd_slot_bank_decode( void * mem, fd_bincode_decode_ctx_t * ctx ) {
-  fd_slot_bank_t * self = (fd_slot_bank_t *)mem;
-  fd_slot_bank_new( self );
-  void * alloc_region = (uchar *)mem + sizeof(fd_slot_bank_t);
-  void * * alloc_mem = &alloc_region;
-  fd_slot_bank_decode_inner( mem, alloc_mem, ctx );
-  return self;
-}
-void fd_slot_bank_walk( void * w, fd_slot_bank_t const * self, fd_types_walk_fn_t fun, const char *name, uint level ) {
-  fun( w, self, name, FD_FLAMENCO_TYPE_MAP, "fd_slot_bank", level++ );
-  fun( w, &self->filler, "filler", FD_FLAMENCO_TYPE_ULONG, "ulong", level );
-  fun( w, self, name, FD_FLAMENCO_TYPE_MAP_END, "fd_slot_bank", level-- );
-}
-ulong fd_slot_bank_size( fd_slot_bank_t const * self ) {
-  ulong size = 0;
-  size += sizeof(ulong);
-  return size;
-}
-
 int fd_prev_epoch_inflation_rewards_encode( fd_prev_epoch_inflation_rewards_t const * self, fd_bincode_encode_ctx_t * ctx ) {
   int err;
   err = fd_bincode_uint64_encode( self->validator_rewards, ctx );

@@ -55,9 +55,6 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
     return NULL;
   }
 
-  /* Restore slot bank */
-  fd_slot_bank_new( &slot_ctx->slot_bank );
-
   /* Initialize builtin accounts */
   fd_builtin_programs_init( slot_ctx );
 

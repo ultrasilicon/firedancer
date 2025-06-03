@@ -65,8 +65,6 @@ usage( void ) {
     fd_blockstore_t * blockstore = fd_blockstore_join( &blockstore_ljoin, shblockstore ); \
     fd_buf_shred_pool_reset( blockstore->shred_pool, 0 );                                \
     FD_TEST( blockstore );                                                               \
-    fd_slot_bank_t slot_bank = {0};                                                      \
-    fd_slot_bank_new( &slot_bank );                                                      \
     int fd = open( "dummy.archv", O_RDWR | O_CREAT, 0666 );                              \
     FD_TEST( fd > 0 );
 
@@ -195,7 +193,7 @@ initialize_rocksdb( fd_wksp_t * wksp,
 static void
 aggregate_entries( fd_wksp_t * wksp, const char * folder, const char * csv, ulong st, ulong end ){
     INITIALIZE_BLOCKSTORE( blockstore );
-    FD_TEST( fd_blockstore_init( blockstore, fd, FD_BLOCKSTORE_ARCHIVE_MIN_SIZE, &slot_bank, 1UL ) );
+    FD_TEST( fd_blockstore_init( blockstore, fd, FD_BLOCKSTORE_ARCHIVE_MIN_SIZE, 1UL ) );
 
     ulong populated_slots[end - st + 1];
     memset( populated_slots, -1, sizeof(populated_slots) );
@@ -288,7 +286,7 @@ aggregate_entries( fd_wksp_t * wksp, const char * folder, const char * csv, ulon
 static void
 aggregate_batch_entries( fd_wksp_t * wksp, const char * folder, const char * csv, ulong st, ulong end ){
   INITIALIZE_BLOCKSTORE( blockstore );
-  FD_TEST( fd_blockstore_init( blockstore, fd, FD_BLOCKSTORE_ARCHIVE_MIN_SIZE, &slot_bank, 1UL ) );
+  FD_TEST( fd_blockstore_init( blockstore, fd, FD_BLOCKSTORE_ARCHIVE_MIN_SIZE, 1UL ) );
 
   ulong populated_slots[end - st + 1];
   memset( populated_slots, -1, sizeof(populated_slots) );
@@ -335,7 +333,7 @@ aggregate_batch_entries( fd_wksp_t * wksp, const char * folder, const char * csv
 static void
 investigate_shred( fd_wksp_t * wksp, const char * folder, ulong st, ulong end ){
   INITIALIZE_BLOCKSTORE( blockstore );
-  FD_TEST( fd_blockstore_init( blockstore, fd, FD_BLOCKSTORE_ARCHIVE_MIN_SIZE, &slot_bank, 1UL ) );
+  FD_TEST( fd_blockstore_init( blockstore, fd, FD_BLOCKSTORE_ARCHIVE_MIN_SIZE, 1UL ) );
 
   ulong populated_slots[end - st + 1];
   memset( populated_slots, -1, sizeof(populated_slots) );

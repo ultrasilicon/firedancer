@@ -124,8 +124,6 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   fd_memcpy( bank_hash, test_ctx->slot_ctx.parent_bank_hash, sizeof(fd_hash_t) );
   fd_bank_mgr_bank_hash_save( slot_ctx->bank_mgr );
 
-  /* Set up slot bank */
-  fd_slot_bank_t * slot_bank = &slot_ctx->slot_bank;
 
   /* Initialize vote timestamps cache */
   uchar * pool_mem                      = fd_spad_alloc( runner->spad, fd_clock_timestamp_vote_t_map_align(), fd_clock_timestamp_vote_t_map_footprint( 10000UL ) );
@@ -133,7 +131,6 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   // slot_bank->timestamp_votes.votes_root = NULL;
 
   // fd_memcpy( slot_bank->lthash.lthash, test_ctx->slot_ctx.parent_lt_hash, FD_LTHASH_LEN_BYTES );
-  (void)slot_bank;
 
   /* Set up epoch context and epoch bank */
   /* TODO: Do we need any more of these? */

@@ -1643,7 +1643,6 @@ kickoff_repair_orphans( fd_replay_tile_ctx_t * ctx, fd_stem_context_t * stem ) {
   fd_blockstore_init( ctx->slot_ctx->blockstore,
                       ctx->blockstore_fd,
                       FD_BLOCKSTORE_ARCHIVE_MIN_SIZE,
-                      &ctx->slot_ctx->slot_bank,
                       ctx->slot_ctx->slot );
 
   fd_fseq_update( ctx->published_wmark, ctx->slot_ctx->slot );
@@ -1673,7 +1672,7 @@ read_snapshot( void *              _ctx,
   ulong        base_slot = 0UL;
   if( strcmp( snapshot, "funk" )==0 || strncmp( snapshot, "wksp:", 5 )==0 ) {
     /* Funk already has a snapshot loaded */
-    fd_runtime_recover_banks( ctx->slot_ctx, 1, 1, ctx->runtime_spad );
+    fd_runtime_recover_banks( ctx->slot_ctx, 1, ctx->runtime_spad );
     base_slot = ctx->slot_ctx->slot;
     kickoff_repair_orphans( ctx, stem );
   } else {
@@ -1973,7 +1972,6 @@ init_snapshot( fd_replay_tile_ctx_t * ctx,
   fd_blockstore_init( ctx->slot_ctx->blockstore,
                       ctx->blockstore_fd,
                       FD_BLOCKSTORE_ARCHIVE_MIN_SIZE,
-                      &ctx->slot_ctx->slot_bank,
                       ctx->curr_slot );
   ctx->epoch_ctx->bank_hash_cmp  = ctx->bank_hash_cmp;
   ctx->epoch_ctx->runtime_public = ctx->runtime_public;

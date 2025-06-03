@@ -53,7 +53,6 @@ fd_hashes_load( fd_exec_slot_ctx_t * slot_ctx ) {
   FD_STORE( ulong, execution_fees, 0UL );
   fd_bank_mgr_execution_fees_save( slot_ctx->bank_mgr );
 
-  fd_runtime_save_slot_bank( slot_ctx );
   fd_runtime_save_epoch_bank( slot_ctx );
 }
 

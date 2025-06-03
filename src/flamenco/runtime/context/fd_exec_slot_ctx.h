@@ -33,8 +33,6 @@ struct __attribute__((aligned(8UL))) fd_exec_slot_ctx {
   ulong                       txns_meta_sz;
   fd_exec_epoch_ctx_t *       epoch_ctx;
 
-  fd_slot_bank_t              slot_bank;
-
   ulong                       total_compute_units_requested;
   ulong                       slots_per_epoch;
   ulong                       part_width;

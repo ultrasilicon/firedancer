@@ -201,58 +201,32 @@ slot_ctx_restore( ulong                 slot,
     FD_LOG_ERR( ( "missing block at slot we're trying to restore" ) );
 
   fd_funk_txn_xid_t xid = { .ul = { slot, slot } };
-  fd_funk_rec_key_t id  = fd_runtime_slot_bank_key();
-  for( ; ; ) {
-    fd_funk_txn_start_read( funk );
-    fd_funk_txn_t * txn = fd_funk_txn_query( &xid, txn_map );
+
+  fd_funk_txn_start_read( funk );
+  fd_funk_txn_t * txn = fd_funk_txn_query( &xid, txn_map );
+  if( !txn ) {
+    memset( xid.uc, 0, sizeof( fd_funk_txn_xid_t ) );
+    xid.ul[0] = slot;
+    txn       = fd_funk_txn_query( &xid, txn_map );
     if( !txn ) {
-      memset( xid.uc, 0, sizeof( fd_funk_txn_xid_t ) );
-      xid.ul[0] = slot;
-      txn       = fd_funk_txn_query( &xid, txn_map );
-      if( !txn ) {
-        FD_LOG_ERR( ( "missing txn, parent slot %lu", slot ) );
-      }
-    }
-    fd_funk_txn_end_read( funk );
-
-    fd_funk_rec_query_t query[1];
-    fd_funk_rec_t const * rec = fd_funk_rec_query_try_global( funk, txn, &id, NULL, query );
-    if( rec == NULL ) FD_LOG_ERR( ( "failed to read banks record" ) );
-    void * val = fd_funk_val( rec, fd_funk_wksp( funk ) );
-
-    uint magic = *(uint *)val;
-
-    if( slot_ctx_out == NULL || slot_ctx_out->magic != FD_EXEC_SLOT_CTX_MAGIC ) {
-      FD_LOG_WARNING(( "bad slot context" ));
-      continue;
-    }
-
-    FD_TEST( slot_ctx_out->magic == FD_EXEC_SLOT_CTX_MAGIC );
-
-    slot_ctx_out->funk_txn   = txn;
-    slot_ctx_out->funk       = funk;
-    slot_ctx_out->blockstore = blockstore;
-    slot_ctx_out->epoch_ctx  = epoch_ctx;
-
-    if( FD_UNLIKELY( magic!=FD_RUNTIME_ENC_BINCODE ) ) {
-      FD_LOG_ERR( ( "failed to read banks record: invalid magic number" ) );
-    }
-
-    int err;
-    fd_slot_bank_t * slot_bank = fd_bincode_decode_spad( slot_bank, runtime_spad, (uchar *)val+sizeof(uint), fd_funk_val_sz( rec )-sizeof(uint), &err );
-    if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) {
-      FD_LOG_WARNING(( "failed to decode banks record" ));
-      continue;
-    }
-
-    slot_ctx_out->slot      = slot;
-    slot_ctx_out->slot_bank = *slot_bank;
-    FD_TEST( !fd_runtime_sysvar_cache_load( slot_ctx_out, runtime_spad ) );
-
-    if( FD_LIKELY( fd_funk_rec_query_test( query ) == FD_FUNK_SUCCESS ) ) {
-      break;
+      FD_LOG_ERR( ( "missing txn, parent slot %lu", slot ) );
     }
   }
+  fd_funk_txn_end_read( funk );
+
+  if( slot_ctx_out == NULL || slot_ctx_out->magic != FD_EXEC_SLOT_CTX_MAGIC ) {
+    FD_LOG_ERR(( "bad slot context" ));
+  }
+
+  FD_TEST( slot_ctx_out->magic == FD_EXEC_SLOT_CTX_MAGIC );
+
+  slot_ctx_out->funk_txn   = txn;
+  slot_ctx_out->funk       = funk;
+  slot_ctx_out->blockstore = blockstore;
+  slot_ctx_out->epoch_ctx  = epoch_ctx;
+
+  slot_ctx_out->slot = slot;
+  FD_TEST( !fd_runtime_sysvar_cache_load( slot_ctx_out, runtime_spad ) );
 
   // TODO how do i get this info, ignoring rewards for now
   // slot_ctx_out->epoch_reward_status = ???

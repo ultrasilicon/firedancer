@@ -1613,15 +1613,6 @@ fd_runtime_block_execute_finalize_finish( fd_exec_slot_ctx_t *             slot_
     FD_LOG_ERR(( "Unable to hash at end of slot" ));
   }
 
-  /* We don't want to save the epoch bank at the end of every slot because it
-     should only be changing at the epoch boundary. */
-
-  err = fd_runtime_save_slot_bank( slot_ctx );
-  if( FD_UNLIKELY( err!=FD_RUNTIME_EXECUTE_SUCCESS ) ) {
-    FD_LOG_WARNING(( "failed to save slot bank" ));
-    return err;
-  }
-
   slot_ctx->total_compute_units_requested = 0UL;
 
   return FD_RUNTIME_EXECUTE_SUCCESS;
@@ -3859,8 +3850,6 @@ fd_runtime_process_genesis_block( fd_exec_slot_ctx_t * slot_ctx,
 
   FD_TEST( FD_RUNTIME_EXECUTE_SUCCESS==fd_runtime_save_epoch_bank( slot_ctx ) );
 
-  FD_TEST( FD_RUNTIME_EXECUTE_SUCCESS==fd_runtime_save_slot_bank( slot_ctx ) );
-
   return FD_RUNTIME_EXECUTE_SUCCESS;
 }
 
@@ -4538,8 +4527,6 @@ fd_runtime_block_eval_tpool( fd_exec_slot_ctx_t * slot_ctx,
   ulong * transaction_count = fd_bank_mgr_transaction_count_modify( slot_ctx->bank_mgr );
   *transaction_count += block_info.txn_cnt;
   fd_bank_mgr_transaction_count_save( slot_ctx->bank_mgr );
-
-  fd_runtime_save_slot_bank( slot_ctx );
 
   ulong * prev_slot = fd_bank_mgr_prev_slot_modify( slot_ctx->bank_mgr );
   *prev_slot = slot;

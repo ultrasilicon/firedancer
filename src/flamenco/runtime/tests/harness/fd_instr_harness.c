@@ -55,10 +55,6 @@ fd_runtime_fuzz_instr_ctx_create( fd_runtime_fuzz_runner_t *           runner,
     return 0;
   }
 
-  /* Restore slot_bank */
-
-  fd_slot_bank_new( &slot_ctx->slot_bank );
-
   /* Bank manager */
 
   slot_ctx->bank_mgr = fd_bank_mgr_join( fd_bank_mgr_new( slot_ctx->bank_mgr_mem ), slot_ctx->funk, funk_txn );

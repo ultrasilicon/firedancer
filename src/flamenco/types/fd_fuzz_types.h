@@ -1816,14 +1816,6 @@ void *fd_epoch_reward_status_generate( void *mem, void **alloc_mem, fd_rng_t * r
   return mem;
 }
 
-void *fd_slot_bank_generate( void *mem, void **alloc_mem, fd_rng_t * rng ) {
-  fd_slot_bank_t *self = (fd_slot_bank_t *) mem;
-  *alloc_mem = (uchar *) *alloc_mem + sizeof(fd_slot_bank_t);
-  fd_slot_bank_new(mem);
-  self->filler = fd_rng_ulong( rng );
-  return mem;
-}
-
 void *fd_prev_epoch_inflation_rewards_generate( void *mem, void **alloc_mem, fd_rng_t * rng ) {
   fd_prev_epoch_inflation_rewards_t *self = (fd_prev_epoch_inflation_rewards_t *) mem;
   *alloc_mem = (uchar *) *alloc_mem + sizeof(fd_prev_epoch_inflation_rewards_t);

@@ -190,8 +190,7 @@ fd_snapshot_create_populate_acc_vecs( fd_snapshot_ctx_t *    snapshot_ctx,
 
     err = fd_snapshot_service_hash( &snapshot_ctx->acc_hash,
                                     &snapshot_ctx->snap_hash,
-                                    &snapshot_ctx->slot_bank,
-                                    &snapshot_ctx->epoch_bank,
+                                    NULL,
                                     snapshot_ctx->funk,
                                     snapshot_ctx->tpool,
                                     snapshot_ctx->spad,
@@ -200,8 +199,7 @@ fd_snapshot_create_populate_acc_vecs( fd_snapshot_ctx_t *    snapshot_ctx,
   } else {
     err = fd_snapshot_service_inc_hash( &snapshot_ctx->acc_hash,
                                         &snapshot_ctx->snap_hash,
-                                        &snapshot_ctx->slot_bank,
-                                        &snapshot_ctx->epoch_bank,
+                                        NULL,
                                         snapshot_ctx->funk,
                                         incremental_keys,
                                         incremental_key_cnt,
@@ -497,7 +495,7 @@ fd_snapshot_create_populate_acc_vecs( fd_snapshot_ctx_t *    snapshot_ctx,
 
 }
 
-static void
+static void FD_FN_UNUSED
 fd_snapshot_create_serialiable_stakes( fd_snapshot_ctx_t * snapshot_ctx,
                                        fd_stakes_t *       old_stakes,
                                        fd_stakes_t *       new_stakes ) {
@@ -602,7 +600,7 @@ fd_snapshot_create_populate_bank( fd_snapshot_ctx_t *   snapshot_ctx,
                                   fd_versioned_bank_t * bank ) {
 
   // fd_slot_bank_t  * slot_bank  = &snapshot_ctx->slot_bank;
-  fd_epoch_bank_t * epoch_bank = &snapshot_ctx->epoch_bank;
+  // fd_epoch_bank_t * epoch_bank = &snapshot_ctx->epoch_bank;
 
   /* The blockhash queue has to be copied over along with all of its entries.
      As a note, the size is 300 but in fact is of size 301 due to a knwon bug
@@ -706,78 +704,76 @@ fd_snapshot_create_populate_bank( fd_snapshot_ctx_t *   snapshot_ctx,
      snapshot format. Therefore, we must recompute the data structure using
      the pubkeys from the stakes cache that is currently in the epoch context. */
 
-  fd_snapshot_create_serialiable_stakes( snapshot_ctx, &epoch_bank->stakes, &bank->stakes );
+  // fd_snapshot_create_serialiable_stakes( snapshot_ctx, &epoch_bank->stakes, &bank->stakes );
 
 }
 
 static inline void
 fd_snapshot_create_setup_and_validate_ctx( fd_snapshot_ctx_t * snapshot_ctx ) {
 
-  fd_funk_t * funk = snapshot_ctx->funk;
+  // fd_funk_t * funk = snapshot_ctx->funk;
 
-  /* First the epoch bank. */
+  // /* First the epoch bank. */
 
-  fd_funk_rec_key_t     epoch_id  = fd_runtime_epoch_bank_key();
-  fd_funk_rec_query_t   query[1];
-  fd_funk_rec_t const * epoch_rec = fd_funk_rec_query_try( funk, NULL, &epoch_id, query );
-  if( FD_UNLIKELY( !epoch_rec ) ) {
-    FD_LOG_ERR(( "Failed to read epoch bank record: missing record" ));
-  }
-  void * epoch_val = fd_funk_val( epoch_rec, fd_funk_wksp( funk ) );
+  // fd_funk_rec_key_t     epoch_id  = fd_runtime_epoch_bank_key();
+  // fd_funk_rec_query_t   query[1];
+  // fd_funk_rec_t const * epoch_rec = fd_funk_rec_query_try( funk, NULL, &epoch_id, query );
+  // if( FD_UNLIKELY( !epoch_rec ) ) {
+  //   FD_LOG_ERR(( "Failed to read epoch bank record: missing record" ));
+  // }
+  // void * epoch_val = fd_funk_val( epoch_rec, fd_funk_wksp( funk ) );
 
-  if( FD_UNLIKELY( fd_funk_val_sz( epoch_rec )<sizeof(uint) ) ) {
-    FD_LOG_ERR(( "Failed to read epoch bank record: empty record" ));
-  }
+  // if( FD_UNLIKELY( fd_funk_val_sz( epoch_rec )<sizeof(uint) ) ) {
+  //   FD_LOG_ERR(( "Failed to read epoch bank record: empty record" ));
+  // }
 
-  uint epoch_magic = *(uint*)epoch_val;
-  if( FD_UNLIKELY( epoch_magic!=FD_RUNTIME_ENC_BINCODE ) ) {
-    FD_LOG_ERR(( "Epoch bank record has wrong magic" ));
-  }
+  // uint epoch_magic = *(uint*)epoch_val;
+  // if( FD_UNLIKELY( epoch_magic!=FD_RUNTIME_ENC_BINCODE ) ) {
+  //   FD_LOG_ERR(( "Epoch bank record has wrong magic" ));
+  // }
 
-  int err;
-  fd_epoch_bank_t * epoch_bank = fd_bincode_decode_spad(
-      epoch_bank, snapshot_ctx->spad,
-      (uchar *)epoch_val          + sizeof(uint),
-      fd_funk_val_sz( epoch_rec ) - sizeof(uint),
-      &err );
-  if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) {
-    FD_LOG_ERR(( "Failed to decode epoch bank" ));
-  }
+  // int err;
+  // fd_epoch_bank_t * epoch_bank = fd_bincode_decode_spad(
+  //     epoch_bank, snapshot_ctx->spad,
+  //     (uchar *)epoch_val          + sizeof(uint),
+  //     fd_funk_val_sz( epoch_rec ) - sizeof(uint),
+  //     &err );
+  // if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) {
+  //   FD_LOG_ERR(( "Failed to decode epoch bank" ));
+  // }
 
-  snapshot_ctx->epoch_bank = *epoch_bank;
-
-  FD_TEST( !fd_funk_rec_query_test( query ) );
+  // FD_TEST( !fd_funk_rec_query_test( query ) );
 
   /* Now the slot bank. */
 
-  fd_funk_rec_key_t     slot_id  = fd_runtime_slot_bank_key();
-  fd_funk_rec_t const * slot_rec = fd_funk_rec_query_try( funk, NULL, &slot_id, query );
-  if( FD_UNLIKELY( !slot_rec ) ) {
-    FD_LOG_ERR(( "Failed to read slot bank record: missing record" ));
-  }
-  void * slot_val = fd_funk_val( slot_rec, fd_funk_wksp( funk ) );
+  // fd_funk_rec_key_t     slot_id  = fd_runtime_slot_bank_key();
+  // fd_funk_rec_t const * slot_rec = fd_funk_rec_query_try( funk, NULL, &slot_id, query );
+  // if( FD_UNLIKELY( !slot_rec ) ) {
+  //   FD_LOG_ERR(( "Failed to read slot bank record: missing record" ));
+  // }
+  // void * slot_val = fd_funk_val( slot_rec, fd_funk_wksp( funk ) );
 
-  if( FD_UNLIKELY( fd_funk_val_sz( slot_rec )<sizeof(uint) ) ) {
-    FD_LOG_ERR(( "Failed to read slot bank record: empty record" ));
-  }
+  // if( FD_UNLIKELY( fd_funk_val_sz( slot_rec )<sizeof(uint) ) ) {
+  //   FD_LOG_ERR(( "Failed to read slot bank record: empty record" ));
+  // }
 
-  uint slot_magic = *(uint*)slot_val;
-  if( FD_UNLIKELY( slot_magic!=FD_RUNTIME_ENC_BINCODE ) ) {
-    FD_LOG_ERR(( "Slot bank record has wrong magic" ));
-  }
+  // uint slot_magic = *(uint*)slot_val;
+  // if( FD_UNLIKELY( slot_magic!=FD_RUNTIME_ENC_BINCODE ) ) {
+  //   FD_LOG_ERR(( "Slot bank record has wrong magic" ));
+  // }
 
-  fd_slot_bank_t * slot_bank = fd_bincode_decode_spad(
-      slot_bank, snapshot_ctx->spad,
-      (uchar *)slot_val          + sizeof(uint),
-      fd_funk_val_sz( slot_rec ) - sizeof(uint),
-      &err );
-  if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) {
-    FD_LOG_ERR(( "Failed to decode slot bank" ));
-  }
+  // fd_slot_bank_t * slot_bank = fd_bincode_decode_spad(
+  //     slot_bank, snapshot_ctx->spad,
+  //     (uchar *)slot_val          + sizeof(uint),
+  //     fd_funk_val_sz( slot_rec ) - sizeof(uint),
+  //     &err );
+  // if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) {
+  //   FD_LOG_ERR(( "Failed to decode slot bank" ));
+  // }
 
-  snapshot_ctx->slot_bank = *slot_bank;
+  // snapshot_ctx->slot_bank = *slot_bank;
 
-  FD_TEST( !fd_funk_rec_query_test( query ) );
+  // FD_TEST( !fd_funk_rec_query_test( query ) );
 
   /* Validate that the snapshot context is setup correctly */
 

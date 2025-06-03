@@ -1254,7 +1254,6 @@ fd_accounts_hash_inc_no_txn( fd_funk_t *                 funk,
 int
 fd_snapshot_service_hash( fd_hash_t *       accounts_hash,
                           fd_hash_t *       snapshot_hash,
-                          fd_slot_bank_t *  slot_bank,
                           fd_epoch_bank_t * epoch_bank,
                           fd_funk_t *       funk,
                           fd_tpool_t *      tpool,
@@ -1270,7 +1269,6 @@ fd_snapshot_service_hash( fd_hash_t *       accounts_hash,
   };
 
   /* FIXME: this has an invalid slot number. */
-  (void)slot_bank;
   fd_accounts_hash( funk, 0UL, accounts_hash, runtime_spad, features, &exec_para_ctx, NULL );
 
 
@@ -1292,7 +1290,6 @@ fd_snapshot_service_hash( fd_hash_t *       accounts_hash,
 int
 fd_snapshot_service_inc_hash( fd_hash_t *                 accounts_hash,
                               fd_hash_t *                 snapshot_hash,
-                              fd_slot_bank_t *            slot_bank,
                               fd_epoch_bank_t *           epoch_bank,
                               fd_funk_t *                 funk,
                               fd_funk_rec_key_t const * * pubkeys,
@@ -1304,7 +1301,6 @@ fd_snapshot_service_inc_hash( fd_hash_t *                 accounts_hash,
 
   int should_include_eah = 0;
   (void)epoch_bank;
-  (void)slot_bank;
 
   if( should_include_eah ) {
     fd_sha256_init( &h );
@@ -1322,7 +1318,6 @@ fd_snapshot_service_inc_hash( fd_hash_t *                 accounts_hash,
 void
 fd_accounts_check_lthash( fd_funk_t *      funk,
                           fd_funk_txn_t *  funk_txn,
-                          fd_slot_bank_t * slot_bank,
                           fd_spad_t *      runtime_spad,
                           fd_features_t *  features ) {
 
@@ -1408,7 +1403,6 @@ fd_accounts_check_lthash( fd_funk_t *      funk,
   }
 
   // Compare the accumulator to the slot
-  (void)slot_bank;
   fd_lthash_value_t * acc = (fd_lthash_value_t *)fd_type_pun_const( NULL );
   if ( memcmp( acc, &acc_lthash, sizeof( fd_lthash_value_t ) ) == 0 ) {
     FD_LOG_NOTICE(("accounts_lthash %s == %s", FD_LTHASH_ENC_32_ALLOCA (acc), FD_LTHASH_ENC_32_ALLOCA (&acc_lthash)));

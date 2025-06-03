@@ -1162,7 +1162,7 @@ ingest( fd_ledger_args_t * args ) {
   }
 
   if( !args->snapshot && (args->restore_funk != NULL || args->restore != NULL) ) {
-    fd_runtime_recover_banks( slot_ctx, 0, 1, args->runtime_spad );
+    fd_runtime_recover_banks( slot_ctx, 1, args->runtime_spad );
   }
 
   /* At this point the account state has been ingested into funk. Intake rocksdb */
@@ -1367,7 +1367,6 @@ replay( fd_ledger_args_t * args ) {
   fd_blockstore_init( args->blockstore,
                       -1,
                       FD_BLOCKSTORE_ARCHIVE_MIN_SIZE,
-                      &args->slot_ctx->slot_bank,
                       args->slot_ctx->slot );
   fd_buf_shred_pool_reset( args->blockstore->shred_pool, 0 );
 

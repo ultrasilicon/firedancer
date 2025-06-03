@@ -24,7 +24,6 @@ fd_exec_slot_ctx_new( void *      mem,
   fd_memset( mem, 0, sizeof(fd_exec_slot_ctx_t) );
 
   fd_exec_slot_ctx_t * self = (fd_exec_slot_ctx_t *)mem;
-  fd_slot_bank_new( &self->slot_bank );
 
   uchar * sysvar_cache_mem = fd_spad_alloc_check( runtime_spad, fd_sysvar_cache_align(), fd_sysvar_cache_footprint() );
   if( FD_UNLIKELY( !sysvar_cache_mem ) ) {
@@ -164,11 +163,6 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   fd_exec_epoch_ctx_t * epoch_ctx   = slot_ctx->epoch_ctx;
   fd_epoch_bank_t *     epoch_bank  = fd_exec_epoch_ctx_epoch_bank( epoch_ctx );
-
-  /* Clean out prior bank */
-  fd_slot_bank_t * slot_bank = &slot_ctx->slot_bank;
-  memset( slot_bank, 0, sizeof(fd_slot_bank_t) );
-  fd_slot_bank_new( slot_bank );
 
   for ( fd_vote_accounts_pair_t_mapnode_t * n = fd_vote_accounts_pair_t_map_minimum(
           epoch_bank->stakes.vote_accounts.vote_accounts_pool,

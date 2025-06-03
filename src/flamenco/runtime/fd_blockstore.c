@@ -249,10 +249,7 @@ fd_blockstore_t *
 fd_blockstore_init( fd_blockstore_t *      blockstore,
                     int                    fd,
                     ulong                  fd_size_max,
-                    fd_slot_bank_t const * slot_bank,
                     ulong                  slot ) {
-
-  (void)slot_bank;
 
   if( fd_size_max < FD_BLOCKSTORE_ARCHIVE_MIN_SIZE ) {
     FD_LOG_ERR(( "archive file size too small" ));
