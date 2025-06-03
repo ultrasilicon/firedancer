@@ -256,9 +256,7 @@ unprivileged_init( fd_topo_t *      topo,
                                                gossip_send_fn,
                                                (void*)ctx,
                                                gossip_sign_fn,
-                                               (void*)ctx,
-
-                                               ctx->last_wallclock ) );
+                                               (void*)ctx ) );
   FD_TEST( ctx->gossip );
 
   FD_MGAUGE_SET( GOSSIP, SHRED_VERSION, tile->gossip.expected_shred_version );

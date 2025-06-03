@@ -26,14 +26,7 @@
    Once a peer is validated by responding to a ping with a valid pong,
    it is considered valid for 20 minutes.  After 18 minutes, we will
    begin pinging the peer again, every twenty seconds, to refresh the
-   peer.
-
-   A special case applies to entrypoints. Since pubkey information is
-   not known at start up, we cannot use it for lookups. Instead,
-   fd_ping_tracker tracks the entrypoints in a separate list that is
-   populated with fd_ping_tracker_entrypoint_track. Once we have
-   information about an entrypoint's pubkey (via a pong or contact info),
-   fd_ping_tracker will "promote" it to a regular peer. */
+   peer. */
 
 #include "../../util/rng/fd_rng.h"
 #include "../../util/net/fd_net_headers.h"
@@ -127,13 +120,6 @@ fd_ping_tracker_pop_request( fd_ping_tracker_t *    ping_tracker,
                              fd_ip4_port_t const ** out_peer_address,
                              uchar const **         out_token );
 
-/* Analagous to fd_ping_tracker_track, but for entrypoints whom we
-   do not have pubkey information about. If an entrypoint's pubkey
-   is known, use fd_ping_tracker_track instead. */
-void
-fd_ping_tracker_entrypoint_track( fd_ping_tracker_t *   ping_tracker,
-                                  long                  now,
-                                  fd_ip4_port_t const * peer_address );
 /* fd_ping_tracker_response_hash generates a hash of a ping token, to be
    embedded in a corresponding pong message that is then verified by the ping
    sender.

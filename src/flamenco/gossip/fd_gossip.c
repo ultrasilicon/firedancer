@@ -59,10 +59,11 @@ fd_gossip_new( void *                shmem,
                fd_gossip_send_fn     send_fn,
                void *                send_ctx,
                fd_gossip_sign_fn     sign_fn,
-               void *                sign_ctx,
-               long                  now ) {
+               void *                sign_ctx ) {
   (void)has_expected_shred_version;
   (void)expected_shred_version;
+  (void)entrypoints;
+  (void)entrypoints_cnt;
 
   if( FD_UNLIKELY( !shmem ) ) {
     FD_LOG_ERR(( "NULL shmem" ));
@@ -86,10 +87,6 @@ fd_gossip_new( void *                shmem,
   // fd_gossip_set_expected_shred_version( gossip, has_expected_shred_version, expected_shred_version );
   // fd_gossip_set_identity( gossip, identity_pubkey );
   fd_memcpy( gossip->identity_pubkey, identity_pubkey, 32UL );
-
-  for( ulong i=0UL; i<entrypoints_cnt; i++ ) {
-    fd_ping_tracker_entrypoint_track( ping_tracker, now, &entrypoints[i] );
-  }
 
   return gossip;
 }
