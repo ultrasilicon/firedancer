@@ -44,12 +44,35 @@
 struct fd_gossip_view_contact_info {
   long   instance_creation_wallclock_nanos;
   ushort shred_version;
-  ushort pubkey_off;
-  ushort signature_off; /* within full message payload, not CRDS */
 };
 
 typedef struct fd_gossip_view_contact_info fd_gossip_view_contact_info_t;
 
+ /* Offsets are within full message payload, not the subset where the encoded
+    CRDS value lies. */
+struct fd_gossip_view_crds_value {
+  ushort signature_off;
+  ushort pubkey_off;
+
+  ushort length; /* Length of the value in bytes (incl. signature) */
+
+  uchar tag; /* Discriminant */
+  union{
+    fd_gossip_view_contact_info_t contact_info; /* FD_GOSSIP_VALUE_CONTACT_INFO */
+  };
+};
+
+typedef struct fd_gossip_view_crds_value fd_gossip_view_crds_value_t;
+
+struct fd_gossip_view_crds_composite {
+  ushort from_off; /* Offset to the sender's pubkey */
+  ushort crds_values_len; /* Number of CRDS values in the response */
+
+  fd_gossip_view_crds_value_t crds_values[ FD_GOSSIP_MSG_MAX_CRDS ]; /* CRDS values */
+};
+
+typedef struct fd_gossip_view_crds_composite fd_gossip_view_pull_response_t;
+typedef struct fd_gossip_view_crds_composite fd_gossip_view_push_t;
 struct fd_gossip_view_pull_request {
   ulong bloom_keys_len; /* number of keys in the bloom filter */
   ulong bloom_keys_offset; /* offset to start of bloom keys in payload */
@@ -62,7 +85,7 @@ struct fd_gossip_view_pull_request {
   ulong mask; /* mask used to filter the CRDS values */
   uint  mask_bits; /* number of bits in the mask */
 
-  fd_gossip_view_contact_info_t contact_info[ 1 ]; /* Pull Req holds contact info */
+  fd_gossip_view_crds_value_t contact_info[ 1 ]; /* Pull Req holds contact info */
 };
 
 typedef struct fd_gossip_view_pull_request fd_gossip_view_pull_request_t;
@@ -86,12 +109,12 @@ typedef struct fd_gossip_view_pong fd_gossip_view_pong_t;
 struct fd_gossip_view {
   uchar tag; // uint in rust bincode
   union {
-    fd_gossip_view_pull_request_t pull_request[ 1 ];
-    // fd_gossip_pull_response_t pull_response[ 1 ]; /* CRDS Composite Type */
-    // fd_gossip_push_t          push[ 1 ];          /* CRDS Composite Type */
+    fd_gossip_view_pull_request_t  pull_request[ 1 ];
+    fd_gossip_view_pull_response_t pull_response[ 1 ]; /* CRDS Composite Type */
+    fd_gossip_view_push_t          push[ 1 ];          /* CRDS Composite Type */
     // fd_gossip_prune_t         prune[ 1 ];
-    fd_gossip_view_ping_t         ping[ 1 ];
-    fd_gossip_view_pong_t         pong[ 1 ];
+    fd_gossip_view_ping_t          ping[ 1 ];
+    fd_gossip_view_pong_t          pong[ 1 ];
   };
 };
 

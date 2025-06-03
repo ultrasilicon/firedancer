@@ -114,31 +114,80 @@ fd_gossip_join( void * shgossip ) {
 }
 
 static int
+verify_crds_value( fd_gossip_view_crds_value_t * value,
+                   uchar const *                 payload,
+                   fd_sha512_t *                 sha ) {
+
+  return fd_ed25519_verify( payload+64UL, /* signable data begins after signature */
+                            value->length - 64UL, /* signable data length */
+                            payload+value->signature_off,
+                            payload+value->pubkey_off,
+                            sha );
+}
+
+static int
 verify_signatures( fd_gossip_view_t const *  view,
                    uchar const *             payload,
                   //  ulong                     payload_sz,
                    fd_sha512_t *             sha ) {
 
-  /* Optimize for CRDS composites (push/pull) that don't have an outer signable
-     data */
-  ulong signature_offsets[ 16 ];
-  ulong signable_data_offsets[ 16 ];
-  ulong signable_data_lengths[ 16 ];
-  ulong signable_data_count;
-  int err = fd_gossip_view_signable_data_offsets( view, payload, signature_offsets,
-                                                  signable_data_offsets, signable_data_lengths,
-                                                  &signable_data_count );
+  /* Messages with CRDS values */
+  ulong crds_cnt = 0UL;
+  fd_gossip_view_crds_value_t const * crds_views = NULL;
 
-  for( ulong i=0UL; i<signable_data_count; i++ ) {
-    if( FD_UNLIKELY( signable_data_lengths[i]==0UL ) ) continue; /* Skip empty signable data */
-    err = fd_ed25519_verify( payload + signable_data_offsets[i],
-                             signable_data_lengths[i],
-                             payload + signature_offsets[i],
-                             payload + fd_gossip_view_pubkey_offset( view ),
-                             sha );
-    if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err;
+  switch( view->tag ) {
+    case FD_GOSSIP_MESSAGE_PULL_REQUEST:
+      crds_views  = view->pull_request->contact_info;
+      crds_cnt    = 1UL;
+      break;
+    case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
+      crds_cnt     = view->pull_response->crds_values_len;
+      crds_views   = view->pull_response->crds_values;
+      break;
+    case FD_GOSSIP_MESSAGE_PUSH:
+      crds_cnt     = view->push->crds_values_len;
+      crds_views   = view->push->crds_values;
+      break;
+  };
+
+  for( ulong i=0UL; i<crds_cnt; i++ ) {
+    fd_gossip_view_crds_value_t const * value = &crds_views[ i ];
+    int err = verify_crds_value( (fd_gossip_view_crds_value_t *)value, payload, sha );
+    if( FD_UNLIKELY( err!=FD_GOSSIP_RX_OK ) ) return err;
   }
 
+  /* Messages with simple signatures */
+  ulong signature_off     = 0UL;
+  ulong pubkey_off        = 0UL;
+  ulong signable_data_off = 0UL;
+  ulong signable_data_len = 0UL;
+
+  switch( view->tag ) {
+    case FD_GOSSIP_MESSAGE_PING:
+      signature_off     = view->ping->signature_off;
+      signable_data_off = view->ping->token_off;
+      signable_data_len = 32UL; /* Token */
+      pubkey_off        = view->ping->from_off;
+      break;
+    case FD_GOSSIP_MESSAGE_PONG:
+      signature_off     = view->pong->signature_off;
+      signable_data_off = view->pong->hash_off;
+      signable_data_len = 32UL; /* Token */
+      pubkey_off        = view->pong->from_off;
+      break;
+    default:
+      FD_LOG_WARNING(( "Unsupported message type %d for signature verification", view->tag ));
+      return -1;
+  }
+
+  int err = fd_ed25519_verify(  payload + signable_data_off,
+                                signable_data_len,
+                                payload + signature_off,
+                                payload + pubkey_off,
+                                sha );
+  if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err;
+
+  /* TODO: PRUNE MESSAGES */
 
   return FD_GOSSIP_RX_OK;
 }
