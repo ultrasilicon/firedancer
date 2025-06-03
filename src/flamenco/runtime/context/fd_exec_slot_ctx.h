@@ -13,7 +13,7 @@
 /* fd_exec_slot_ctx_t is the context that stays constant during all
    transactions in a block. */
 
-struct __attribute__((aligned(8UL))) fd_exec_slot_ctx {
+struct __attribute__((aligned(128UL))) fd_exec_slot_ctx {
   ulong                       magic; /* ==FD_EXEC_SLOT_CTX_MAGIC */
 
   ulong                       slot;
