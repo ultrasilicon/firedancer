@@ -14,6 +14,7 @@
 #include "sham_link.h"
 
 struct geys_fd_ctx {
+  fd_spad_t * spad;
   fd_funk_t * funk;
   fd_blockstore_t blockstore_ljoin;
   fd_blockstore_t * blockstore;
@@ -30,6 +31,7 @@ geys_fd_get_history( geys_fd_ctx_t * ctx ) {
 geys_fd_ctx_t *
 geys_fd_init( geys_fd_loop_args_t * args ) {
   geys_fd_ctx_t * ctx = (geys_fd_ctx_t *)malloc(sizeof(geys_fd_ctx_t));
+  memset( ctx, 0, sizeof(geys_fd_ctx_t) );
 
   FD_LOG_NOTICE(( "attaching to funk file \"%s\"", args->funk_file ));
   fd_funk_t funk_join[1];
@@ -57,7 +59,7 @@ geys_fd_init( geys_fd_loop_args_t * args ) {
 
 #define SMAX 1LU<<30
   uchar * smem = aligned_alloc( FD_SPAD_ALIGN, SMAX );
-  args->history.spad = fd_spad_join( fd_spad_new( smem, SMAX ) );
+  ctx->spad = args->history.spad = fd_spad_join( fd_spad_new( smem, SMAX ) );
   fd_spad_push( args->history.spad );
 
   ctx->hist = geys_history_create( &args->history );
@@ -85,23 +87,27 @@ replay_sham_link_during_frag(geys_fd_ctx_t * ctx, fd_replay_notif_msg_t * state,
 
 static void
 replay_sham_link_after_frag(geys_fd_ctx_t * ctx, fd_replay_notif_msg_t * msg) {
-  if( msg->type == FD_REPLAY_SLOT_TYPE ) {
-    if( msg->slot_exec.shred_cnt == 0 ) return;
+  fd_spad_push( ctx->spad );
+  do {
+    if( msg->type == FD_REPLAY_SLOT_TYPE ) {
+      if( msg->slot_exec.shred_cnt == 0 ) break;
 
-    geys_history_save( ctx->hist, ctx->blockstore, msg );
+      geys_history_save( ctx->hist, ctx->blockstore, msg );
 
-    /*
-    for( ulong j = 0; j < subs->sub_cnt; ++j ) {
-      struct fd_ws_subscription * sub = &subs->sub_list[ j ];
-      if( sub->meth_id == KEYW_WS_METHOD_SLOTSUBSCRIBE ) {
+      /*
+        for( ulong j = 0; j < subs->sub_cnt; ++j ) {
+        struct fd_ws_subscription * sub = &subs->sub_list[ j ];
+        if( sub->meth_id == KEYW_WS_METHOD_SLOTSUBSCRIBE ) {
         if( ws_method_slotSubscribe_update( ctx, msg, sub ) )
-          fd_web_ws_send( &subs->ws, sub->conn_id );
-      }
-      if( sub->meth_id == KEYW_WS_METHOD_ACCOUNTSUBSCRIBE ) {
+        fd_web_ws_send( &subs->ws, sub->conn_id );
+        }
+        if( sub->meth_id == KEYW_WS_METHOD_ACCOUNTSUBSCRIBE ) {
         if( ws_method_accountSubscribe_update( ctx, msg, sub ) )
-          fd_web_ws_send( &subs->ws, sub->conn_id );
-      }
+        fd_web_ws_send( &subs->ws, sub->conn_id );
+        }
+        }
+      */
     }
-    */
-  }
+  } while(0);
+  fd_spad_pop( ctx->spad );
 }

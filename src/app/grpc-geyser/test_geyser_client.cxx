@@ -87,6 +87,52 @@ class GeyserClient {
       }
     }
 
+    void testGetBlockHeight() {
+      // Data we are sending to the server.
+      ::geyser::GetBlockHeightRequest request;
+
+      // Container for the data we expect from the server.
+      ::geyser::GetBlockHeightResponse reply;
+
+      // Context for the client. It could be used to convey extra information to
+      // the server and/or tweak certain RPC behaviors.
+      ClientContext context;
+
+      // The actual RPC.
+      Status status = stub_->GetBlockHeight(&context, request, &reply);
+
+      // Act upon its status.
+      if (status.ok()) {
+        std::cout << "block_height=" << reply.block_height() << std::endl;
+      } else {
+        std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+      }
+    }
+
+    void testGetLatestBlockhash() {
+      // Data we are sending to the server.
+      ::geyser::GetLatestBlockhashRequest request;
+
+      // Container for the data we expect from the server.
+      ::geyser::GetLatestBlockhashResponse reply;
+
+      // Context for the client. It could be used to convey extra information to
+      // the server and/or tweak certain RPC behaviors.
+      ClientContext context;
+
+      // The actual RPC.
+      Status status = stub_->GetLatestBlockhash(&context, request, &reply);
+
+      // Act upon its status.
+      if (status.ok()) {
+        std::cout << "slot=" << reply.slot() << std::endl
+                  << "hash=" << reply.blockhash() << std::endl
+                  << "height=" << reply.last_valid_block_height() << std::endl;
+      } else {
+        std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+      }
+    }
+
   private:
     std::unique_ptr<geyser::Geyser::Stub> stub_;
 };
@@ -104,6 +150,8 @@ int main(int argc, char** argv) {
   geyser.testGetVersion();
   geyser.testPing();
   geyser.testGetSlot();
+  geyser.testGetBlockHeight();
+  geyser.testGetLatestBlockhash();
 
   return 0;
 }

@@ -2,6 +2,8 @@
 
 extern "C" {
 #include "../firedancer/version.h"
+#include "../../discof/replay/fd_replay_notif.h"
+#include "../../ballet/base58/fd_base58.h"
 }
 
 GeyserServiceImpl::GeyserServiceImpl(geys_fd_ctx_t * loop_ctx)
@@ -29,11 +31,20 @@ GeyserServiceImpl::Ping(::grpc::ServerContext* context, const ::geyser::PingRequ
 
 ::grpc::Status
 GeyserServiceImpl::GetLatestBlockhash(::grpc::ServerContext* context, const ::geyser::GetLatestBlockhashRequest* request, ::geyser::GetLatestBlockhashResponse* response) {
+  fd_replay_notif_msg_t * info = geys_history_get_block_info( _hist_ctx, geys_history_latest_slot( _hist_ctx ) );
+  if( info == NULL ) return ::grpc::Status(::grpc::StatusCode::INTERNAL, "missing block info");
+  response->set_slot( info->slot_exec.slot );
+  FD_BASE58_ENCODE_32_BYTES( info->slot_exec.block_hash.uc, hash_str );
+  response->set_blockhash( std::string(hash_str, hash_str_len) );
+  response->set_last_valid_block_height( info->slot_exec.height );
   return ::grpc::Status::OK;
 }
 
 ::grpc::Status
 GeyserServiceImpl::GetBlockHeight(::grpc::ServerContext* context, const ::geyser::GetBlockHeightRequest* request, ::geyser::GetBlockHeightResponse* response) {
+  fd_replay_notif_msg_t * info = geys_history_get_block_info( _hist_ctx, geys_history_latest_slot( _hist_ctx ) );
+  if( info == NULL ) return ::grpc::Status(::grpc::StatusCode::INTERNAL, "missing block info");
+  response->set_block_height( info->slot_exec.height );
   return ::grpc::Status::OK;
 }
 
