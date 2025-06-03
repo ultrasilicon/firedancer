@@ -5,7 +5,6 @@
 
 #include "../../fd_flamenco_base.h"
 #include "../context/fd_exec_instr_ctx.h"
-#include "fd_sysvar_cache.h"
 #include "fd_sysvar.h"
 
 /* https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/sdk/program/src/clock.rs#L10 */
@@ -27,6 +26,12 @@ fd_sysvar_clock_init( fd_exec_slot_ctx_t * slot_ctx );
 int
 fd_sysvar_clock_update( fd_exec_slot_ctx_t * slot_ctx,
                         fd_spad_t *          runtime_spad );
+
+/* Writes the current value of the clock sysvar to funk. */
+
+void
+fd_sysvar_clock_write( fd_exec_slot_ctx_t *    slot_ctx,
+                       fd_sol_sysvar_clock_t * clock );
 
 /* Reads the current value of the clock sysvar from funk. */
 

@@ -41,6 +41,8 @@ fd_sysvar_last_restart_slot_read( fd_funk_t *     funk,
   int err = fd_txn_account_init_from_funk_readonly( acc, &fd_sysvar_last_restart_slot_id, funk, funk_txn );
   if( FD_UNLIKELY( err!=FD_ACC_MGR_SUCCESS ) ) return NULL;
 
+  if( FD_UNLIKELY( acc->vt->get_lamports( acc )==0 ) ) return NULL;
+
   return fd_bincode_decode_spad(
       sol_sysvar_last_restart_slot, spad,
       acc->vt->get_data( acc ),

@@ -16,4 +16,9 @@ fd_sysvar_set( fd_exec_slot_ctx_t * state,
                ulong                sz,
                ulong                slot );
 
+int
+fd_sysvar_instr_acct_check( fd_exec_instr_ctx_t const * ctx,
+                            ulong                       idx,
+                            fd_pubkey_t const *         addr_want );
+
 #endif /* HEADER_fd_src_flamenco_runtime_fd_sysvar_h */
