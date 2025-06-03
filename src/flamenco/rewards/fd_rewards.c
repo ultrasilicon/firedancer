@@ -1090,6 +1090,11 @@ fd_distribute_partitioned_epoch_rewards( fd_exec_slot_ctx_t * slot_ctx,
   ulong * block_height = fd_bank_mgr_block_height_query( slot_ctx->bank_mgr );
 
   fd_epoch_reward_status_global_t * epoch_reward_status = fd_bank_mgr_epoch_reward_status_query( slot_ctx->bank_mgr );
+
+  if( epoch_reward_status->discriminant == fd_epoch_reward_status_enum_Inactive ) {
+    return;
+  }
+
   fd_start_block_height_and_rewards_global_t * status = &epoch_reward_status->inner.Active;
 
 
@@ -1099,10 +1104,6 @@ fd_distribute_partitioned_epoch_rewards( fd_exec_slot_ctx_t * slot_ctx,
 
   fd_stake_reward_t * pool = fd_stake_reward_calculation_pool_join( (uchar *)&status->partitioned_stake_rewards + status->partitioned_stake_rewards.pool_offset );
   FD_TEST( pool );
-
-  if( epoch_reward_status->discriminant == fd_epoch_reward_status_enum_Inactive ) {
-    return;
-  }
 
   ulong height                             = *block_height;
   ulong distribution_starting_block_height = status->distribution_starting_block_height;
