@@ -984,13 +984,13 @@ distribute_epoch_reward_to_stake_acc( fd_exec_slot_ctx_t * slot_ctx,
 
 /* Sets the epoch reward status to inactive, and destroys any allocated state associated with the active state. */
 static void
-set_epoch_reward_status_inactive( fd_exec_slot_ctx_t * slot_ctx,
-                                  fd_spad_t *          runtime_spad ) {
-  if( slot_ctx->slot_bank.epoch_reward_status.discriminant == fd_epoch_reward_status_enum_Active ) {
+set_epoch_reward_status_inactive( fd_exec_slot_ctx_t * slot_ctx ) {
+  fd_epoch_reward_status_global_t * epoch_reward_status = fd_bank_mgr_epoch_reward_status_modify( slot_ctx->bank_mgr );
+  if( epoch_reward_status->discriminant == fd_epoch_reward_status_enum_Active ) {
     FD_LOG_NOTICE(( "Done partitioning rewards for current epoch" ));
-    fd_spad_pop( runtime_spad );
   }
-  slot_ctx->slot_bank.epoch_reward_status.discriminant = fd_epoch_reward_status_enum_Inactive;
+  epoch_reward_status->discriminant = fd_epoch_reward_status_enum_Inactive;
+  fd_bank_mgr_epoch_reward_status_save( slot_ctx->bank_mgr );
 }
 
 /* Sets the epoch reward status to active.
@@ -1003,9 +1003,31 @@ set_epoch_reward_status_active( fd_exec_slot_ctx_t *             slot_ctx,
                                 fd_partitioned_stake_rewards_t * partitioned_rewards ) {
 
   FD_LOG_NOTICE(( "Setting epoch reward status as active" ));
-  slot_ctx->slot_bank.epoch_reward_status.discriminant                                    = fd_epoch_reward_status_enum_Active;
-  slot_ctx->slot_bank.epoch_reward_status.inner.Active.distribution_starting_block_height = distribution_starting_block_height;
-  slot_ctx->slot_bank.epoch_reward_status.inner.Active.partitioned_stake_rewards          = *partitioned_rewards;
+
+  fd_epoch_reward_status_global_t * epoch_reward_status                = fd_bank_mgr_epoch_reward_status_modify( slot_ctx->bank_mgr );
+  epoch_reward_status->discriminant                                    = fd_epoch_reward_status_enum_Active;
+  epoch_reward_status->inner.Active.distribution_starting_block_height = distribution_starting_block_height;
+
+
+  epoch_reward_status->inner.Active.partitioned_stake_rewards.partitions_len     = partitioned_rewards->partitions_len;
+  fd_memcpy( epoch_reward_status->inner.Active.partitioned_stake_rewards.partitions_lengths,
+             partitioned_rewards->partitions_lengths,
+             sizeof(ulong[4096]) );
+
+  ulong pool_max       = fd_stake_reward_calculation_pool_max( partitioned_rewards->pool );
+  ulong pool_footprint = fd_stake_reward_calculation_pool_footprint( pool_max );
+
+  uchar * pool_mem = (uchar *)fd_ulong_align_up( (ulong)epoch_reward_status + sizeof(fd_epoch_reward_status_global_t),
+                                                fd_stake_reward_calculation_pool_align() );
+  fd_memcpy( pool_mem, fd_stake_reward_calculation_pool_leave( partitioned_rewards->pool ), pool_footprint );
+  epoch_reward_status->inner.Active.partitioned_stake_rewards.pool_offset = (ulong)pool_mem - (ulong)&epoch_reward_status->inner.Active.partitioned_stake_rewards;
+
+  uchar * partitions_mem       = (uchar *)fd_ulong_align_up( (ulong)pool_mem + pool_footprint, fd_partitioned_stake_rewards_dlist_align() );
+  ulong   partitions_footprint = fd_partitioned_stake_rewards_dlist_footprint() * partitioned_rewards->partitions_len;
+  fd_memcpy( partitions_mem, partitioned_rewards->partitions, partitions_footprint );
+  epoch_reward_status->inner.Active.partitioned_stake_rewards.partitions_offset = (ulong)partitions_mem - (ulong)&epoch_reward_status->inner.Active.partitioned_stake_rewards;
+
+  fd_bank_mgr_epoch_reward_status_save( slot_ctx->bank_mgr );
 }
 
 /*  Process reward credits for a partition of rewards.
@@ -1067,11 +1089,20 @@ fd_distribute_partitioned_epoch_rewards( fd_exec_slot_ctx_t * slot_ctx,
 
   ulong * block_height = fd_bank_mgr_block_height_query( slot_ctx->bank_mgr );
 
-  if( slot_ctx->slot_bank.epoch_reward_status.discriminant == fd_epoch_reward_status_enum_Inactive ) {
+  fd_epoch_reward_status_global_t * epoch_reward_status = fd_bank_mgr_epoch_reward_status_query( slot_ctx->bank_mgr );
+  fd_start_block_height_and_rewards_global_t * status = &epoch_reward_status->inner.Active;
+
+
+  fd_partitioned_stake_rewards_dlist_t * partitions =
+    (fd_partitioned_stake_rewards_dlist_t *)((uchar *)&status->partitioned_stake_rewards + status->partitioned_stake_rewards.partitions_offset);
+
+
+  fd_stake_reward_t * pool = fd_stake_reward_calculation_pool_join( (uchar *)&status->partitioned_stake_rewards + status->partitioned_stake_rewards.pool_offset );
+  FD_TEST( pool );
+
+  if( epoch_reward_status->discriminant == fd_epoch_reward_status_enum_Inactive ) {
     return;
   }
-
-  fd_start_block_height_and_rewards_t * status = &slot_ctx->slot_bank.epoch_reward_status.inner.Active;
 
   ulong height                             = *block_height;
   ulong distribution_starting_block_height = status->distribution_starting_block_height;
@@ -1086,15 +1117,15 @@ fd_distribute_partitioned_epoch_rewards( fd_exec_slot_ctx_t * slot_ctx,
 
   if( (height>=distribution_starting_block_height) && (height < distribution_end_exclusive) ) {
     ulong partition_index = height - distribution_starting_block_height;
-    distribute_epoch_rewards_in_partition( &status->partitioned_stake_rewards.partitions[ partition_index ],
-                                           status->partitioned_stake_rewards.pool,
+    distribute_epoch_rewards_in_partition( &partitions[ partition_index ],
+                                           pool,
                                            slot_ctx,
                                            runtime_spad );
   }
 
   /* If we have finished distributing rewards, set the status to inactive */
   if( fd_ulong_sat_add( height, 1UL ) >= distribution_end_exclusive ) {
-    set_epoch_reward_status_inactive( slot_ctx, runtime_spad );
+    set_epoch_reward_status_inactive( slot_ctx );
     fd_sysvar_epoch_rewards_set_inactive( slot_ctx,runtime_spad );
   }
 }
@@ -1191,7 +1222,7 @@ fd_rewards_recalculate_partitioned_rewards( fd_exec_slot_ctx_t * slot_ctx,
   fd_sysvar_epoch_rewards_t * epoch_rewards = fd_sysvar_cache_epoch_rewards( slot_ctx->sysvar_cache, slot_ctx->runtime_wksp );
   if( FD_UNLIKELY( epoch_rewards == NULL ) ) {
     FD_LOG_NOTICE(( "failed to read sysvar epoch rewards - the sysvar may not have been created yet" ));
-    set_epoch_reward_status_inactive( slot_ctx, runtime_spad );
+    set_epoch_reward_status_inactive( slot_ctx );
     return;
   }
 
@@ -1302,6 +1333,6 @@ fd_rewards_recalculate_partitioned_rewards( fd_exec_slot_ctx_t * slot_ctx,
                                     epoch_rewards->distribution_starting_block_height,
                                     &stake_rewards_by_partition->partitioned_stake_rewards );
   } else {
-    set_epoch_reward_status_inactive( slot_ctx, runtime_spad );
+    set_epoch_reward_status_inactive( slot_ctx );
   }
 }

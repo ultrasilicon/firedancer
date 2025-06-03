@@ -10048,28 +10048,18 @@ int fd_epoch_reward_status_encode( fd_epoch_reward_status_t const * self, fd_bin
 
 int fd_slot_bank_encode( fd_slot_bank_t const * self, fd_bincode_encode_ctx_t * ctx ) {
   int err;
-  err = fd_epoch_reward_status_encode( &self->epoch_reward_status, ctx );
+  err = fd_bincode_uint64_encode( self->filler, ctx );
   if( FD_UNLIKELY( err ) ) return err;
   return FD_BINCODE_SUCCESS;
 }
-static int fd_slot_bank_decode_footprint_inner( fd_bincode_decode_ctx_t * ctx, ulong * total_sz ) {
-  if( ctx->data>=ctx->dataend ) { return FD_BINCODE_ERR_OVERFLOW; };
-  int err = 0;
-  err = fd_epoch_reward_status_decode_footprint_inner( ctx, total_sz );
-  if( FD_UNLIKELY( err ) ) return err;
+static inline int fd_slot_bank_decode_footprint_inner( fd_bincode_decode_ctx_t * ctx, ulong * total_sz ) {
+  if( (ulong)ctx->data + 8UL > (ulong)ctx->dataend ) { return FD_BINCODE_ERR_OVERFLOW; };
+  ctx->data = (void *)( (ulong)ctx->data + 8UL );
   return 0;
-}
-int fd_slot_bank_decode_footprint( fd_bincode_decode_ctx_t * ctx, ulong * total_sz ) {
-  *total_sz += sizeof(fd_slot_bank_t);
-  void const * start_data = ctx->data;
-  int err = fd_slot_bank_decode_footprint_inner( ctx, total_sz );
-  if( ctx->data>ctx->dataend ) { return FD_BINCODE_ERR_OVERFLOW; };
-  ctx->data = start_data;
-  return err;
 }
 static void fd_slot_bank_decode_inner( void * struct_mem, void * * alloc_mem, fd_bincode_decode_ctx_t * ctx ) {
   fd_slot_bank_t * self = (fd_slot_bank_t *)struct_mem;
-  fd_epoch_reward_status_decode_inner( &self->epoch_reward_status, alloc_mem, ctx );
+  fd_bincode_uint64_decode_unsafe( &self->filler, ctx );
 }
 void * fd_slot_bank_decode( void * mem, fd_bincode_decode_ctx_t * ctx ) {
   fd_slot_bank_t * self = (fd_slot_bank_t *)mem;
@@ -10079,18 +10069,14 @@ void * fd_slot_bank_decode( void * mem, fd_bincode_decode_ctx_t * ctx ) {
   fd_slot_bank_decode_inner( mem, alloc_mem, ctx );
   return self;
 }
-void fd_slot_bank_new(fd_slot_bank_t * self) {
-  fd_memset( self, 0, sizeof(fd_slot_bank_t) );
-  fd_epoch_reward_status_new( &self->epoch_reward_status );
-}
 void fd_slot_bank_walk( void * w, fd_slot_bank_t const * self, fd_types_walk_fn_t fun, const char *name, uint level ) {
   fun( w, self, name, FD_FLAMENCO_TYPE_MAP, "fd_slot_bank", level++ );
-  fd_epoch_reward_status_walk( w, &self->epoch_reward_status, fun, "epoch_reward_status", level );
+  fun( w, &self->filler, "filler", FD_FLAMENCO_TYPE_ULONG, "ulong", level );
   fun( w, self, name, FD_FLAMENCO_TYPE_MAP_END, "fd_slot_bank", level-- );
 }
 ulong fd_slot_bank_size( fd_slot_bank_t const * self ) {
   ulong size = 0;
-  size += fd_epoch_reward_status_size( &self->epoch_reward_status );
+  size += sizeof(ulong);
   return size;
 }
 

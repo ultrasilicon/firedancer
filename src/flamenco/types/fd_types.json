@@ -1229,7 +1229,7 @@
       "type": "struct",
       "alignment": 128,
       "fields": [
-        { "name": "epoch_reward_status",         "type": "epoch_reward_status" }
+        { "name": "filler",         "type": "ulong" }
       ]
     },
     {

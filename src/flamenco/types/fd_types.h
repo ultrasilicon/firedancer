@@ -1785,9 +1785,9 @@ struct fd_epoch_reward_status_global {
 typedef struct fd_epoch_reward_status_global fd_epoch_reward_status_global_t;
 #define FD_EPOCH_REWARD_STATUS_GLOBAL_ALIGN alignof(fd_epoch_reward_status_global_t)
 
-/* Encoded Size: Dynamic */
+/* Encoded Size: Fixed (8 bytes) */
 struct __attribute__((aligned(128UL))) fd_slot_bank {
-  fd_epoch_reward_status_t epoch_reward_status;
+  ulong filler;
 };
 typedef struct fd_slot_bank fd_slot_bank_t;
 #define FD_SLOT_BANK_ALIGN (128UL)
@@ -4472,12 +4472,16 @@ enum {
 fd_epoch_reward_status_enum_Active = 0,
 fd_epoch_reward_status_enum_Inactive = 1,
 };
-void fd_slot_bank_new( fd_slot_bank_t * self );
+static inline void fd_slot_bank_new( fd_slot_bank_t * self ) { fd_memset( self, 0, sizeof(fd_slot_bank_t) ); }
 int fd_slot_bank_encode( fd_slot_bank_t const * self, fd_bincode_encode_ctx_t * ctx );
 void fd_slot_bank_walk( void * w, fd_slot_bank_t const * self, fd_types_walk_fn_t fun, const char *name, uint level );
 ulong fd_slot_bank_size( fd_slot_bank_t const * self );
 static inline ulong fd_slot_bank_align( void ) { return FD_SLOT_BANK_ALIGN; }
-int fd_slot_bank_decode_footprint( fd_bincode_decode_ctx_t * ctx, ulong * total_sz );
+static inline int fd_slot_bank_decode_footprint( fd_bincode_decode_ctx_t * ctx, ulong * total_sz ) {
+  *total_sz += sizeof(fd_slot_bank_t);
+  if( (ulong)ctx->data + 8UL > (ulong)ctx->dataend ) { return FD_BINCODE_ERR_OVERFLOW; };
+  return 0;
+}
 void * fd_slot_bank_decode( void * mem, fd_bincode_decode_ctx_t * ctx );
 
 static inline void fd_prev_epoch_inflation_rewards_new( fd_prev_epoch_inflation_rewards_t * self ) { fd_memset( self, 0, sizeof(fd_prev_epoch_inflation_rewards_t) ); }
