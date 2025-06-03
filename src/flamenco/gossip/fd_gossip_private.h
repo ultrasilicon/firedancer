@@ -90,6 +90,19 @@ struct fd_gossip_view_pull_request {
 
 typedef struct fd_gossip_view_pull_request fd_gossip_view_pull_request_t;
 
+struct fd_gossip_view_prune {
+  ushort origin_off;      /* Offset to the origin pubkey */
+  ushort prunes_len;      /* Number of prunes in the message */
+  ushort prunes_off;      /* Offset to the start of pubkeys to prune */
+  ushort destination_off; /* Offset to the destination pubkey */
+  ulong  wallclock;       /* Wallclock encoded by sender (for sigverify) */
+  ushort signature_off;   /* Offset to the signature */
+
+  long   wallclock_nanos;
+};
+
+typedef struct fd_gossip_view_prune fd_gossip_view_prune_t;
+
 struct fd_gossip_view_ping {
   ushort from_off;
   ushort token_off;
@@ -110,9 +123,9 @@ struct fd_gossip_view {
   uchar tag; // uint in rust bincode
   union {
     fd_gossip_view_pull_request_t  pull_request[ 1 ];
-    fd_gossip_view_pull_response_t pull_response[ 1 ]; /* CRDS Composite Type */
-    fd_gossip_view_push_t          push[ 1 ];          /* CRDS Composite Type */
-    // fd_gossip_prune_t         prune[ 1 ];
+    fd_gossip_view_pull_response_t pull_response[ 1 ];
+    fd_gossip_view_push_t          push[ 1 ];
+    fd_gossip_view_prune_t         prune[ 1 ];
     fd_gossip_view_ping_t          ping[ 1 ];
     fd_gossip_view_pong_t          pong[ 1 ];
   };

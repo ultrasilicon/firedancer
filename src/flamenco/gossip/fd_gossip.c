@@ -136,10 +136,56 @@ verify_crds_values( fd_gossip_view_crds_value_t const * values,
   return FD_ED25519_SUCCESS;
 }
 
+struct __attribute__((__packed__)) prune_sign_data_pre {
+ uchar prefix[18UL];
+ uchar origin[32UL];
+ ulong prunes_len;
+};
+
+typedef struct prune_sign_data_pre prune_sign_data_pre_t;
+
+struct __attribute__((__packed__)) prune_sign_data_post {
+ uchar destination[32UL];
+ ulong wallclock;
+};
+
+typedef struct prune_sign_data_post prune_sign_data_post_t;
+
 static int
-verify_prune(void) {
-  FD_LOG_ERR(( "Signature verification for PRUNE messages not implemented" ));
-  return -1;
+verify_prune( fd_gossip_view_prune_t const * view,
+              uchar const *                  payload,
+              fd_sha512_t *                  sha ) {
+  uchar sign_data[1232UL];
+
+  prune_sign_data_pre_t * pre = (prune_sign_data_pre_t *)sign_data;
+  fd_memcpy( pre->prefix, "\xffSOLANA_PRUNE_DATA", 18UL );
+  fd_memcpy( pre->origin, payload+view->origin_off, 32UL );
+  pre->prunes_len = view->prunes_len;
+
+  /* Skip verifying size bounds since gossip_message_parse takes care of that. */
+  ulong prunes_arr_sz = view->prunes_len*32UL;
+  fd_memcpy( sign_data+sizeof(prune_sign_data_pre_t), payload+view->prunes_off, prunes_arr_sz );
+
+  prune_sign_data_post_t * post = (prune_sign_data_post_t *)( sign_data + sizeof(prune_sign_data_pre_t) + prunes_arr_sz );
+  fd_memcpy( post->destination, payload+view->destination_off, 32UL );
+  post->wallclock = view->wallclock;
+
+  ulong signable_data_len = sizeof(prune_sign_data_pre_t) + prunes_arr_sz + sizeof(prune_sign_data_post_t);
+
+  int err_prefix = fd_ed25519_verify( sign_data,
+                                      signable_data_len,
+                                      payload+view->signature_off,
+                                      payload+view->origin_off,
+                                      sha );
+  int err_no_prefix = fd_ed25519_verify( sign_data+18UL,
+                                         signable_data_len-18UL,
+                                         payload+view->signature_off,
+                                         payload+view->origin_off,
+                                         sha );
+
+  /* Either sigverify needs to pass */
+  return (err_prefix && err_no_prefix) ? -1 : FD_ED25519_SUCCESS;
+
 }
 
 static int
@@ -174,7 +220,6 @@ static int
 verify_signatures( fd_gossip_view_t const *  view,
                    uchar const *             payload,
                    fd_sha512_t *             sha ) {
-
   switch( view->tag ) {
     case FD_GOSSIP_MESSAGE_PULL_REQUEST:
       return verify_crds_values( view->pull_request->contact_info, 1UL, payload, sha );
@@ -183,7 +228,7 @@ verify_signatures( fd_gossip_view_t const *  view,
     case FD_GOSSIP_MESSAGE_PUSH:
       return verify_crds_values( view->push->crds_values, view->push->crds_values_len, payload, sha );
     case FD_GOSSIP_MESSAGE_PRUNE:
-      // return verify_prune();
+      return verify_prune( view->prune, payload, sha );
     case FD_GOSSIP_MESSAGE_PING:
     case FD_GOSSIP_MESSAGE_PONG:
       return verify_ping_pong( view, payload, sha );
