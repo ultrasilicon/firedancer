@@ -74,16 +74,16 @@ struct fd_gossip_view_crds_composite {
 typedef struct fd_gossip_view_crds_composite fd_gossip_view_pull_response_t;
 typedef struct fd_gossip_view_crds_composite fd_gossip_view_push_t;
 struct fd_gossip_view_pull_request {
-  ulong bloom_keys_len; /* number of keys in the bloom filter */
-  ulong bloom_keys_offset; /* offset to start of bloom keys in payload */
+  ulong bloom_keys_len;     /* number of keys in the bloom filter */
+  ulong bloom_keys_offset;  /* offset to start of bloom keys in payload */
 
-  ulong bloom_bits_len; /* length of bloom bits vector (ulong *) */
-  ulong bloom_bits_offset; /* offset to start of bloom bits in payload */
+  ulong bloom_bits_len;     /* length of bloom bits vector (ulong *) */
+  ulong bloom_bits_offset;  /* offset to start of bloom bits in payload */
   ulong bloom_len;
 
   ulong bloom_num_bits_set; /* number of bits set in the bloom filter */
-  ulong mask; /* mask used to filter the CRDS values */
-  uint  mask_bits; /* number of bits in the mask */
+  ulong mask;               /* mask used to filter the CRDS values */
+  uint  mask_bits;          /* number of bits in the mask */
 
   fd_gossip_view_crds_value_t contact_info[ 1 ]; /* Pull Req holds contact info */
 };
@@ -135,15 +135,6 @@ typedef struct fd_gossip_view fd_gossip_view_t;
 
 void
 fd_gossip_msg_init( fd_gossip_view_t * msg );
-
-int
-fd_gossip_view_signable_data_offsets( fd_gossip_view_t const * view,
-                                     uchar const *            payload,
-                                    //  ulong                    payload_sz,
-                                     ulong                    out_signature_offsets[static 16],
-                                     ulong                    out_signable_data_offsets[static 16],
-                                     ulong                    out_signable_data_offsets_lengths[static 16],
-                                     ulong *                  out_signable_data_count );
 
 ulong
 fd_gossip_view_pubkey_offset( fd_gossip_view_t const * view );

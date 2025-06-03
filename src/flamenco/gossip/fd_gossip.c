@@ -167,16 +167,16 @@ verify_prune( fd_gossip_view_prune_t const * view,
   fd_memcpy( sign_data+sizeof(prune_sign_data_pre_t), payload+view->prunes_off, prunes_arr_sz );
 
   prune_sign_data_post_t * post = (prune_sign_data_post_t *)( sign_data + sizeof(prune_sign_data_pre_t) + prunes_arr_sz );
+  post->wallclock               = view->wallclock;
   fd_memcpy( post->destination, payload+view->destination_off, 32UL );
-  post->wallclock = view->wallclock;
 
   ulong signable_data_len = sizeof(prune_sign_data_pre_t) + prunes_arr_sz + sizeof(prune_sign_data_post_t);
 
-  int err_prefix = fd_ed25519_verify( sign_data,
-                                      signable_data_len,
-                                      payload+view->signature_off,
-                                      payload+view->origin_off,
-                                      sha );
+  int err_prefix    = fd_ed25519_verify( sign_data,
+                                         signable_data_len,
+                                         payload+view->signature_off,
+                                         payload+view->origin_off,
+                                         sha );
   int err_no_prefix = fd_ed25519_verify( sign_data+18UL,
                                          signable_data_len-18UL,
                                          payload+view->signature_off,
