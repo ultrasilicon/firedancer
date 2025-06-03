@@ -21,6 +21,9 @@ struct fd_gossip_private {
 
   fd_sha512_t         sha512[1];
 
+  fd_ip4_port_t       entrypoints[ 16UL ];
+  ulong               entrypoints_cnt;
+
   /* Callbacks */
   fd_gossip_sign_fn   sign_fn;
   void *              sign_ctx;
@@ -71,10 +74,16 @@ fd_gossip_new( void *                shmem,
   if( FD_UNLIKELY( !fd_ulong_is_aligned( (ulong)shmem, fd_gossip_align() ) ) ) {
     FD_LOG_ERR(( "misaligned shmem" ));
   }
+  if( FD_UNLIKELY( entrypoints_cnt>16UL ) ) {
+    FD_LOG_ERR(( "entrypoints_cnt %lu exceeds maximum of 16", entrypoints_cnt ));
+  }
 
   FD_SCRATCH_ALLOC_INIT( l, shmem );
   fd_gossip_t * gossip = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_gossip_t), sizeof(fd_gossip_t) );
   void * ping_tracker  = FD_SCRATCH_ALLOC_APPEND( l, fd_ping_tracker_align(), fd_ping_tracker_footprint() );
+
+  gossip->entrypoints_cnt = entrypoints_cnt;
+  fd_memcpy( gossip->entrypoints, entrypoints, entrypoints_cnt*sizeof(fd_ip4_port_t) );
 
   fd_ping_tracker_new( ping_tracker, rng );
 
@@ -111,82 +120,76 @@ fd_gossip_join( void * shgossip ) {
 }
 
 static int
-verify_crds_value( fd_gossip_view_crds_value_t * value,
-                   uchar const *                 payload,
-                   fd_sha512_t *                 sha ) {
+verify_crds_values( fd_gossip_view_crds_value_t const * values,
+                    ulong                               values_len,
+                    uchar const *                       payload,
+                    fd_sha512_t *                       sha ) {
+  for( ulong i=0UL; i<values_len; i++ ) {
+    fd_gossip_view_crds_value_t const * value = &values[ i ];
+    int err = fd_ed25519_verify( payload+value->signature_off+64UL, /* signable data begins after signature */
+                                 value->length-64UL,                /* signable data length */
+                                 payload+value->signature_off,
+                                 payload+value->pubkey_off,
+                                 sha );
+    if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err;
+  }
+  return FD_ED25519_SUCCESS;
+}
 
-  return fd_ed25519_verify( payload+64UL, /* signable data begins after signature */
-                            value->length - 64UL, /* signable data length */
-                            payload+value->signature_off,
-                            payload+value->pubkey_off,
+static int
+verify_prune(void) {
+  FD_LOG_ERR(( "Signature verification for PRUNE messages not implemented" ));
+  return -1;
+}
+
+static int
+verify_ping_pong( fd_gossip_view_t const * view,
+                  uchar const *            payload,
+                  fd_sha512_t *            sha ) {
+  /* Ping/Pong messages */
+  ulong signature_off, pubkey_off, signable_data_off, signable_data_len;
+
+  if( view->tag==FD_GOSSIP_MESSAGE_PING ) {
+    signature_off     = view->ping->signature_off;
+    pubkey_off        = view->ping->from_off;
+    signable_data_off = view->ping->token_off;
+    signable_data_len = 32UL;
+  } else if( view->tag==FD_GOSSIP_MESSAGE_PONG ) {
+    signature_off     = view->pong->signature_off;
+    pubkey_off        = view->pong->from_off;
+    signable_data_off = view->pong->hash_off;
+    signable_data_len = 32UL;
+  } else {
+    FD_LOG_ERR(( "Invalid type %u, should not reach", view->tag ));
+  }
+
+  return fd_ed25519_verify( payload+signable_data_off,
+                            signable_data_len,
+                            payload+signature_off,
+                            payload+pubkey_off,
                             sha );
 }
 
 static int
 verify_signatures( fd_gossip_view_t const *  view,
                    uchar const *             payload,
-                  //  ulong                     payload_sz,
                    fd_sha512_t *             sha ) {
-
-  /* Messages with CRDS values */
-  ulong crds_cnt = 0UL;
-  fd_gossip_view_crds_value_t const * crds_views = NULL;
 
   switch( view->tag ) {
     case FD_GOSSIP_MESSAGE_PULL_REQUEST:
-      crds_views  = view->pull_request->contact_info;
-      crds_cnt    = 1UL;
-      break;
+      return verify_crds_values( view->pull_request->contact_info, 1UL, payload, sha );
     case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
-      crds_cnt     = view->pull_response->crds_values_len;
-      crds_views   = view->pull_response->crds_values;
-      break;
+      return verify_crds_values( view->pull_response->crds_values, view->pull_response->crds_values_len, payload, sha );
     case FD_GOSSIP_MESSAGE_PUSH:
-      crds_cnt     = view->push->crds_values_len;
-      crds_views   = view->push->crds_values;
-      break;
-  };
-
-  for( ulong i=0UL; i<crds_cnt; i++ ) {
-    fd_gossip_view_crds_value_t const * value = &crds_views[ i ];
-    int err = verify_crds_value( (fd_gossip_view_crds_value_t *)value, payload, sha );
-    if( FD_UNLIKELY( err!=FD_GOSSIP_RX_OK ) ) return err;
-  }
-
-  /* Messages with simple signatures */
-  ulong signature_off     = 0UL;
-  ulong pubkey_off        = 0UL;
-  ulong signable_data_off = 0UL;
-  ulong signable_data_len = 0UL;
-
-  switch( view->tag ) {
+      return verify_crds_values( view->push->crds_values, view->push->crds_values_len, payload, sha );
+    case FD_GOSSIP_MESSAGE_PRUNE:
+      // return verify_prune();
     case FD_GOSSIP_MESSAGE_PING:
-      signature_off     = view->ping->signature_off;
-      signable_data_off = view->ping->token_off;
-      signable_data_len = 32UL; /* Token */
-      pubkey_off        = view->ping->from_off;
-      break;
     case FD_GOSSIP_MESSAGE_PONG:
-      signature_off     = view->pong->signature_off;
-      signable_data_off = view->pong->hash_off;
-      signable_data_len = 32UL; /* Token */
-      pubkey_off        = view->pong->from_off;
-      break;
+      return verify_ping_pong( view, payload, sha );
     default:
-      FD_LOG_WARNING(( "Unsupported message type %d for signature verification", view->tag ));
       return -1;
-  }
-
-  int err = fd_ed25519_verify(  payload + signable_data_off,
-                                signable_data_len,
-                                payload + signature_off,
-                                payload + pubkey_off,
-                                sha );
-  if( FD_UNLIKELY( err!=FD_ED25519_SUCCESS ) ) return err;
-
-  /* TODO: PRUNE MESSAGES */
-
-  return FD_GOSSIP_RX_OK;
+  };
 }
 
 // static int
