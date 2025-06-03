@@ -329,20 +329,20 @@ produce_snapshot( fd_snapshot_tile_ctx_t * ctx, ulong batch_fseq ) {
 
 }
 
-static fd_funk_txn_t * FD_FN_UNUSED
-get_eah_txn( fd_funk_t * funk, ulong slot ) {
+// static fd_funk_txn_t * FD_FN_UNUSED
+// get_eah_txn( fd_funk_t * funk, ulong slot ) {
 
-  fd_funk_txn_all_iter_t txn_iter[1];
-  for( fd_funk_txn_all_iter_new( funk, txn_iter ); !fd_funk_txn_all_iter_done( txn_iter ); fd_funk_txn_all_iter_next( txn_iter ) ) {
-    fd_funk_txn_t * txn = fd_funk_txn_all_iter_ele( txn_iter );
-    if( txn->xid.ul[0]==slot ) {
-      FD_LOG_NOTICE(( "Found transaction for eah" ));
-      return txn;
-    }
-  }
-  FD_LOG_NOTICE(( "Calculating eah from root" ));
-  return NULL;
-}
+//   fd_funk_txn_all_iter_t txn_iter[1];
+//   for( fd_funk_txn_all_iter_new( funk, txn_iter ); !fd_funk_txn_all_iter_done( txn_iter ); fd_funk_txn_all_iter_next( txn_iter ) ) {
+//     fd_funk_txn_t * txn = fd_funk_txn_all_iter_ele( txn_iter );
+//     if( txn->xid.ul[0]==slot ) {
+//       FD_LOG_NOTICE(( "Found transaction for eah" ));
+//       return txn;
+//     }
+//   }
+//   FD_LOG_NOTICE(( "Calculating eah from root" ));
+//   return NULL;
+// }
 
 static void FD_FN_UNUSED
 produce_eah( fd_snapshot_tile_ctx_t * ctx, fd_stem_context_t * stem, ulong batch_fseq ) {
