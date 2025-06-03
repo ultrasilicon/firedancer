@@ -1474,6 +1474,7 @@ exec_slice( fd_replay_tile_ctx_t * ctx,
       /* dispatch dcache */
       fd_runtime_public_txn_msg_t * exec_msg = (fd_runtime_public_txn_msg_t *)fd_chunk_to_laddr( exec_out->mem, exec_out->chunk );
       memcpy( &exec_msg->txn, &txn_p, sizeof(fd_txn_p_t) );
+      exec_msg->slot = fork->slot_ctx->slot;
 
       ctx->exec_ready[ exec_idx ] = EXEC_TXN_BUSY;
       ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );

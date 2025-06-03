@@ -6,6 +6,8 @@
 #include "../../disco/pack/fd_microblock.h"
 #include "../../disco/fd_disco_base.h"
 
+/* FIXME: Everything in this file should be migrated to fd_exec.h */
+
 /* definition of the public/readable workspace */
 #define FD_RUNTIME_PUBLIC_MAGIC (0xF17EDA2C9A7B1C21UL)
 
@@ -216,6 +218,7 @@ struct fd_runtime_public_slot_msg {
 typedef struct fd_runtime_public_slot_msg fd_runtime_public_slot_msg_t;
 
 struct fd_runtime_public_txn_msg {
+  ulong      slot;
   fd_txn_p_t txn;
 };
 typedef struct fd_runtime_public_txn_msg fd_runtime_public_txn_msg_t;

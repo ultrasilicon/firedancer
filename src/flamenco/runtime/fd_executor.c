@@ -706,7 +706,8 @@ fd_executor_calculate_fee( fd_exec_txn_ctx_t *  txn_ctx,
     }
   }
 
-  ulong signature_fee = fd_executor_lamports_per_signature( &txn_ctx->fee_rate_governor ) * num_signatures;
+  fd_fee_rate_governor_t * fee_rate_governor = fd_bank_mgr_fee_rate_governor_query( txn_ctx->bank_mgr );
+  ulong signature_fee = fd_executor_lamports_per_signature( fee_rate_governor ) * num_signatures;
 
   // TODO: as far as I can tell, this is always 0
   //
@@ -1288,18 +1289,11 @@ fd_exec_txn_ctx_from_exec_slot_ctx( fd_exec_slot_ctx_t const * slot_ctx,
 
   ctx->bank_mgr = fd_bank_mgr_join( fd_bank_mgr_new( ctx->bank_mgr_mem ), slot_ctx->funk, slot_ctx->funk_txn );
 
-  ctx->block_hash_queue = fd_bank_mgr_block_hash_queue_query( ctx->bank_mgr );
   ulong * slot = fd_bank_mgr_slot_query( ctx->bank_mgr );
   ctx->slot = !!slot ? *slot : 0UL;
 
-  fd_fee_rate_governor_t * fee_rate_governor = fd_bank_mgr_fee_rate_governor_query( ctx->bank_mgr );
-  if( fee_rate_governor ) {
-    ctx->fee_rate_governor = *fee_rate_governor;
-  }
-
   /* Distribute rewards */
   fd_epoch_bank_t const * epoch_bank = fd_exec_epoch_ctx_epoch_bank_const( slot_ctx->epoch_ctx );
-
 
   fd_epoch_schedule_t   epoch_schedule_default = {0};
   fd_epoch_schedule_t * epoch_schedule         = fd_bank_mgr_epoch_schedule_query( ctx->bank_mgr );

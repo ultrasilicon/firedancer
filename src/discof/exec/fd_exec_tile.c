@@ -150,6 +150,9 @@ struct fd_exec_tile_ctx {
   /* Local handle to the bank manager. The join must be updated at
      every slot boundary. */
   fd_bank_mgr_t *       bank_mgr;
+
+  /* Current slot being executed. */
+  ulong               slot;
 };
 typedef struct fd_exec_tile_ctx fd_exec_tile_ctx_t;
 
@@ -248,7 +251,7 @@ prepare_new_slot_execution( fd_exec_tile_ctx_t *           ctx,
   fd_funk_txn_end_read( ctx->funk );
   ctx->txn_ctx->funk_txn = funk_txn;
 
-  ctx->txn_ctx->enable_exec_recording       = slot_msg->enable_exec_recording;
+  ctx->txn_ctx->enable_exec_recording = slot_msg->enable_exec_recording;
 
   ctx->txn_ctx->sysvar_cache = fd_wksp_laddr_fast( ctx->runtime_public_wksp, slot_msg->sysvar_cache_gaddr );
   if( FD_UNLIKELY( !ctx->txn_ctx->sysvar_cache ) ) {
@@ -260,15 +263,8 @@ prepare_new_slot_execution( fd_exec_tile_ctx_t *           ctx,
   if( FD_UNLIKELY( !ctx->bank_mgr ) ) {
     FD_LOG_ERR(( "Could not join bank mgr for slot %lu", slot_msg->slot ));
   }
-
-  ctx->txn_ctx->slot             = *(fd_bank_mgr_slot_query( ctx->bank_mgr ));
-  ctx->txn_ctx->block_hash_queue = fd_bank_mgr_block_hash_queue_query( ctx->bank_mgr );
-  if( FD_UNLIKELY( !ctx->txn_ctx->block_hash_queue ) ) {
-    FD_LOG_ERR(( "Could not find valid block hash queue" ));
-  }
-  ctx->txn_ctx->fee_rate_governor = *(fd_bank_mgr_fee_rate_governor_query( ctx->bank_mgr ));
-
   ctx->txn_ctx->bank_mgr = ctx->bank_mgr;
+  ctx->txn_ctx->slot     = *(fd_bank_mgr_slot_query( ctx->bank_mgr ));
 }
 
 static void
@@ -279,6 +275,29 @@ execute_txn( fd_exec_tile_ctx_t * ctx ) {
   }
   fd_spad_push( ctx->exec_spad );
   ctx->pending_txn_pop = 1;
+
+  if( FD_UNLIKELY( ctx->txn_ctx->slot!=ctx->slot ) ) {
+    fd_funk_txn_map_t * txn_map = fd_funk_txn_map( ctx->funk );
+    if( FD_UNLIKELY( !txn_map->map ) ) {
+      FD_LOG_ERR(( "Could not find valid funk transaction map" ));
+    }
+    fd_funk_txn_xid_t xid = { .ul = { ctx->slot, ctx->slot } };
+    fd_funk_txn_start_read( ctx->funk );
+    fd_funk_txn_t * funk_txn = fd_funk_txn_query( &xid, txn_map );
+    if( FD_UNLIKELY( !funk_txn ) ) {
+      FD_LOG_ERR(( "Could not find valid funk transaction" ));
+    }
+    fd_funk_txn_end_read( ctx->funk );
+    ctx->txn_ctx->funk_txn = funk_txn;
+
+    /* Refresh the bank manager join for the slot that's being executed. */
+    ctx->bank_mgr = fd_bank_mgr_join( ctx->bank_mgr, ctx->funk, funk_txn );
+    if( FD_UNLIKELY( !ctx->bank_mgr ) ) {
+      FD_LOG_ERR(( "Could not join bank mgr for slot %lu", ctx->slot ));
+    }
+    ctx->txn_ctx->bank_mgr = ctx->bank_mgr;
+    ctx->txn_ctx->slot     = *(fd_bank_mgr_slot_query( ctx->bank_mgr ));
+  }
 
   fd_execute_txn_task_info_t task_info = {
     .txn_ctx  = ctx->txn_ctx,
@@ -425,7 +444,8 @@ during_frag( fd_exec_tile_ctx_t * ctx,
 
     if( FD_LIKELY( sig==EXEC_NEW_TXN_SIG ) ) {
       fd_runtime_public_txn_msg_t * txn = (fd_runtime_public_txn_msg_t *)fd_chunk_to_laddr( ctx->replay_in_mem, chunk );
-      ctx->txn = txn->txn;
+      ctx->txn  = txn->txn;
+      ctx->slot = txn->slot;
       execute_txn( ctx );
       return;
     } else if( sig==EXEC_NEW_SLOT_SIG ) {

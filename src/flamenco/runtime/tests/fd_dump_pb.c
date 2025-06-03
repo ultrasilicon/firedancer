@@ -858,7 +858,8 @@ create_txn_context_protobuf_from_txn( fd_exec_test_txn_context_t * txn_context_m
                                                       alignof(pb_bytes_array_t *),
                                                       PB_BYTES_ARRAY_T_ALLOCSIZE((FD_BLOCKHASH_QUEUE_MAX_ENTRIES + 1) * sizeof(pb_bytes_array_t *)) );
   txn_context_msg->blockhash_queue = output_blockhash_queue;
-  dump_blockhash_queue( txn_ctx->block_hash_queue, spad, output_blockhash_queue, &txn_context_msg->blockhash_queue_count );
+  fd_block_hash_queue_global_t * block_hash_queue = fd_bank_mgr_block_hash_queue_query( txn_ctx->bank_mgr );
+  dump_blockhash_queue( block_hash_queue, spad, output_blockhash_queue, &txn_context_msg->blockhash_queue_count );
 
   /* Transaction Context -> epoch_ctx */
   txn_context_msg->has_epoch_ctx = true;
