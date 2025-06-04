@@ -15,6 +15,8 @@ GeyserServiceImpl::~GeyserServiceImpl() {
 
 ::grpc::Status
 GeyserServiceImpl::Subscribe(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::geyser::SubscribeUpdate, ::geyser::SubscribeRequest>* stream) {
+  ::geyser::SubscribeRequest request;
+  while( stream->Read(&request) ) { }
   return ::grpc::Status::OK;
 }
 

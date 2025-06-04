@@ -158,6 +158,26 @@ class GeyserClient {
       }
     }
 
+    void testSubscribe() {
+      // Data we are sending to the server.
+      ::geyser::SubscribeRequest request;
+
+      // Container for the data we expect from the server.
+      ::geyser::SubscribeUpdate update;
+
+      // Context for the client. It could be used to convey extra information to
+      // the server and/or tweak certain RPC behaviors.
+      ClientContext context;
+
+      // The actual RPC.
+      auto rpc(stub_->Subscribe(&context));
+      rpc->Write(request);
+      rpc->WritesDone();
+
+      while( rpc->Read(&update) ) { }
+      rpc->Finish();
+    }
+
   private:
     std::unique_ptr<geyser::Geyser::Stub> stub_;
 };
@@ -177,6 +197,7 @@ int main(int argc, char** argv) {
   geyser.testGetSlot();
   geyser.testGetBlockHeight();
   geyser.testGetLatestBlockhash();
+  geyser.testSubscribe();
 
   return 0;
 }
