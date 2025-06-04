@@ -5,9 +5,9 @@
 #include "../fd_bank_mgr.h"
 #include <assert.h>
 
-static void
-write_rent( fd_exec_slot_ctx_t * slot_ctx,
-            fd_rent_t const *    rent ) {
+void
+fd_sysvar_rent_write( fd_exec_slot_ctx_t * slot_ctx,
+                      fd_rent_t *          rent ) {
 
   uchar enc[ 32 ];
 
@@ -27,5 +27,27 @@ write_rent( fd_exec_slot_ctx_t * slot_ctx,
 void
 fd_sysvar_rent_init( fd_exec_slot_ctx_t * slot_ctx ) {
   fd_rent_t * rent = fd_bank_mgr_rent_query( slot_ctx->bank_mgr );
-  write_rent( slot_ctx, rent );
+  fd_sysvar_rent_write( slot_ctx, rent );
+}
+
+fd_rent_t const *
+fd_sysvar_rent_read( fd_funk_t *     funk,
+                     fd_funk_txn_t * funk_txn,
+                     fd_spad_t *     spad ) {
+  FD_TXN_ACCOUNT_DECL( acc );
+  int rc = fd_txn_account_init_from_funk_readonly( acc, &fd_sysvar_rent_id, funk, funk_txn );
+  if( FD_UNLIKELY( rc!=FD_ACC_MGR_SUCCESS ) ) {
+    return NULL;
+  }
+
+  if( FD_UNLIKELY( acc->vt->get_lamports( acc )==0 ) ) {
+    return NULL;
+  }
+
+  int err;
+  return fd_bincode_decode_spad(
+      rent, spad,
+      acc->vt->get_data( acc ),
+      acc->vt->get_data_len( acc ),
+      &err );
 }

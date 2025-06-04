@@ -96,13 +96,10 @@ generate_replay_exec_slot_msg( fd_exec_slot_ctx_t * slot_ctx,
                                fd_runtime_public_slot_msg_t * slot_msg_out ) {
 
   (void)runtime_spad;
+  (void)runtime_public_wksp;
 
   slot_msg_out->slot                  = slot_ctx->slot;
   slot_msg_out->enable_exec_recording = slot_ctx->enable_exec_recording;
-
-  /* Save the gaddr of the sysvar cache */
-  slot_msg_out->sysvar_cache_gaddr = fd_wksp_gaddr_fast( runtime_public_wksp, slot_ctx->sysvar_cache );
-
 }
 
 static inline void

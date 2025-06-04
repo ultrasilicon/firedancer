@@ -183,21 +183,17 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
     fd_runtime_fuzz_load_account( acc, funk, funk_txn, &test_ctx->acct_states[i], 1 );
   }
 
-  /* Restore sysvar cache */
-  fd_runtime_sysvar_cache_load( slot_ctx, runner->spad );
-
   /* Finish init epoch bank sysvars */
-  uchar * val_epoch_schedule = fd_wksp_laddr_fast( runner->wksp, slot_ctx->sysvar_cache->gaddr_epoch_schedule );
-  fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_modify( bank_mgr );
-  *epoch_schedule = *(fd_epoch_schedule_t *)fd_type_pun_const( val_epoch_schedule );
+  fd_epoch_schedule_t * epoch_schedule    = fd_sysvar_epoch_schedule_read( funk, funk_txn, runner->spad );
+  fd_epoch_schedule_t * epoch_schedule_bm = fd_bank_mgr_epoch_schedule_modify( bank_mgr );
+  fd_memcpy( epoch_schedule_bm, epoch_schedule, sizeof(fd_epoch_schedule_t) );
   fd_bank_mgr_epoch_schedule_save( bank_mgr );
 
-  uchar * val_rent = fd_wksp_laddr_fast( runner->wksp, slot_ctx->sysvar_cache->gaddr_rent );
-  fd_rent_t * rent_bm = fd_bank_mgr_rent_modify( bank_mgr );
-  *rent_bm = *(fd_rent_t *)fd_type_pun_const( val_rent );
+  fd_rent_t const * rent    = fd_sysvar_rent_read( funk, funk_txn, runner->spad );
+  fd_rent_t *       rent_bm = fd_bank_mgr_rent_modify( bank_mgr );
+  fd_memcpy( rent_bm, rent, sizeof(fd_rent_t) );
   fd_bank_mgr_rent_save( bank_mgr );
 
-  prev_slot = fd_bank_mgr_prev_slot_query( bank_mgr );
   epoch_bank->stakes.epoch = fd_slot_to_epoch( epoch_schedule, *prev_slot, NULL );
 
   /* Update stake cache for epoch T */
@@ -357,7 +353,7 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   fd_bank_mgr_genesis_hash_save( bank_mgr );
 
   // Use the latest lamports per signature
-  fd_recent_block_hashes_global_t const * rbh_global = fd_sysvar_cache_recent_block_hashes( slot_ctx->sysvar_cache, runner->wksp );
+  fd_recent_block_hashes_global_t const * rbh_global = fd_sysvar_recent_hashes_read( funk, funk_txn, runner->spad );
   fd_recent_block_hashes_t rbh[1];
   if( rbh_global ) {
     rbh->hashes = deq_fd_block_block_hash_entry_t_join( (uchar*)rbh_global + rbh_global->hashes_offset );
@@ -535,7 +531,7 @@ fd_runtime_fuzz_block_run( fd_runtime_fuzz_runner_t * runner,
     fd_wksp_t *           wksp          = fd_wksp_attach( "wksp" );
     fd_alloc_t *          alloc         = fd_alloc_join( fd_alloc_new( fd_wksp_alloc_laddr( wksp, fd_alloc_align(), fd_alloc_footprint(), 2 ), 2 ), 0 );
     uchar *               slot_ctx_mem  = fd_spad_alloc( runner->spad, FD_EXEC_SLOT_CTX_ALIGN,  FD_EXEC_SLOT_CTX_FOOTPRINT );
-    fd_exec_slot_ctx_t *  slot_ctx      = fd_exec_slot_ctx_join ( fd_exec_slot_ctx_new ( slot_ctx_mem, runner->spad ) );
+    fd_exec_slot_ctx_t *  slot_ctx      = fd_exec_slot_ctx_join ( fd_exec_slot_ctx_new ( slot_ctx_mem ) );
 
     /* Set up the block execution context */
     fd_runtime_block_info_t * block_info = fd_runtime_fuzz_block_ctx_create( runner, slot_ctx, input );

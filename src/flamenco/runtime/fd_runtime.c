@@ -11,7 +11,6 @@
 #include "fd_cost_tracker.h"
 #include "fd_runtime_public.h"
 #include "fd_txncache.h"
-#include "sysvar/fd_sysvar_cache.h"
 #include "sysvar/fd_sysvar_clock.h"
 #include "sysvar/fd_sysvar_epoch_schedule.h"
 #include "sysvar/fd_sysvar_recent_hashes.h"
@@ -223,23 +222,6 @@ fd_runtime_update_leaders( fd_exec_slot_ctx_t * slot_ctx,
   } FD_SPAD_FRAME_END;
 }
 
-/* Loads the sysvar cache. Expects funk, funk_txn to be non-NULL and valid. */
-int
-fd_runtime_sysvar_cache_load( fd_exec_slot_ctx_t * slot_ctx,
-                              fd_spad_t *          runtime_spad ) {
-  if( FD_UNLIKELY( !slot_ctx->funk ) ) {
-    return -1;
-  }
-
-  fd_sysvar_cache_restore( slot_ctx->sysvar_cache,
-                           slot_ctx->funk,
-                           slot_ctx->funk_txn,
-                           runtime_spad,
-                           slot_ctx->runtime_wksp );
-
-  return FD_RUNTIME_EXECUTE_SUCCESS;
-}
-
 /******************************************************************************/
 /* Various Private Runtime Helpers                                            */
 /******************************************************************************/
@@ -249,8 +231,8 @@ fd_runtime_sysvar_cache_load( fd_exec_slot_ctx_t * slot_ctx,
    Returns the amount to burn(==fee) on failure */
 static ulong
 fd_runtime_validate_fee_collector( fd_exec_slot_ctx_t const * slot_ctx,
-                                   fd_txn_account_t const *  collector,
-                                   ulong                     fee ) {
+                                   fd_txn_account_t const *   collector,
+                                   ulong                      fee ) {
   if( FD_UNLIKELY( fee<=0UL ) ) {
     FD_LOG_ERR(( "expected fee(%lu) to be >0UL", fee ));
   }
@@ -283,8 +265,8 @@ fd_runtime_validate_fee_collector( fd_exec_slot_ctx_t const * slot_ctx,
      We already know that the post deposit balance is >0 because we are paying a >0 amount.
      So TLDR we just check if the account is rent exempt.
    */
-  ulong minbal = fd_rent_exempt_minimum_balance( fd_sysvar_cache_rent( slot_ctx->sysvar_cache, slot_ctx->runtime_wksp ),
-                                                 collector->vt->get_data_len( collector ) );
+  fd_rent_t const * rent = fd_bank_mgr_rent_query( slot_ctx->bank_mgr );
+  ulong minbal = fd_rent_exempt_minimum_balance( rent, collector->vt->get_data_len( collector ) );
   if( FD_UNLIKELY( collector->vt->get_lamports( collector ) + fee < minbal ) ) {
     FD_BASE58_ENCODE_32_BYTES( collector->pubkey->key, _out_key );
     FD_LOG_WARNING(("cannot pay a rent paying account (%s)", _out_key ));
@@ -564,10 +546,6 @@ fd_runtime_freeze( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad ) {
 
   fd_runtime_run_incinerator( slot_ctx );
 
-
-
-  /* At this point we want to invalidate the sysvar cache entries. */
-  fd_sysvar_cache_invalidate( slot_ctx->sysvar_cache );
 }
 
 #define FD_RENT_EXEMPT (-1L)
@@ -1550,12 +1528,6 @@ fd_runtime_block_execute_prepare( fd_exec_slot_ctx_t * slot_ctx,
     return result;
   }
 
-  /* Load sysvars into cache */
-  if( FD_UNLIKELY( result = fd_runtime_sysvar_cache_load( slot_ctx, runtime_spad ) ) ) {
-    /* non-zero error */
-    return result;
-  }
-
   return FD_RUNTIME_EXECUTE_SUCCESS;
 }
 
@@ -2419,7 +2391,7 @@ fd_new_target_program_account( fd_exec_slot_ctx_t * slot_ctx,
   };
 
   /* https://github.com/anza-xyz/agave/blob/v2.1.0/runtime/src/bank/builtins/core_bpf_migration/mod.rs#L89-L90 */
-  fd_rent_t const * rent = fd_sysvar_cache_rent( slot_ctx->sysvar_cache, slot_ctx->runtime_wksp );
+  fd_rent_t const * rent = fd_bank_mgr_rent_query( slot_ctx->bank_mgr );
   if( FD_UNLIKELY( rent==NULL ) ) {
     return -1;
   }
@@ -2481,7 +2453,7 @@ fd_new_target_program_data_account( fd_exec_slot_ctx_t * slot_ctx,
   }
 
   /* https://github.com/anza-xyz/agave/blob/v2.1.0/runtime/src/bank/builtins/core_bpf_migration/mod.rs#L127-L132 */
-  const fd_rent_t * rent = fd_sysvar_cache_rent( slot_ctx->sysvar_cache, slot_ctx->runtime_wksp );
+  fd_rent_t const * rent = fd_bank_mgr_rent_query( slot_ctx->bank_mgr );
   if( FD_UNLIKELY( rent==NULL ) ) {
     return -1;
   }
@@ -2939,9 +2911,10 @@ fd_runtime_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
   ulong   new_rate_activation_epoch_val = 0UL;
   ulong * new_rate_activation_epoch     = &new_rate_activation_epoch_val;
   int     is_some                       = fd_new_warmup_cooldown_rate_epoch( slot_ctx->slot,
-                                                                             slot_ctx->sysvar_cache,
+                                                                             slot_ctx->funk,
+                                                                             slot_ctx->funk_txn,
+                                                                             runtime_spad,
                                                                              &slot_ctx->epoch_ctx->features,
-                                                                             slot_ctx->runtime_wksp,
                                                                              new_rate_activation_epoch,
                                                                              _err );
   if( FD_UNLIKELY( !is_some ) ) {
@@ -2976,9 +2949,9 @@ fd_runtime_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
 
   /* Refresh vote accounts in stakes cache using updated stake weights, and merges slot bank vote accounts with the epoch bank vote accounts.
     https://github.com/anza-xyz/agave/blob/v2.1.6/runtime/src/stakes.rs#L363-L370 */
-  fd_stake_history_t const * history = fd_sysvar_cache_stake_history( slot_ctx->sysvar_cache, slot_ctx->runtime_wksp );
+  fd_stake_history_t const * history = fd_sysvar_stake_history_read( slot_ctx->funk, slot_ctx->funk_txn, runtime_spad );
   if( FD_UNLIKELY( !history ) ) {
-    FD_LOG_ERR(( "StakeHistory sysvar is missing from sysvar cache" ));
+    FD_LOG_ERR(( "StakeHistory sysvar could not be read and decoded" ));
   }
 
   /* In order to correctly handle the lifetimes of allocations for partitioned

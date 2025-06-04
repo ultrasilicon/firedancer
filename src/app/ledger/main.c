@@ -740,11 +740,6 @@ fd_ledger_main_setup( fd_ledger_args_t * args ) {
                                                        args->runtime_spad,
                                                        &exec_para_ctx );
 
-  /* First, load in the sysvars into the sysvar cache. This is required to
-      make the StakeHistory sysvar available to the rewards calculation. */
-
-  fd_runtime_sysvar_cache_load( args->slot_ctx, args->runtime_spad );
-
   /* After both snapshots have been loaded in, we can determine if we should
       start distributing rewards. */
 
@@ -1102,7 +1097,7 @@ ingest( fd_ledger_args_t * args ) {
   fd_exec_epoch_ctx_t * epoch_ctx = fd_exec_epoch_ctx_join( fd_exec_epoch_ctx_new( epoch_ctx_mem, args->vote_acct_max ) );
 
   uchar slot_ctx_mem[FD_EXEC_SLOT_CTX_FOOTPRINT] __attribute__((aligned(FD_EXEC_SLOT_CTX_ALIGN)));
-  fd_exec_slot_ctx_t * slot_ctx = fd_exec_slot_ctx_join( fd_exec_slot_ctx_new( slot_ctx_mem, spad ) );
+  fd_exec_slot_ctx_t * slot_ctx = fd_exec_slot_ctx_join( fd_exec_slot_ctx_new( slot_ctx_mem ) );
   slot_ctx->epoch_ctx = epoch_ctx;
   args->slot_ctx = slot_ctx;
 
@@ -1281,7 +1276,7 @@ replay( fd_ledger_args_t * args ) {
   /* TODO: This is very hacky, needs to be cleaned up */
 
   void * slot_ctx_mem        = fd_spad_alloc_check( spad, FD_EXEC_SLOT_CTX_ALIGN, FD_EXEC_SLOT_CTX_FOOTPRINT );
-  args->slot_ctx             = fd_exec_slot_ctx_join( fd_exec_slot_ctx_new( slot_ctx_mem, spad ) );
+  args->slot_ctx             = fd_exec_slot_ctx_join( fd_exec_slot_ctx_new( slot_ctx_mem ) );
   args->slot_ctx->epoch_ctx  = args->epoch_ctx;
   args->slot_ctx->funk       = funk;
   args->slot_ctx->blockstore = args->blockstore;

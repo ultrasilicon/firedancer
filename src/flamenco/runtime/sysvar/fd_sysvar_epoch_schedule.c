@@ -32,9 +32,9 @@ fd_epoch_schedule_derive( fd_epoch_schedule_t * schedule,
   return schedule;
 }
 
-static void
-write_epoch_schedule( fd_exec_slot_ctx_t *  slot_ctx,
-                      fd_epoch_schedule_t * epoch_schedule ) {
+void
+fd_sysvar_epoch_schedule_write( fd_exec_slot_ctx_t *  slot_ctx,
+                                fd_epoch_schedule_t * epoch_schedule ) {
   ulong sz = fd_epoch_schedule_size( epoch_schedule );
   FD_LOG_INFO(("Writing epoch schedule size %lu", sz));
   /* TODO remove alloca */
@@ -71,7 +71,7 @@ fd_sysvar_epoch_schedule_read( fd_funk_t *     funk,
 void
 fd_sysvar_epoch_schedule_init( fd_exec_slot_ctx_t * slot_ctx ) {
   fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
-  write_epoch_schedule( slot_ctx, epoch_schedule );
+  fd_sysvar_epoch_schedule_write( slot_ctx, epoch_schedule );
 }
 
 /* https://github.com/solana-labs/solana/blob/88aeaa82a856fc807234e7da0b31b89f2dc0e091/sdk/program/src/epoch_schedule.rs#L105 */

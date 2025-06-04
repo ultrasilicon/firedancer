@@ -1,9 +1,10 @@
 #ifndef HEADER_fd_src_flamenco_runtime_sysvar_fd_slot_hashes_h
 #define HEADER_fd_src_flamenco_runtime_sysvar_fd_slot_hashes_h
 
+#include "../../../funk/fd_funk.h"
+#include "../../../funk/fd_funk_txn.h"
 #include "../../fd_flamenco_base.h"
 #include "../../types/fd_types.h"
-
 /* The slot hashes sysvar contains the most recent hashes of the slot's parent bank hashes. */
 
 /* FD_SYSVAR_SLOT_HASHES_CAP is the max number of entries that the
@@ -53,8 +54,9 @@ fd_sysvar_slot_hashes_update( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime
    value into *result.  On failure, returns the bincode/acc_mgr error
    code. */
 fd_slot_hashes_global_t *
-fd_sysvar_slot_hashes_read( fd_exec_slot_ctx_t * slot_ctx,
-                            fd_spad_t *          runtime_spad );
+  fd_sysvar_slot_hashes_read( fd_funk_t *     funk,
+                            fd_funk_txn_t * funk_txn,
+                            fd_spad_t *     spad );
 
 FD_PROTOTYPES_END
 

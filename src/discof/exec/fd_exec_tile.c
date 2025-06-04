@@ -253,11 +253,6 @@ prepare_new_slot_execution( fd_exec_tile_ctx_t *           ctx,
 
   ctx->txn_ctx->enable_exec_recording = slot_msg->enable_exec_recording;
 
-  ctx->txn_ctx->sysvar_cache = fd_wksp_laddr_fast( ctx->runtime_public_wksp, slot_msg->sysvar_cache_gaddr );
-  if( FD_UNLIKELY( !ctx->txn_ctx->sysvar_cache ) ) {
-    FD_LOG_ERR(( "Could not find valid sysvar cache" ));
-  }
-
   /* Refresh the bank manager join for the slot that's being executed. */
   ctx->bank_mgr = fd_bank_mgr_join( ctx->bank_mgr, ctx->funk, funk_txn );
   if( FD_UNLIKELY( !ctx->bank_mgr ) ) {
