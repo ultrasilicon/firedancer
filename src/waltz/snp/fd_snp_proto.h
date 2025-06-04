@@ -149,6 +149,7 @@ struct FD_SNP_ALIGNED fd_snp_conn {
   fd_snp_pkt_t * last_pkt;
 
   long  last_sent_ts;
+  long  last_recv_ts;
   uchar retry_cnt;
 
   /* public key. Access via: fd_snp_conn_pubkey() */

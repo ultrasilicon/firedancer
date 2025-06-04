@@ -363,6 +363,7 @@ fd_snp_finalize_snp_and_invoke_tx_cb(
     return 0;
   }
   fd_snp_v1_finalize_packet( conn, packet+sizeof(fd_ip4_udp_hdrs_t), packet_sz-sizeof(fd_ip4_udp_hdrs_t) );
+  conn->last_sent_ts = fd_snp_timestamp_ms();
   return fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, packet_sz, meta & (~FD_SNP_META_OPT_HANDSHAKE) );
 }
 
@@ -378,7 +379,14 @@ fd_snp_verify_snp_and_invoke_rx_cb(
   if( FD_UNLIKELY( res < 0 ) ) {
     return -1;
   }
-  return snp->cb.rx( snp->cb.ctx, packet, packet_sz, meta );
+  conn->last_recv_ts = fd_snp_timestamp_ms();
+  ulong data_offset = sizeof(fd_ip4_udp_hdrs_t) + 12;
+  if( FD_LIKELY( packet[data_offset]==FD_SNP_FRAME_DATAGRAM ) ) {
+    return snp->cb.rx( snp->cb.ctx, packet, packet_sz, meta );
+  } else if( FD_LIKELY( packet[data_offset]==FD_SNP_FRAME_PING ) ) {
+    FD_LOG_NOTICE(( "[snp] received PING "));
+  }
+  return 0;
 }
 
 static inline int
@@ -390,8 +398,6 @@ fd_snp_cache_packet_and_invoke_sign_cb(
   uchar *         to_sign
 ) {
   if( FD_LIKELY( packet_snp_sz > 0 ) ) {
-    conn->last_sent_ts = fd_snp_timestamp_ms();
-    conn->retry_cnt = 0;
     conn->last_pkt->data_sz = (ushort)((ulong)packet_snp_sz+sizeof(fd_ip4_udp_hdrs_t));
     memcpy( conn->last_pkt->data, packet, conn->last_pkt->data_sz );
     return snp->cb.sign( snp->cb.ctx, conn->session_id, to_sign );
@@ -423,6 +429,25 @@ fd_snp_retry_cached_packet( fd_snp_t *      snp,
   fd_snp_meta_t meta = conn->last_pkt->meta;
   conn->last_sent_ts = fd_snp_timestamp_ms();
   return fd_snp_finalize_udp_and_invoke_tx_cb( snp, packet, packet_sz, meta | FD_SNP_META_OPT_BUFFERED );
+}
+
+int
+fd_snp_send_ping( fd_snp_t *      snp,
+                  fd_snp_conn_t * conn ) {
+  uchar packet[ FD_SNP_MTU ] = { 0 };
+
+  /* PING */
+  ulong data_offset = sizeof(fd_ip4_udp_hdrs_t) + 12;
+  if( FD_LIKELY( packet!=NULL ) ) {
+    packet[data_offset] = FD_SNP_FRAME_PING;
+    ushort data_sz_h = (ushort)0;
+    memcpy( packet+data_offset+1, &data_sz_h, 2 );
+  }
+  data_offset += 3;
+
+  ulong packet_sz = 0 + data_offset + 19;
+  fd_snp_meta_t meta = conn->peer_addr | FD_SNP_META_PROTO_V1;
+  return fd_snp_finalize_snp_and_invoke_tx_cb( snp, conn, packet, packet_sz, meta | FD_SNP_META_OPT_BUFFERED );
 }
 
 static inline void
@@ -703,23 +728,35 @@ fd_snp_process_packet( fd_snp_t * snp,
 
     /* HS4. Client receives server_fini and sends client_fini */
     case FD_SNP_TYPE_HS_SERVER_FINI: {
+      if( conn==NULL ) {
+        return -1;
+      }
       if( FD_LIKELY( conn->state == FD_SNP_TYPE_HS_CLIENT_CONT ) ) {
         sz = fd_snp_v1_client_fini( &snp->config, conn, pkt, pkt_sz, pkt, to_sign );
+        if( FD_UNLIKELY( sz < 0 ) ) {
+          return -1;
+        }
+        conn->last_recv_ts = fd_snp_timestamp_ms();
         return fd_snp_cache_packet_and_invoke_sign_cb( snp, conn, packet, sz, to_sign );
       } else if( conn->state==FD_SNP_TYPE_HS_DONE ) {
         /* This immediate retry is necessary, because from the client perspective
-           the handshake is completeled, and thus housekeeping wouldn't be retrying.
+           the handshake is completed, and thus housekeeping wouldn't be retrying.
            But if the server re-sends server_fini, it means it didn't receive
            client_fini, and so we have to retry. */
         // FD_LOG_NOTICE(( "client retry immediately" ));
+        conn->last_recv_ts = fd_snp_timestamp_ms();
         return fd_snp_retry_cached_packet( snp, conn );
       }
     } break;
 
     /* HS5. Server receives client_fini and accepts */
     case FD_SNP_TYPE_HS_CLIENT_FINI: {
+      if( conn==NULL ) {
+        return -1;
+      }
       sz = fd_snp_v1_server_acpt( &snp->config, conn, pkt, pkt_sz, pkt, NULL );
       if( FD_LIKELY( sz>=0 ) ) {
+        conn->last_recv_ts = fd_snp_timestamp_ms();
         /* Update the default connection to peer_addr to this conn */
         fd_snp_conn_map_t sentinel = { 0 };
         fd_snp_conn_map_t * entry = fd_snp_conn_map_query( snp->conn_map, peer_addr, &sentinel );
@@ -781,6 +818,7 @@ fd_snp_process_signature( fd_snp_t *  snp,
     /* HS4. Client receives server_fini and sends client_fini */
     case FD_SNP_TYPE_HS_CLIENT_FINI_SIG: {
       fd_snp_v1_client_fini_add_signature( conn, conn->last_pkt->data+sizeof(fd_ip4_udp_hdrs_t), signature );
+      conn->last_sent_ts = fd_snp_timestamp_ms();
       sz = fd_snp_finalize_udp_and_invoke_tx_cb( snp, conn->last_pkt->data, conn->last_pkt->data_sz, meta );
 
       /* process cached packets before return */
@@ -802,22 +840,46 @@ fd_snp_housekeeping( fd_snp_t * snp ) {
 
 #define FD_SNP_HANDSHAKE_RETRY_MAX (5U)
 #define FD_SNP_HANDSHAKE_RETRY_MS  (500L)
+#define FD_SNP_KEEP_ALIVE_MS       (5000L)
+#define FD_SNP_TIMEOUT_MS          (20000L)
 
   long now = fd_snp_timestamp_ms();
-  for( ; idx<max; idx++, conn++ ) {
+  for( ; idx<max && used_ele<used; idx++, conn++ ) {
     if( conn->session_id == 0 ) continue;
+    used_ele++;
+
+    if( conn->state==FD_SNP_STATE_INVALID ) {
+      FD_LOG_WARNING(( "[snp-hkp] connection invalid session_id=%016lx", conn->session_id ));
+      fd_snp_conn_delete( snp, conn );
+      continue;
+    }
+
     if( FD_SNP_STATE_INVALID < conn->state && conn->state < FD_SNP_TYPE_HS_DONE ) {
+      if( conn->retry_cnt == FD_SNP_HANDSHAKE_RETRY_MAX ) {
+        FD_LOG_NOTICE(( "[snp-hkp] retry expired - deleting session_id=%016lx", conn->session_id ));
+        fd_snp_conn_delete( snp, conn );
+        continue;
+      }
       if( now > conn->last_sent_ts + FD_SNP_HANDSHAKE_RETRY_MS
         && ++conn->retry_cnt < FD_SNP_HANDSHAKE_RETRY_MAX ) {
-        FD_LOG_NOTICE(( "retry %d session_id=%016lx", conn->retry_cnt, conn->session_id ));
+        FD_LOG_NOTICE(( "[snp-hkp] retry %d session_id=%016lx", conn->retry_cnt, conn->session_id ));
         fd_snp_retry_cached_packet( snp, conn );
-      }
-      if( conn->retry_cnt == FD_SNP_HANDSHAKE_RETRY_MAX ) {
-        FD_LOG_NOTICE(( "retry expired - deleting session_id=%016lx", conn->session_id ));
-        fd_snp_conn_delete( snp, conn );
+        continue;
       }
     }
-    if( ++used_ele>=used ) break;
+
+    if( conn->state==FD_SNP_TYPE_HS_DONE ) {
+      if( now > conn->last_recv_ts + FD_SNP_TIMEOUT_MS ) {
+        FD_LOG_NOTICE(( "[snp-hkp] timeout - deleting session_id=%016lx", conn->session_id ));
+        fd_snp_conn_delete( snp, conn );
+        continue;
+      }
+      if( now > conn->last_sent_ts + FD_SNP_KEEP_ALIVE_MS ) {
+        FD_LOG_NOTICE(( "[snp-hkp] keep alive - pinging session_id=%016lx peer_session_id=%016lx", conn->session_id, conn->peer_session_id ));
+        fd_snp_send_ping( snp, conn );
+        continue;
+      }
+    }
   }
 
   return (int)used;

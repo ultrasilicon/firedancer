@@ -405,9 +405,9 @@ snp_callback_tx( void const *  _ctx,
   ulong tspub  = fd_frag_meta_ts_comp( fd_tickcount() );
   ulong sig = fd_disco_netmux_sig( dst_ip, dst_port, dst_ip, DST_PROTO_OUTGOING, FD_NETMUX_SIG_MIN_HDR_SZ );
 
-  /* No memcpy needed here - already done in during_frag. */
+  /* memcpy is done in during_frag, it's only needed for buffered packets */
   if( FD_UNLIKELY( meta & FD_SNP_META_OPT_BUFFERED ) ) {
-    memcpy( ctx->packet, packet, packet_sz );
+    memcpy( fd_chunk_to_laddr( ctx->net_out_mem, ctx->net_out_chunk ), packet, packet_sz );
   }
   fd_mcache_publish( ctx->net_out_mcache, ctx->net_out_depth, ctx->net_out_seq, sig, ctx->net_out_chunk, packet_sz, 0UL, 0UL /* tsorig */, tspub );
   ctx->net_out_seq   = fd_seq_inc( ctx->net_out_seq, 1UL );
