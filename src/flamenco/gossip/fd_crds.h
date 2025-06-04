@@ -13,6 +13,8 @@ typedef struct fd_crds_private fd_crds_t;
 struct fd_crds_mask_iter_private;
 typedef struct fd_crds_mask_iter_private fd_crds_mask_iter_t;
 
+#define CRDS_MASK_ITER_SIZE (16UL)
+
 FD_PROTOTYPES_BEGIN
 
 /* Returns the timestamp when the node received the CRDS value associated
@@ -27,7 +29,8 @@ FD_FN_CONST ulong
 fd_crds_align( void );
 
 FD_FN_CONST ulong
-fd_crds_footprint( ulong ele_max, ulong purged_max );
+fd_crds_footprint( ulong ele_max,
+                   ulong purged_max );
 
 void *
 fd_crds_new( void *     shmem,
@@ -119,6 +122,9 @@ fd_crds_insert( fd_crds_t *       crds,
                 fd_crds_entry_t * value,
                 int               from_push_msg );
 
+uchar const *
+fd_crds_value_hash( fd_crds_entry_t const * value );
+
 ulong
 fd_crds_purged_len( fd_crds_t * crds );
 
@@ -126,22 +132,42 @@ uchar const *
 fd_crds_purged( fd_crds_t * crds,
                 ulong       idx );
 
-fd_crds_mask_iter_t
+
+/* fd_crds_mask_iter_{init,next,done,value} provide an iterator to
+   iterate over the CRDS values in the table that whose hashes match
+   a given mask. In the Gossip CRDS filter, the mask is applied on
+   the most significant 8 bytes of the CRDS value's hash.
+
+   The Gossip CRDS filter encodes the mask in two values: `mask` and
+   `mask_bits`. For example, if we set `mask_bits` to 5 and 0b01010 as
+   `mask`, we get the following 64-bit bitmask:
+                        01010 11111111111.....
+
+   Therefore, we can frame a mask match as a CRDS value's hash whose
+   most significant `mask_bits` is `mask`. We can trivially define
+   the range of matching hash values by setting the non-mask bits to
+   all 0s or 1s to get the start and end values respectively. */
+
+fd_crds_mask_iter_t *
 fd_crds_mask_iter_init( fd_crds_t const * crds,
                         ulong             mask,
-                        ulong             mask_bits );
+                        uint              mask_bits,
+                        void *            iter_mem );
 
-fd_crds_mask_iter_t
-fd_crds_mask_iter_next( fd_crds_mask_iter_t it );
+fd_crds_mask_iter_t *
+fd_crds_mask_iter_next( fd_crds_mask_iter_t * it,
+                        fd_crds_t const * crds );
 
 int
-fd_crds_mask_iter_done( fd_crds_mask_iter_t it );
+fd_crds_mask_iter_done( fd_crds_mask_iter_t * it,
+                        fd_crds_t const * crds );
 
 fd_crds_entry_t const *
-fd_crds_mask_iter_value( fd_crds_mask_iter_t it );
+fd_crds_mask_iter_value( fd_crds_mask_iter_t * it,
+                         fd_crds_t const * crds );
 
 ulong
-fd_crds_len( void );
+fd_crds_len( fd_crds_t * crds );
 
 FD_PROTOTYPES_END
 

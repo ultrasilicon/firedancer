@@ -1,5 +1,6 @@
 #include "fd_crds.h"
-#include "fd_crds_value.h"
+// #include "fd_crds_value.h"
+#include <string.h>
 
 #define FD_CRDS_ALIGN 8UL
 #define FD_CRDS_MAGIC (0xf17eda2c37c7d50UL) /* firedancer crds version 0*/
@@ -77,17 +78,19 @@ struct fd_crds_entry_private {
 
     Messages encode wallclock in millis, firedancer converts
     them into nanos internally. */
-  long   wallclock_nanos;
+  long    wallclock_nanos;
 
-  uchar  data[ 1232UL ];
-  ushort data_sz;
+  uchar   data[ 1232UL ];
+  ushort  data_sz;
 
-  ulong num_duplicates;
+  uchar   value_hash[ 32UL ]; /* The hash of the encoded value, used for pull requests */
+  ulong   num_duplicates;
 
   /* Pool fields. Not in use when pool element is acquired */
   struct {
     ulong next;
   } pool;
+
   /* The CRDS needs to perform a variety of actions on the message table
      quickly, so there are various indexes woven through them values to
      support these actions.  They are ...
@@ -132,7 +135,7 @@ struct fd_crds_entry_private {
 
   /* Finally, a core operation on the CRDS is to to query for values by
      hash, to respond to pull requests.  This is done with a treap
-     sorted by the hash of the encoded value. */
+     sorted by hash, which is just the first 8 bytes value_hash. */
   struct {
     ulong parent;
     ulong left;
@@ -190,9 +193,8 @@ fd_crds_entry_wallclock( fd_crds_entry_t const * entry ){
 
 #define TREAP_NAME      hash_treap
 #define TREAP_T         fd_crds_entry_t
-#define TREAP_QUERY_T   void *                                         /* We don't use query ... */
-#define TREAP_CMP(q,e)  (__extension__({ (void)(q); (void)(e); -1; })) /* which means we don't need to give a real
-                                                                          implementation to cmp either */
+#define TREAP_QUERY_T   ulong
+#define TREAP_CMP(q,e)  (q-e->hash.hash)
 #define TREAP_IDX_T     ulong
 #define TREAP_OPTIMIZE_ITERATION 1
 #define TREAP_NEXT      hash.next
@@ -491,7 +493,7 @@ overrides( fd_crds_entry_t const * value,
 
   if( FD_UNLIKELY( cand_wc>val_wc ) ) return 1;
   else if( FD_UNLIKELY( cand_wc<val_wc ) ) return 0;
-  else return !!candidate->hash.hash<value->hash.hash;
+  else return !!(candidate->hash.hash<value->hash.hash);
 }
 
 int
@@ -561,29 +563,46 @@ fd_crds_insert( fd_crds_t *       crds,
   return 0;
 }
 
+uchar const *
+fd_crds_value_hash( fd_crds_entry_t const * value ){
+  return value->value_hash;
+}
+
 struct fd_crds_mask_iter_private {
-  ulong mask;
-  ulong mask_bits;
-  ulong iter;
+  ulong idx;
+  ulong end_hash;
 };
 
-fd_crds_mask_iter_t
+fd_crds_mask_iter_t *
 fd_crds_mask_iter_init( fd_crds_t const * crds,
                         ulong             mask,
-                        ulong             mask_bits ) {
-  fd_crds_mask_iter_t it = {
-    .mask       = mask,
-    .mask_bits  = mask_bits,
-    .iter       = hash_treap_fwd_iter_init( crds->hash_treap, crds->pool ),
-  };
+                        uint              mask_bits,
+                        void *            iter_mem ) {
+  fd_crds_mask_iter_t * it = (fd_crds_mask_iter_t *)iter_mem;
+  ulong start_hash         = (mask << (64UL - mask_bits));
+  it->idx                  = hash_treap_idx_ge( crds->hash_treap, start_hash, crds->pool );
+
+  ulong end_hash           = (mask << (64UL - mask_bits)) |
+                             ((1UL << (64UL - mask_bits)) - 1UL);
+  it->end_hash             = end_hash;
   return it;
 }
 
-fd_crds_mask_iter_t
-fd_crds_mask_iter_next( fd_crds_mask_iter_t it );
+fd_crds_mask_iter_t *
+fd_crds_mask_iter_next( fd_crds_mask_iter_t * it, fd_crds_t const * crds ) {
+  fd_crds_entry_t const * val = hash_treap_ele_fast_const( it->idx, crds->pool );
+  it->idx                     = val->hash.next;
+  return it;
+}
 
 int
-fd_crds_mask_iter_done( fd_crds_mask_iter_t it );
+fd_crds_mask_iter_done( fd_crds_mask_iter_t * it, fd_crds_t const * crds ) {
+  fd_crds_entry_t const * val = hash_treap_ele_fast_const( it->idx, crds->pool );
+  return hash_treap_idx_is_null( it->idx ) ||
+         (it->end_hash < val->hash.hash);
+}
 
 fd_crds_entry_t const *
-fd_crds_mask_iter_value( fd_crds_mask_iter_t it );
+fd_crds_mask_iter_value( fd_crds_mask_iter_t * it, fd_crds_t const * crds ){
+  return hash_treap_ele_fast_const( it->idx, crds->pool );
+}
