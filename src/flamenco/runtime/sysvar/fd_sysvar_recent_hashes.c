@@ -160,6 +160,14 @@ fd_sysvar_recent_hashes_read( fd_funk_t * funk, fd_funk_txn_t * funk_txn, fd_spa
     .dataend = acc->vt->get_data( acc ) + acc->vt->get_data_len( acc ),
   };
 
+  /* This check is needed as a quirk of the fuzzer. If a sysvar account
+     exists in the accounts database, but doesn't have any lamports,
+     this means that the account does not exist. This wouldn't happen
+     in a real execution environment. */
+  if( FD_UNLIKELY( acc->vt->get_lamports( acc ) == 0UL ) ) {
+    return NULL;
+  }
+
   ulong total_sz = 0;
   err = fd_recent_block_hashes_decode_footprint( &ctx, &total_sz );
   if( FD_UNLIKELY( err ) ) {

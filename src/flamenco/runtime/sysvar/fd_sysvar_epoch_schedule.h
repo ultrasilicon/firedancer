@@ -60,8 +60,9 @@ FD_PROTOTYPES_BEGIN
 void
 fd_sysvar_epoch_schedule_init( fd_exec_slot_ctx_t * slot_ctx );
 
-/* fd_sysvar_epoch_schedule_read reads the current value of the epoch
-   schedule sysvar into result. */
+/* fd_sysvar_epoch_schedule_read reads the current value of the rent
+   sysvar from funk. If the account doesn't exist in funk or if the account
+   has zero lamports, this function returns NULL. */
 
 fd_epoch_schedule_t *
 fd_sysvar_epoch_schedule_read( fd_funk_t *     funk,

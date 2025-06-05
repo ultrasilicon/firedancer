@@ -21,4 +21,8 @@ fd_sysvar_instr_acct_check( fd_exec_instr_ctx_t const * ctx,
                             ulong                       idx,
                             fd_pubkey_t const *         addr_want );
 
+/* TODO: Some common functions that exist in all sysvar accounts should
+   be templatized/factored out into this common header file.
+   Notably, fd_sysvar_{*}_{read,write} should be factored out here. */
+
 #endif /* HEADER_fd_src_flamenco_runtime_fd_sysvar_h */

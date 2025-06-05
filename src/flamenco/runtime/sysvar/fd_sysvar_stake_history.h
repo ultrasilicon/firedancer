@@ -20,7 +20,10 @@ FD_PROTOTYPES_BEGIN
 void
 fd_sysvar_stake_history_init( fd_exec_slot_ctx_t * slot_ctx );
 
-/* Read the stake history sysvar account. */
+/* fd_sysvar_stake_history_read reads the stake history sysvar from funk.
+   If the account doesn't exist in funk or if the account has zero
+   lamports, this function returns NULL. */
+
 fd_stake_history_t *
 fd_sysvar_stake_history_read( fd_funk_t *     funk,
                               fd_funk_txn_t * funk_txn,

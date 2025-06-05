@@ -49,12 +49,11 @@ fd_sysvar_slot_hashes_init( fd_exec_slot_ctx_t * slot_ctx,
 void
 fd_sysvar_slot_hashes_update( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad );
 
-/* fd_sysvar_slot_hashes_read reads the slot hashes sysvar from the
-   accounts manager.  On success, returns 0 and writes deserialized
-   value into *result.  On failure, returns the bincode/acc_mgr error
-   code. */
+/* fd_sysvar_slot_hashes_read reads the slot hashes sysvar from funk.
+   If the account doesn't exist in funk or if the account has zero
+   lamports, this function returns NULL. */
 fd_slot_hashes_global_t *
-  fd_sysvar_slot_hashes_read( fd_funk_t *     funk,
+fd_sysvar_slot_hashes_read( fd_funk_t *     funk,
                             fd_funk_txn_t * funk_txn,
                             fd_spad_t *     spad );
 

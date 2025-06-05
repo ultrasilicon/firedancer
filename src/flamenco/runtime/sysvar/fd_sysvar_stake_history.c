@@ -31,6 +31,10 @@ fd_sysvar_stake_history_read( fd_funk_t *     funk,
     return NULL;
   }
 
+  /* This check is needed as a quirk of the fuzzer. If a sysvar account
+     exists in the accounts database, but doesn't have any lamports,
+     this means that the account does not exist. This wouldn't happen
+     in a real execution environment. */
   if( FD_UNLIKELY( stake_rec->vt->get_lamports( stake_rec )==0 ) ) {
     return NULL;
   }

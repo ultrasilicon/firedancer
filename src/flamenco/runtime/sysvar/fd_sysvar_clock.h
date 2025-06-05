@@ -33,7 +33,9 @@ void
 fd_sysvar_clock_write( fd_exec_slot_ctx_t *    slot_ctx,
                        fd_sol_sysvar_clock_t * clock );
 
-/* Reads the current value of the clock sysvar from funk. */
+/* fd_sysvar_clok_read reads the current value of the rent sysvar from
+   funk. If the account doesn't exist in funk or if the account
+   has zero lamports, this function returns NULL. */
 
 fd_sol_sysvar_clock_t const *
 fd_sysvar_clock_read( fd_funk_t *     funk,

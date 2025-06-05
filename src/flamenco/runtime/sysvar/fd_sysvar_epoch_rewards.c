@@ -32,6 +32,14 @@ fd_sysvar_epoch_rewards_read( fd_funk_t *     funk,
     return NULL;
   }
 
+  /* This check is needed as a quirk of the fuzzer. If a sysvar account
+     exists in the accounts database, but doesn't have any lamports,
+     this means that the account does not exist. This wouldn't happen
+     in a real execution environment. */
+  if( FD_UNLIKELY( acc->vt->get_lamports( acc ) == 0UL ) ) {
+    return NULL;
+  }
+
   return fd_bincode_decode_spad(
       sysvar_epoch_rewards, spad,
       acc->vt->get_data( acc ),

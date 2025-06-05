@@ -27,7 +27,11 @@ void
 fd_sysvar_recent_hashes_update( fd_exec_slot_ctx_t * slot_ctx,
                                 fd_spad_t *          runtime_spad );
 
-/* Read the recent hashes sysvar account. */
+
+/* fd_sysvar_recent_hashes_read reads the recent hashes sysvar from funk.
+   If the account doesn't exist in funk or if the account has zero
+   lamports, this function returns NULL. */
+
 fd_recent_block_hashes_global_t *
 fd_sysvar_recent_hashes_read( fd_funk_t * funk, fd_funk_txn_t * funk_txn, fd_spad_t * spad );
 
