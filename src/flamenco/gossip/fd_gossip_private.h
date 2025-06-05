@@ -48,17 +48,51 @@ struct fd_gossip_view_contact_info {
 
 typedef struct fd_gossip_view_contact_info fd_gossip_view_contact_info_t;
 
+struct fd_gossip_view_node_instance {
+  ushort token_off;
+};
+
+typedef struct fd_gossip_view_node_instance fd_gossip_view_node_instance_t;
+
+struct fd_gossip_view_vote {
+  uchar  index;
+  ulong  transaction_sz;
+  ushort transaction_off;
+};
+
+typedef struct fd_gossip_view_vote fd_gossip_view_vote_t;
+
+struct fd_gossip_view_epoch_slots {
+  uchar  index;
+};
+
+typedef struct fd_gossip_view_epoch_slots fd_gossip_view_epoch_slots_t;
+
+struct fd_gossip_view_duplicate_shred {
+  ushort index;
+};
+
+typedef struct fd_gossip_view_duplicate_shred fd_gossip_view_duplicate_shred_t;
+
  /* Offsets are within full message payload, not the subset where the encoded
     CRDS value lies. */
 struct fd_gossip_view_crds_value {
-  ushort signature_off;
+  union{
+    ushort value_off; /* Start of CRDS value data in payload */
+    ushort signature_off;
+  };
   ushort pubkey_off;
+  long   wallclock_nanos;
 
   ushort length; /* Length of the value in bytes (incl. signature) */
 
   uchar tag; /* Discriminant */
   union{
-    fd_gossip_view_contact_info_t contact_info; /* FD_GOSSIP_VALUE_CONTACT_INFO */
+    fd_gossip_view_contact_info_t    contact_info[ 1 ];
+    fd_gossip_view_node_instance_t   node_instance[ 1 ];
+    fd_gossip_view_vote_t            vote[ 1 ];
+    fd_gossip_view_epoch_slots_t     epoch_slots[ 1 ];
+    fd_gossip_view_duplicate_shred_t duplicate_shred[ 1 ];
   };
 };
 

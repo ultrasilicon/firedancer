@@ -3,6 +3,7 @@
 
 #include "../../util/fd_util.h"
 #include "../../util/net/fd_net_headers.h"
+#include "fd_gossip_private.h"
 
 struct fd_crds_entry_private;
 typedef struct fd_crds_entry_private fd_crds_entry_t;
@@ -101,6 +102,29 @@ fd_crds_acquire( fd_crds_t * crds );
 void
 fd_crds_release( fd_crds_t *       crds,
                  fd_crds_entry_t * value );
+
+/* fd_crds_populate_upsert fills in the minimum information necessary
+   for a valid fd_crds_upserts query. Supplied view and payload are
+   assumed to be error free (i.e., no possibility of OOBs when correctly
+   used). */
+
+void
+fd_crds_populate_upsert( fd_gossip_view_crds_value_t const * view,
+                         uchar const *                       view_payload,
+                         fd_crds_entry_t *                   out_value );
+
+/* fd_crds_populate_insert fills in the information necessary
+   for a valid fd_crds_insert call from a given CRDS view and the corresponding
+   payload. view and payload are assumed to be error free (i.e., no possibility
+   of OOBs when correctly used). has_upsert_info can be set if the entry was
+   previously populated with fd_crds_populate_upsert. */
+
+void
+fd_crds_populate_insert( fd_gossip_view_crds_value_t const * view,
+                         uchar const *                       view_payload,
+                         long                                now,
+                         uchar                               has_upsert_info,
+                         fd_crds_entry_t *                   out_value );
 
 /* fd_crds_upserts checks if inserting the value into the CRDS would
    succeed.  An insert will fail if the value is already present in the

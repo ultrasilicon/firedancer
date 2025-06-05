@@ -1,4 +1,6 @@
 #include "fd_crds.h"
+#include "../../ballet/sha256/fd_sha256.h"
+#include "fd_gossip_private.h"
 // #include "fd_crds_value.h"
 #include <string.h>
 
@@ -65,9 +67,7 @@ struct fd_crds_entry_private {
     } contact_info;
 
     struct {
-      /* offsets into data[] */
-      ushort token_offset;
-      ushort from_offset; /* TODO: Is this different from key->pubkey */
+      uchar  token[ 32UL ];
     } node_instance;
   };
 
@@ -108,11 +108,11 @@ struct fd_crds_entry_private {
      make room.  This is accomplished with a treap sorted by stake, so
      the lowest stake message is removed. */
   struct {
+    ulong stake;
     ulong parent;
     ulong left;
     ulong right;
     ulong prio;
-    ulong stake;
     ulong next; /* next in the treap iteration order */
     ulong prev; /* previous in the treap iteration order */
   } evict;
@@ -128,22 +128,22 @@ struct fd_crds_entry_private {
      nodes, which values expire after 48 hours, and one is for unstaked
      nodes, which expire after 15 seconds. */
   struct {
+    long  wallclock_nanos;
     ulong prev;
     ulong next;
-    long  wallclock_nanos;
   } expire;
 
   /* Finally, a core operation on the CRDS is to to query for values by
      hash, to respond to pull requests.  This is done with a treap
      sorted by hash, which is just the first 8 bytes value_hash. */
   struct {
+    ulong hash;
     ulong parent;
     ulong left;
     ulong right;
     ulong next;
     ulong prev;
     ulong prio;
-    ulong hash;
   } hash;
 };
 
@@ -466,6 +466,59 @@ fd_crds_release( fd_crds_t *       crds,
   crds_pool_ele_release( crds->pool, value );
 }
 
+void
+fd_crds_populate_upsert( fd_gossip_view_crds_value_t const * view,
+                         uchar const *                       view_payload,
+                         fd_crds_entry_t *                   out_value ) {
+  static fd_sha256_t sha2[1];
+  /* Construct key */
+  fd_crds_key_t * key = out_value->key;
+  key->tag            = view->tag;
+  fd_memcpy( key->pubkey, view_payload+view->pubkey_off, 32UL );
+
+  switch( key->tag ) {
+    case FD_CRDS_TAG_VOTE:
+      key->vote_index            = view->vote->index;
+      break;
+    case FD_CRDS_TAG_EPOCH_SLOTS:
+      key->epoch_slots_index     = view->epoch_slots->index;
+      break;
+    case FD_CRDS_TAG_DUPLICATE_SHRED:
+      key->duplicate_shred_index = view->duplicate_shred->index;
+      break;
+    default:
+      break; /* no additional key fields */
+  }
+
+  out_value->wallclock_nanos = view->wallclock_nanos;
+
+  out_value->contact_info.instance_creation_wallclock_nanos = view->contact_info->instance_creation_wallclock_nanos;
+  fd_memcpy( out_value->node_instance.token, view_payload + view->node_instance->token_off, 32UL );
+
+  fd_sha256_init(   sha2 );
+  fd_sha256_append( sha2, view_payload + view->value_off, view->length );
+  fd_sha256_fini(   sha2, out_value->value_hash );
+
+  /* assign to first 8 bytes of value_hash to hash.hash */
+  out_value->hash.hash = fd_ulong_load_8( out_value->value_hash );
+}
+
+void
+fd_crds_populate_insert( fd_gossip_view_crds_value_t const * view,
+                         uchar const *                       view_payload,
+                         long                                now,
+                         uchar                               has_upsert_info,
+                         fd_crds_entry_t *                   out_value ){
+  if( FD_UNLIKELY( !has_upsert_info ) ){
+    fd_crds_populate_upsert( view, view_payload, out_value );
+  }
+  out_value->num_duplicates = 0UL;
+  out_value->expire.wallclock_nanos = now;
+
+  out_value->data_sz = view->length;
+  fd_memcpy( out_value->data, view_payload+view->value_off, view->length );
+}
+
 static inline int
 overrides( fd_crds_entry_t const * value,
            fd_crds_entry_t const * candidate ) {
@@ -482,18 +535,18 @@ overrides( fd_crds_entry_t const * value,
       else if( FD_UNLIKELY( cand_wc<val_wc ) ) return 0;
       break;
     case FD_CRDS_TAG_NODE_INSTANCE:
-      if( FD_LIKELY( !memcmp( candidate->data + candidate->node_instance.token_offset, value->data + value->node_instance.token_offset, 32UL ) ) ) break;
-      else if( FD_LIKELY( memcmp( candidate->data + candidate->node_instance.from_offset, value->data + value->node_instance.from_offset, 32UL ) ) ) break;
+      if( FD_LIKELY( !memcmp( candidate->node_instance.token, value->node_instance.token, 32UL ) ) ) break;
+      else if( FD_LIKELY( memcmp( candidate->key->pubkey, value->key->pubkey, 32UL ) ) ) break;
       else if( FD_UNLIKELY( cand_wc>val_wc ) ) return 1;
       else if( FD_UNLIKELY( cand_wc<val_wc ) ) return 0;
-      else return memcmp(candidate->data + candidate->node_instance.token_offset, value->data + value->node_instance.token_offset, 32UL) < 0;
+      else return memcmp( candidate->node_instance.token, value->node_instance.token, 32UL ) < 0;
     default:
       break;
   }
 
   if( FD_UNLIKELY( cand_wc>val_wc ) ) return 1;
   else if( FD_UNLIKELY( cand_wc<val_wc ) ) return 0;
-  else return !!(candidate->hash.hash<value->hash.hash);
+  else return !!(fd_crds_value_hash( candidate )<fd_crds_value_hash( value ));
 }
 
 int
@@ -524,7 +577,7 @@ fd_crds_insert( fd_crds_t *       crds,
   if( FD_LIKELY( replace ) ) {
     if( FD_UNLIKELY( !overrides( replace, value ) ) ) {
       if( FD_UNLIKELY( replace->hash.hash!=value->hash.hash ) ) {
-        insert_purged( crds, fd_crds_value_hash( replace->data ), replace->wallclock_nanos );
+        insert_purged( crds, fd_crds_value_hash( value ), replace->wallclock_nanos );
         return -1;
       }
 
@@ -537,7 +590,7 @@ fd_crds_insert( fd_crds_t *       crds,
     }
     replace->num_duplicates = 0;
 
-    insert_purged( crds, fd_crds_value_hash( replace->data ), replace->wallclock_nanos );
+    insert_purged( crds, fd_crds_value_hash( replace ), replace->wallclock_nanos );
 
     evict_treap_ele_remove( crds->evict_treap, replace, crds->pool );
     if( FD_LIKELY( replace->evict.stake ) ) {
@@ -579,11 +632,11 @@ fd_crds_mask_iter_init( fd_crds_t const * crds,
                         uint              mask_bits,
                         void *            iter_mem ) {
   fd_crds_mask_iter_t * it = (fd_crds_mask_iter_t *)iter_mem;
-  ulong start_hash         = (mask << (64UL - mask_bits));
+  ulong start_hash         = (mask<<(64UL-mask_bits));
   it->idx                  = hash_treap_idx_ge( crds->hash_treap, start_hash, crds->pool );
 
-  ulong end_hash           = (mask << (64UL - mask_bits)) |
-                             ((1UL << (64UL - mask_bits)) - 1UL);
+  ulong end_hash           = (mask<<(64UL-mask_bits)) |
+                             ((1UL<<(64UL-mask_bits))-1UL);
   it->end_hash             = end_hash;
   return it;
 }

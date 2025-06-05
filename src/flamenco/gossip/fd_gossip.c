@@ -8,12 +8,23 @@
 #include "../../ballet/ed25519/fd_ed25519.h"
 #include "../../disco/keyguard/fd_keyguard.h"
 
+#define BLOOM_FILTER_MAX_BYTES          (512UL) /* TODO: Calculate for worst case contactinfo*/
+#define BLOOM_FALSE_POSITIVE_RATE       (  0.1)
+#define BLOOM_NUM_KEYS                  (  8.0)
+
+struct failed_insert{
+  uchar hash[32UL];
+  long  wallclock_nanos; /* time when we last tried to insert */
+};
+
+typedef struct failed_insert failed_insert_t;
+
 struct fd_gossip_private {
   uchar               identity_pubkey[ 32UL ];
 
   fd_gossip_metrics_t metrics[1];
 
-  // fd_crds_t *         crds;
+  fd_crds_t *         crds;
   // fd_active_set_t *   active_set;
   fd_ping_tracker_t * ping_tracker;
 
@@ -23,6 +34,16 @@ struct fd_gossip_private {
 
   fd_ip4_port_t       entrypoints[ 16UL ];
   ulong               entrypoints_cnt;
+
+  fd_rng_t *          rng;
+  fd_bloom_t *        bloom;
+
+  struct {
+    failed_insert_t * entries;
+    ulong             cursor; /* index into next entry to write to */
+    ulong             cnt;
+    ulong             max;
+  } failed_inserts;
 
   /* Callbacks */
   fd_gossip_sign_fn   sign_fn;
@@ -39,13 +60,14 @@ fd_gossip_align( void ) {
 
 ulong
 fd_gossip_footprint( ulong max_values ) {
-  (void) max_values;
   ulong l;
   l = FD_LAYOUT_INIT;
   l = FD_LAYOUT_APPEND( l, alignof(fd_gossip_t), sizeof(fd_gossip_t) );
-  // l = FD_LAYOUT_APPEND( l, fd_crds_align(), fd_crds_footprint( max_values ) );
+  l = FD_LAYOUT_APPEND( l, fd_crds_align(), fd_crds_footprint( max_values, max_values*4 /* FIXME: figure out better numbers */ ) );
+  l = FD_LAYOUT_APPEND( l, alignof(uchar),  max_values/4*sizeof(failed_insert_t) ); /* failed inserts FIXME: figure out better numbers */
   // l = FD_LAYOUT_APPEND( l, fd_active_set_align(), fd_active_set_footprint() );
   l = FD_LAYOUT_APPEND( l, fd_ping_tracker_align(), fd_ping_tracker_footprint() );
+  l = FD_LAYOUT_APPEND( l, fd_bloom_align(), fd_bloom_footprint( BLOOM_FALSE_POSITIVE_RATE, BLOOM_FILTER_MAX_BYTES ) );
   l = FD_LAYOUT_FINI( l, fd_gossip_align() );
   return l;
 }
@@ -53,7 +75,7 @@ fd_gossip_footprint( ulong max_values ) {
 void *
 fd_gossip_new( void *                shmem,
                fd_rng_t *            rng,
-               ulong                 max_values FD_PARAM_UNUSED,
+               ulong                 max_values,
                int                   has_expected_shred_version,
                ushort                expected_shred_version,
                ulong                 entrypoints_cnt,
@@ -79,15 +101,28 @@ fd_gossip_new( void *                shmem,
   }
 
   FD_SCRATCH_ALLOC_INIT( l, shmem );
-  fd_gossip_t * gossip = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_gossip_t), sizeof(fd_gossip_t) );
-  void * ping_tracker  = FD_SCRATCH_ALLOC_APPEND( l, fd_ping_tracker_align(), fd_ping_tracker_footprint() );
+  fd_gossip_t * gossip  = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_gossip_t), sizeof(fd_gossip_t) );
+  void * crds           = FD_SCRATCH_ALLOC_APPEND( l, fd_crds_align(), fd_crds_footprint( max_values, max_values*4 ) );
+  void * failed_inserts = FD_SCRATCH_ALLOC_APPEND( l, alignof(uchar), max_values/4*sizeof(failed_insert_t) ); /* FIXME: figure out better numbers */
+  void * ping_tracker   = FD_SCRATCH_ALLOC_APPEND( l, fd_ping_tracker_align(), fd_ping_tracker_footprint() );
+  void * bloom          = FD_SCRATCH_ALLOC_APPEND( l, fd_bloom_align(), fd_bloom_footprint( BLOOM_FALSE_POSITIVE_RATE, BLOOM_FILTER_MAX_BYTES ) );
 
   gossip->entrypoints_cnt = entrypoints_cnt;
   fd_memcpy( gossip->entrypoints, entrypoints, entrypoints_cnt*sizeof(fd_ip4_port_t) );
 
+  fd_crds_new( crds, rng, max_values, max_values*4 );
   fd_ping_tracker_new( ping_tracker, rng );
+  fd_bloom_new( bloom, rng, BLOOM_FALSE_POSITIVE_RATE, BLOOM_FILTER_MAX_BYTES );
+
+
+  gossip->failed_inserts.entries = (failed_insert_t *)failed_inserts;
+  gossip->failed_inserts.cursor  = 0UL;
+  gossip->failed_inserts.cnt     = 0UL;
+  gossip->failed_inserts.max     = max_values/4;
 
   fd_sha512_init( gossip->sha512 );
+  gossip->rng = rng;
+
   gossip->send_fn          = send_fn;
   gossip->send_ctx         = send_ctx;
   gossip->sign_fn          = sign_fn;
@@ -112,9 +147,10 @@ fd_gossip_join( void * shgossip ) {
   FD_SCRATCH_ALLOC_INIT( l, shgossip );
   fd_gossip_t * gossip = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_gossip_t), sizeof(fd_gossip_t) );
   void * ping_tracker  = FD_SCRATCH_ALLOC_APPEND( l, fd_ping_tracker_align(), fd_ping_tracker_footprint() );
+  void * bloom         = FD_SCRATCH_ALLOC_APPEND( l, fd_bloom_align(), fd_bloom_footprint( BLOOM_FALSE_POSITIVE_RATE, BLOOM_FILTER_MAX_BYTES ) );
 
   gossip->ping_tracker = fd_ping_tracker_join( ping_tracker );
-  /* No need to join fd_sha512? */
+  gossip->bloom        = fd_bloom_join( bloom );
 
   return gossip;
 }
@@ -126,6 +162,12 @@ is_entrypoint( fd_gossip_t const *   gossip,
     if( FD_UNLIKELY( peer_addr->l==gossip->entrypoints[i].l ) ) return 1;
   }
   return 0;
+}
+
+static fd_ip4_port_t
+random_entrypoint( fd_gossip_t const * gossip ) {
+  ulong idx = fd_rng_ulong_roll( gossip->rng, gossip->entrypoints_cnt );
+  return gossip->entrypoints[ idx ];
 }
 
 struct __attribute__((__packed__)) prune_sign_data_pre {
@@ -154,7 +196,6 @@ verify_prune( fd_gossip_view_prune_t const * view,
   fd_memcpy( pre->origin, payload+view->origin_off, 32UL );
   pre->prunes_len = view->prunes_len;
 
-  /* Skip verifying size bounds since gossip_message_parse takes care of that. */
   ulong prunes_arr_sz = view->prunes_len*32UL;
   fd_memcpy( sign_data+sizeof(prune_sign_data_pre_t), payload+view->prunes_off, prunes_arr_sz );
 
@@ -246,6 +287,37 @@ verify_signatures( fd_gossip_view_t const * view,
   };
 }
 
+static ulong
+failed_inserts_start_idx( fd_gossip_t const * gossip ) {
+  return (gossip->failed_inserts.cursor-gossip->failed_inserts.cnt+gossip->failed_inserts.max)%gossip->failed_inserts.max;
+}
+
+static void
+failed_inserts_append( fd_gossip_t * gossip,
+                       uchar const * hash,
+                       long          now ) {
+  failed_insert_t * failed_insert = &gossip->failed_inserts.entries[ gossip->failed_inserts.cursor ];
+  failed_insert->wallclock_nanos  = now;
+  fd_memcpy( failed_insert->hash, hash, 32UL );
+
+  gossip->failed_inserts.cursor = (gossip->failed_inserts.cursor+1UL)%gossip->failed_inserts.max;
+  gossip->failed_inserts.cnt    = fd_ulong_min( gossip->failed_inserts.cnt+1UL, gossip->failed_inserts.max );
+}
+
+static void
+failed_inserts_purge( fd_gossip_t * gossip,
+                      long          now ) {
+  long cutoff_nanos = now-20L*1000L*1000L*1000L;
+  ulong idx = failed_inserts_start_idx( gossip );
+  while( gossip->failed_inserts.cnt ) {
+    long ts = gossip->failed_inserts.entries[ idx ].wallclock_nanos;
+    if( FD_UNLIKELY( ts>=cutoff_nanos ) ) break;
+
+    idx = (idx+1UL)%gossip->failed_inserts.max;
+    gossip->failed_inserts.cnt--;
+  }
+}
+
 // static int
 // rx_pull_request( fd_gossip_t *                    gossip,
 //                  fd_gossip_pull_request_t const * pull_request,
@@ -293,65 +365,97 @@ verify_signatures( fd_gossip_view_t const * view,
 //   return 0;
 // }
 
-// static int
-// rx_pull_response( fd_gossip_t *                     gossip,
-//                   fd_gossip_pull_response_t const * pull_response,
-//                   long                              now ) {
-//   /* TODO: use epoch_duration and make timeouts ... ? */
+static int
+rx_pull_response( fd_gossip_t *                          gossip,
+                  fd_gossip_view_pull_response_t const * pull_response,
+                  uchar const *                          payload,
+                  long                                   now ) {
+  /* TODO: use epoch_duration and make timeouts ... ? */
 
-//   for( ulong i=0UL; i<pull_response->values_len; i++ ) {
-//     int upserts = fd_crds_upserts( gossip->crds, pull_response->values[ i ] );
+  for( ulong i=0UL; i<pull_response->crds_values_len; i++ ) {
+    fd_crds_entry_t * candidate =  fd_crds_acquire( gossip->crds );
 
-//     if( FD_UNLIKELY( !upserts ) ) {
-//       failed_inserts_append( gossip, pull_response->values[ i ] );
-//       continue;
-//     }
+    /* Fill up with information needed for upsert */
+    fd_crds_populate_upsert( &pull_response->crds_values[i],
+                             payload,
+                             candidate );
 
-//     /* TODO: Is this jittered in Agave? */
-//     long accept_after_nanos;
-//     if( FD_UNLIKELY( !memcmp( pull_response->sender_pubkey, gossip->identity_pubkey, 32UL ) ) ) {
-//       accept_after_nanos = 0L;
-//     } else if( stake( pull_response->sender_pubkey ) ) {
-//       accept_after_nanos = now-15L*1000L*1000L*1000L;
-//     } else {
-//       accept_after_nanos = now-432000L*1000L*1000L*1000L;
-//     }
+    int upserts = fd_crds_upserts( gossip->crds, candidate );
 
-//     if( FD_LIKELY( accept_after_nanos<=fd_crds_value_wallclock( pull_response->values[ i ] ) ) ) {
-//       fd_crds_insert( gossip->crds, pull_response->values[ i ], now );
-//       fd_crds_update_record_timestamp( pull_response->sender_pubkey, now );
-//     } else if( fd_crds_has_contact_info( pull_response->sender_pubkey ) ) {
-//       fd_crds_insert( gossip->crds, pull_response->values[ i ], now );
-//     } else {
-//       failed_inserts_append( gossip, pull_response->values[ i ] );
-//     }
-//   }
+    if( FD_UNLIKELY( !upserts ) ) {
+      failed_inserts_append( gossip, fd_crds_value_hash( candidate ), now );
+      fd_crds_release( gossip->crds, candidate );
+      continue;
+    }
 
-//   return 0;
-// }
+    /* TODO: Is this jittered in Agave? */
+    long accept_after_nanos;
+    if( FD_UNLIKELY( !memcmp( payload+pull_response->from_off, gossip->identity_pubkey, 32UL ) ) ) {
+      accept_after_nanos = 0L;
+    // } else if( !stake( payload+pull_response->from_off ) ) {
+    //   accept_after_nanos = now-15L*1000L*1000L*1000L;
+    } else {
+      accept_after_nanos = now-432000L*1000L*1000L*1000L;
+    }
+    int error = 0;
 
-// static int
-// rx_push( fd_gossip_t *            gossip,
-//          fd_gossip_push_t const * push,
-//          long                     now ) {
-//   uchar const * relayer_pubkey = push->sender_pubkey;
+    if( FD_LIKELY( accept_after_nanos<=pull_response->crds_values[ i ].wallclock_nanos ) ||
+                   fd_crds_has_contact_info( pull_response->sender_pubkey ) ) {
+      fd_crds_populate_insert( &pull_response->crds_values[i],
+                               payload,
+                               now,
+                               1, /* has_upsert_info */
+                               candidate );
+      error = fd_crds_insert( gossip->crds, candidate, 0 /* from_push_msg */ );
+    } else {
+      failed_inserts_append( gossip, fd_crds_value_hash( candidate ), now );
+      error = 1;
+    }
+    if( FD_UNLIKELY( !!error ) )
+      fd_crds_release( gossip->crds, candidate );
+  }
 
-//   for( ulong i=0UL; i<push->values_len; i++ ) {
-//     fd_gossip_crds_value_t * value = push->values[ i ];
-//     if( FD_UNLIKELY( value->timestamp<now-30L*1000L*1000L*1000L || value->timestamp>now+30L*1000L*1000L*1000L ) ) continue;
+  return 0;
+}
 
-//     uchar const * origin_pubkey = fd_crds_value_pubkey( value );
+static int
+rx_push( fd_gossip_t *                 gossip,
+         fd_gossip_view_push_t const * push,
+         uchar const *                 payload,
+         long                     now ) {
+  uchar const * relayer_pubkey = payload+push->from_off;
 
-//     int error = fd_crds_insert( gossip->crds, value, now );
-//     ulong num_duplicates = 0UL;
-//     if( FD_UNLIKELY( error>0 ) )      num_duplicates = (ulong)error;
-//     else if( FD_UNLIKELY( error<0 ) ) num_duplicates = ULONG_MAX;
+  for( ulong i=0UL; i<push->crds_values_len; i++ ) {
+    fd_gossip_view_crds_value_t const * value = &push->crds_values[ i ];
+    /* TODO: pretty sure this is 15s now. */
+    if( FD_UNLIKELY( value->wallclock_nanos<now-30L*1000L*1000L*1000L || value->wallclock_nanos>now+30L*1000L*1000L*1000L ) ) continue;
 
-//     fd_prune_finder_record( gossip->prune_finder, origin_pubkey, relayer_pubkey, num_duplicates );
-//   }
+    fd_crds_entry_t * candidate = fd_crds_acquire( gossip->crds );
+    /* Separate upsert check prior to insertion to save us a memcpy if not upserting.
 
-//   return 0;
-// }
+       FIXME: We still need to call crds_insert so that the purge table is correctly updated,
+       but we don't need to perform the full memcpy since the insert call terminates prior
+       to any insertion in this case. This is pretty confusing, will need to clean up. */
+    fd_crds_populate_upsert( value, payload, candidate );
+
+    if( FD_UNLIKELY( fd_crds_upserts( gossip->crds, candidate ) ) ) {
+      fd_crds_populate_insert( value, payload, now, 1 /* has_upsert_info */, candidate );
+    }
+
+    int error            = fd_crds_insert( gossip->crds, candidate, 1 /* from_push_msg */ );
+    ulong num_duplicates = 0UL;
+    if( FD_UNLIKELY( !!error ) ){
+      fd_crds_release( gossip->crds, candidate );
+      if( FD_UNLIKELY( error>0 ) )      num_duplicates = (ulong)error;
+      else if( FD_UNLIKELY( error<0 ) ) num_duplicates = ULONG_MAX;
+    }
+
+
+    fd_prune_finder_record( gossip->prune_finder, payload+value->pubkey_off, relayer_pubkey, num_duplicates );
+  }
+
+  return 0;
+}
 
 // static int
 // rx_prune( fd_gossip_t *             gossip,
@@ -514,19 +618,6 @@ fd_gossip_rx( fd_gossip_t * gossip,
   return error;
 }
 
-// static void
-// purge_failed_inserts( fd_gossip_t * gossip,
-//                       long          now ) {
-//   long cutoff_nanos = now-20L*1000L*1000L*1000L;
-//   while( gossip->failed_inserts_len ) {
-//     ulong ts = gossip->failed_inserts[ gossip->failed_inserts_idx ]->timestamp;
-//     if( FD_UNLIKELY( ts>=cutoff_nanos ) ) break;
-
-//     gossip->failed_inserts_idx++;
-//     gossip->failed_inserts_len--;
-//   }
-// }
-
 struct __attribute__((__packed__)) fd_gossip_ping_tx {
   uchar tag; /* FD_GOSSIP_MESSAGE_PING */
   uchar _pad[ 3UL ];
@@ -638,26 +729,56 @@ tx_ping( fd_gossip_t * gossip,
   // gossip->crds_cursor = fd_crds_cursor( gossip->crds );
 // }
 
+struct __attribute__((__packed__)) fd_gossip_pull_request_tx_1 {
+  uchar tag; /* FD_GOSSIP_MESSAGE_PULL_REQUEST */
+  uchar _pad[ 3UL ];
+
+  ulong bloom_keys_len;
+  ulong bloom_keys[ ];
+};
+
+struct __attribute__((__packed__)) fd_gossip_pull_request_tx_2 {
+  uchar has_bits;
+  ulong bloom_bits_len;
+  ulong bloom_bits[ ];
+};
+
+struct __attribute__((__packed__)) fd_gossip_pull_request_tx_3 {
+  ulong bloom_len;
+  ulong bloom_num_bits_set;
+  ulong mask;
+  ulong mask_bits;
+
+  uchar contact_info[ ];
+};
+
+typedef struct fd_gossip_pull_request_tx_1 fd_gossip_pull_request_tx_1_t;
+typedef struct fd_gossip_pull_request_tx_2 fd_gossip_pull_request_tx_2_t;
+typedef struct fd_gossip_pull_request_tx_3 fd_gossip_pull_request_tx_3_t;
+
+
+
 static void
 tx_pull_request( fd_gossip_t * gossip,
                  long          now ) {
-  static const ulong MAX_FILTER_BYTES = 512UL; /* TODO: TODO: Calculate this for worst case ContactInfo */
+  ulong total_crds_vals = fd_crds_len( gossip->crds ) + fd_crds_purged_len( gossip->crds ) + gossip->failed_inserts.cnt;
+  ulong num_items       = fd_ulong_max( 512UL, total_crds_vals );
 
-  ulong num_items = fd_ulong_max( 512UL, fd_crds_len( gossip->crds ) + fd_crds_purged_len( gossip->crds ) + gossip->failed_inserts_len );
-  double max_bits = (double)(MAX_FILTER_BYTES * 8UL);
-  double max_items = ceil(max_bits / (-8.0 / log( 1.0 - exp( log( 0.1 ) / 8.0 ) )));
-  double _mask_bits = ceil( log2( (double)num_items / max_items ) );
-  ulong mask_bits = _mask_bits >= 0.0 ? (ulong)_mask_bits : 0UL;
+  double max_bits       = (double)(BLOOM_FILTER_MAX_BYTES*8UL);
+  double max_items      = ceil(max_bits / ( -BLOOM_NUM_KEYS / log( 1.0 - exp( log( BLOOM_FALSE_POSITIVE_RATE ) / BLOOM_NUM_KEYS) )));
+  double _mask_bits     = ceil( log2( (double)num_items / max_items ) );
+  uint mask_bits        = _mask_bits >= 0.0 ? (uint)_mask_bits : 0UL;
+  ulong mask            = fd_rng_ulong( gossip->rng ) & ((1UL<<mask_bits)-1UL);
 
-  ulong mask = fd_rng_ulong( gossip->rng ) & ((1UL<<mask_bits)-1UL);
+  fd_bloom_t * filter   = gossip->bloom;
+  fd_bloom_initialize( filter, (ulong)max_items+1 ); /* TODO: check cast */
 
-  fd_bloom_t * filter = ??; /* TODO: allocated in gossip_t */
-  fd_bloom_initialize( filter, max_items );
+  uchar iter_mem[ CRDS_MASK_ITER_SIZE ];
 
-  for( fd_crds_iter_t it = fd_crds_mask_iter_init( gossip->crds, mask, mask_bits );
-       !fd_crds_mask_iter_done( it );
-       it = fd_crds_mask_iter_next( it ) ) {
-    fd_bloom_insert( filter, fd_crds_value_hash( fd_crds_mask_iter_value( it ) ), 32UL );
+  for( fd_crds_mask_iter_t * it = fd_crds_mask_iter_init( gossip->crds, mask, mask_bits, iter_mem );
+       !fd_crds_mask_iter_done( it, gossip->crds );
+       it = fd_crds_mask_iter_next( it, gossip->crds ) ) {
+    fd_bloom_insert( filter, fd_crds_value_hash( fd_crds_mask_iter_value( it, gossip->crds ) ), 32UL );
   }
 
   ulong shift = 64UL-mask_bits;
@@ -668,17 +789,50 @@ tx_pull_request( fd_gossip_t * gossip,
     fd_bloom_insert( filter, hash, 32UL );
   }
 
-  for( ulong i=0UL; i<gossip->failed_inserts_len; i++ ) {
+  ulong fi_idx = failed_inserts_start_idx( gossip );
+  for( ulong i=0UL; i<gossip->failed_inserts.cnt; i++ ) {
     /* TODO: Make the failed insert list also a bplus, for fast finding of matching hashes? */
-    fd_crds_value_t * value = gossip->failed_inserts[ (gossip->failed_inserts_idx+i) % gossip->failed_inserts_len ];
-    uchar const * hash = fd_crds_value_hash( value );
+    uchar const * hash = gossip->failed_inserts.entries[ fi_idx ].hash;
     if( FD_LIKELY( (fd_ulong_load_8( hash )>>shift)!=mask ) ) continue;
     fd_bloom_insert( filter, hash, 32UL );
+    fi_idx = (fi_idx+1UL)%gossip->failed_inserts.max;
   }
 
   fd_ip4_port_t peer = fd_crds_sample_peer( gossip->crds );
+  if( FD_UNLIKELY( !peer.l )) {
+    /* Choose random entrypoint */
+    peer = random_entrypoint( gossip );
+  }
 
   /* TODO: Send the pull request to the peer */
+  uchar payload[ 1232UL ];
+
+  fd_gossip_pull_request_tx_1_t * prq1 = (fd_gossip_pull_request_tx_1_t *)payload;
+  prq1->tag                            = FD_GOSSIP_MESSAGE_PULL_REQUEST;
+  prq1->bloom_keys_len                 = filter->keys_len;
+  fd_memcpy( prq1->bloom_keys, filter->keys, filter->keys_len * sizeof(ulong) );
+  ulong prq1_sz = sizeof(fd_gossip_pull_request_tx_1_t) + prq1->bloom_keys_len * sizeof(ulong);
+
+  fd_gossip_pull_request_tx_2_t * prq2 = (fd_gossip_pull_request_tx_2_t *)(payload + prq1_sz);
+
+  prq2->has_bits       = 1;
+  prq2->bloom_bits_len = (filter->bits_len+7UL)/8UL;
+  fd_memcpy( prq2->bloom_bits, filter->bits, prq2->bloom_bits_len*8UL );
+  ulong prq2_sz = sizeof(fd_gossip_pull_request_tx_2_t) + prq2->bloom_bits_len * 8UL;
+
+  fd_gossip_pull_request_tx_3_t * prq3 = (fd_gossip_pull_request_tx_3_t *)(payload + prq1_sz + prq2_sz);
+  prq3->bloom_len = filter->bits_len;
+  for( ulong i=0UL; i<prq2->bloom_bits_len; i++ ) {
+    prq3->bloom_num_bits_set += (uint)fd_ulong_popcnt( filter->bits[i] );
+  }
+  prq3->mask      = mask;
+  prq3->mask_bits = mask_bits;
+
+  ulong payload_sz = prq1_sz + prq2_sz + sizeof(fd_gossip_pull_request_tx_3_t);
+  ulong rem_sz = 1232UL - payload_sz;
+
+  /* TODO: contactinfo */
+
 }
 
 static inline long
