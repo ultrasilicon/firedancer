@@ -8,7 +8,7 @@ extern "C" {
 #include "geys_history.h"
 }
 
-class GeyserServiceImpl final : public geyser::Geyser::Service {
+class GeyserServiceImpl final : public geyser::Geyser::CallbackService{
     geys_fd_ctx_t * _loop_ctx;
     geys_history_t * _hist_ctx;
 
@@ -17,19 +17,27 @@ class GeyserServiceImpl final : public geyser::Geyser::Service {
 
     virtual ~GeyserServiceImpl() override;
 
-    virtual ::grpc::Status Subscribe(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::geyser::SubscribeUpdate, ::geyser::SubscribeRequest>* stream) override;
+    virtual ::grpc::ServerBidiReactor< ::geyser::SubscribeRequest, ::geyser::SubscribeUpdate>* Subscribe(
+      ::grpc::CallbackServerContext* /*context*/) override;
 
-    virtual ::grpc::Status SubscribeReplayInfo(::grpc::ServerContext* context, const ::geyser::SubscribeReplayInfoRequest* request, ::geyser::SubscribeReplayInfoResponse* response) override;
+    virtual ::grpc::ServerUnaryReactor* SubscribeReplayInfo(
+      ::grpc::CallbackServerContext* /*context*/, const ::geyser::SubscribeReplayInfoRequest* /*request*/, ::geyser::SubscribeReplayInfoResponse* /*response*/) override;
 
-    virtual ::grpc::Status Ping(::grpc::ServerContext* context, const ::geyser::PingRequest* request, ::geyser::PongResponse* response) override;
+    virtual ::grpc::ServerUnaryReactor* Ping(
+      ::grpc::CallbackServerContext* /*context*/, const ::geyser::PingRequest* /*request*/, ::geyser::PongResponse* /*response*/) override;
 
-    virtual ::grpc::Status GetLatestBlockhash(::grpc::ServerContext* context, const ::geyser::GetLatestBlockhashRequest* request, ::geyser::GetLatestBlockhashResponse* response) override;
+    virtual ::grpc::ServerUnaryReactor* GetLatestBlockhash(
+      ::grpc::CallbackServerContext* /*context*/, const ::geyser::GetLatestBlockhashRequest* /*request*/, ::geyser::GetLatestBlockhashResponse* /*response*/) override;
 
-    virtual ::grpc::Status GetBlockHeight(::grpc::ServerContext* context, const ::geyser::GetBlockHeightRequest* request, ::geyser::GetBlockHeightResponse* response) override;
+    virtual ::grpc::ServerUnaryReactor* GetBlockHeight(
+      ::grpc::CallbackServerContext* /*context*/, const ::geyser::GetBlockHeightRequest* /*request*/, ::geyser::GetBlockHeightResponse* /*response*/) override;
 
-    virtual ::grpc::Status GetSlot(::grpc::ServerContext* context, const ::geyser::GetSlotRequest* request, ::geyser::GetSlotResponse* response) override;
+    virtual ::grpc::ServerUnaryReactor* GetSlot(
+      ::grpc::CallbackServerContext* /*context*/, const ::geyser::GetSlotRequest* /*request*/, ::geyser::GetSlotResponse* /*response*/) override;
 
-    virtual ::grpc::Status IsBlockhashValid(::grpc::ServerContext* context, const ::geyser::IsBlockhashValidRequest* request, ::geyser::IsBlockhashValidResponse* response) override;
+    virtual ::grpc::ServerUnaryReactor* IsBlockhashValid(
+      ::grpc::CallbackServerContext* /*context*/, const ::geyser::IsBlockhashValidRequest* /*request*/, ::geyser::IsBlockhashValidResponse* /*response*/) override;
 
-    virtual ::grpc::Status GetVersion(::grpc::ServerContext* context, const ::geyser::GetVersionRequest* request, ::geyser::GetVersionResponse* response) override;
+    virtual ::grpc::ServerUnaryReactor* GetVersion(
+      ::grpc::CallbackServerContext* /*context*/, const ::geyser::GetVersionRequest* /*request*/, ::geyser::GetVersionResponse* /*response*/) override;
 };
