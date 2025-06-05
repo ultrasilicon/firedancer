@@ -49,35 +49,7 @@ fd_gossip_view_pubkey_offset( fd_gossip_view_t const * view ) {
     case FD_GOSSIP_MESSAGE_PONG:
       return view->pong->from_off;
   }
-  return 0UL;
-}
-
-int
-fd_gossip_view_signable_data_offsets( fd_gossip_view_t const * view,
-                                       uchar const *           payload,
-                                       ulong                   out_signature_offsets[static 16],
-                                       ulong                   out_signable_data_offsets[static 16],
-                                       ulong                   out_signable_data_lengths[static 16],
-                                       ulong *                 out_signable_data_count ) {
-  (void)payload;
-  switch( view->tag ){
-    case FD_GOSSIP_MESSAGE_PULL_REQUEST:
-    case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
-    case FD_GOSSIP_MESSAGE_PUSH:
-    case FD_GOSSIP_MESSAGE_PING:
-      out_signature_offsets[ 0 ]     = view->ping->signature_off;
-      out_signable_data_offsets[ 0 ] = view->ping->token_off;
-      out_signable_data_lengths[ 0 ] = 32UL; /* https://github.com/anza-xyz/agave/blob/540d5bc56cd44e3cc61b179bd52e9a782a2c99e4/gossip/src/protocol.rs#L44 */
-      *out_signable_data_count       = 1UL;
-      break;
-    case FD_GOSSIP_MESSAGE_PONG:
-      out_signature_offsets[ 0 ]     = view->pong->signature_off;
-      out_signable_data_offsets[ 0 ] = view->pong->hash_off;
-      out_signable_data_lengths[ 0 ] = 32UL; /* https://github.com/anza-xyz/agave/blob/540d5bc56cd44e3cc61b179bd52e9a782a2c99e4/gossip/src/protocol.rs#L44 */
-      *out_signable_data_count       = 1UL;
-      break;
-    }
-  return 0;
+  return ULONG_MAX;
 }
 
 static ulong
