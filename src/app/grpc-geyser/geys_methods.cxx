@@ -13,9 +13,26 @@ GeyserServiceImpl::GeyserServiceImpl(geys_fd_ctx_t * loop_ctx)
 GeyserServiceImpl::~GeyserServiceImpl() {
 }
 
-::grpc::ServerBidiReactor< ::geyser::SubscribeRequest, ::geyser::SubscribeUpdate>*
+::grpc::ServerBidiReactor<::geyser::SubscribeRequest, ::geyser::SubscribeUpdate>*
 GeyserServiceImpl::Subscribe(::grpc::CallbackServerContext* context) {
-  return NULL;
+  class Reactor : public grpc::ServerBidiReactor<::geyser::SubscribeRequest, ::geyser::SubscribeUpdate> {
+    public:
+      Reactor(GeyserServiceImpl * serv) : serv_(serv) {
+        StartRead(&request_);
+      }
+      void OnReadDone(bool ok) override {
+        if (ok) {
+        } else {
+          Finish(::grpc::Status::OK);
+        }
+      }
+      void OnDone() override {
+        delete this;
+      }
+      GeyserServiceImpl * serv_;
+      ::geyser::SubscribeRequest request_;
+  };
+  return new Reactor(this);
 }
 
 ::grpc::ServerUnaryReactor*

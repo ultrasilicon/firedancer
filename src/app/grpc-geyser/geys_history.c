@@ -1,4 +1,4 @@
-#include "geys_history.h"
+#include "geys_fd_loop.h"
 #include "../../flamenco/runtime/fd_system_ids.h"
 #include "../../ballet/txn/fd_txn.h"
 #include "../../flamenco/runtime/fd_blockstore.h"
@@ -114,7 +114,7 @@ geys_history_create(geys_history_args_t * args) {
 }
 
 void
-geys_history_save(geys_history_t * hist, fd_blockstore_t * blockstore, fd_replay_notif_msg_t * info) {
+geys_history_save(geys_fd_ctx_t * fd, geys_history_t * hist, fd_blockstore_t * blockstore, fd_replay_notif_msg_t * info) {
   FD_SPAD_FRAME_BEGIN( hist->spad ) {
     if( geys_block_map_is_full( hist->block_map ) ) return; /* Out of space */
 
@@ -171,10 +171,15 @@ geys_history_save(geys_history_t * hist, fd_blockstore_t * blockstore, fd_replay
           }
           fd_txn_t * txn = (fd_txn_t *)txn_out;
 
+          // geys_fd_txn_callback( fd, txn );
+
           /* Loop across signatures */
           fd_ed25519_sig_t const * sigs = (fd_ed25519_sig_t const *)(raw + txn->signature_off);
           for ( uchar j = 0; j < txn->signature_cnt; j++ ) {
-            if( geys_txn_map_is_full( hist->txn_map ) ) break; /* Out of space */
+            // geys_fd_txn_sig_callback( fd, txn, (const uchar*)&sigs[j] );
+
+            if( geys_txn_map_is_full( hist->txn_map ) ) continue; /* Out of space */
+
             geys_txn_key_t key;
             memcpy(&key, (const uchar*)&sigs[j], sizeof(key));
             geys_txn_t * ent = geys_txn_map_insert( hist->txn_map, &key );
@@ -187,9 +192,14 @@ geys_history_save(geys_history_t * hist, fd_blockstore_t * blockstore, fd_replay
           geys_txn_key_t sig0;
           memcpy(&sig0, (const uchar*)sigs, sizeof(sig0));
           fd_pubkey_t * accs = (fd_pubkey_t *)((uchar *)raw + txn->acct_addr_off);
-          for( ulong i = 0UL; i < txn->acct_addr_cnt; i++ ) {
+          for( int i = 0UL; i < txn->acct_addr_cnt; i++ ) {
+            // bool writable = ((i < txn->signature_cnt - txn->readonly_signed_cnt) ||
+            //                 ((i >= txn->signature_cnt) && (i < txn->acct_addr_cnt - txn->readonly_unsigned_cnt)));
+            // if( writable ) geys_fd_txn_acct_callback( fd, txn, &accs[i] );
+
             if( !memcmp(&accs[i], fd_solana_vote_program_id.key, sizeof(fd_pubkey_t)) ) continue; /* Ignore votes */
-            if( !geys_acct_map_pool_free( hist->acct_pool ) ) break;
+            if( !geys_acct_map_pool_free( hist->acct_pool ) ) continue;
+
             geys_acct_map_elem_t * ele = geys_acct_map_pool_ele_acquire( hist->acct_pool );
             ele->key = accs[i];
             ele->slot = info->slot_exec.slot;

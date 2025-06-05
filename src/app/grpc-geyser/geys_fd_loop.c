@@ -91,22 +91,7 @@ replay_sham_link_after_frag(geys_fd_ctx_t * ctx, fd_replay_notif_msg_t * msg) {
   do {
     if( msg->type == FD_REPLAY_SLOT_TYPE ) {
       if( msg->slot_exec.shred_cnt == 0 ) break;
-
-      geys_history_save( ctx->hist, ctx->blockstore, msg );
-
-      /*
-        for( ulong j = 0; j < subs->sub_cnt; ++j ) {
-        struct fd_ws_subscription * sub = &subs->sub_list[ j ];
-        if( sub->meth_id == KEYW_WS_METHOD_SLOTSUBSCRIBE ) {
-        if( ws_method_slotSubscribe_update( ctx, msg, sub ) )
-        fd_web_ws_send( &subs->ws, sub->conn_id );
-        }
-        if( sub->meth_id == KEYW_WS_METHOD_ACCOUNTSUBSCRIBE ) {
-        if( ws_method_accountSubscribe_update( ctx, msg, sub ) )
-        fd_web_ws_send( &subs->ws, sub->conn_id );
-        }
-        }
-      */
+      geys_history_save( ctx, ctx->hist, ctx->blockstore, msg );
     }
   } while(0);
   fd_spad_pop( ctx->spad );

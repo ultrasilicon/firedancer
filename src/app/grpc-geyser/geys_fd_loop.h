@@ -11,7 +11,6 @@ struct geys_fd_loop_args {
 };
 
 typedef struct geys_fd_loop_args geys_fd_loop_args_t;
-
 typedef struct geys_fd_ctx geys_fd_ctx_t;
 
 geys_fd_ctx_t * geys_fd_init( geys_fd_loop_args_t * args );

@@ -7,6 +7,7 @@ typedef struct fd_blockstore fd_blockstore_t;
 typedef struct fd_replay_notif_msg fd_replay_notif_msg_t;
 typedef union fd_hash fd_hash_t;
 typedef union fd_hash fd_pubkey_t;
+typedef struct geys_fd_ctx geys_fd_ctx_t;
 
 struct geys_history_args {
   uint                 block_index_max;
@@ -29,7 +30,7 @@ typedef struct geys_txn_key geys_txn_key_t;
 
 geys_history_t * geys_history_create(geys_history_args_t * args);
 
-void geys_history_save(geys_history_t * hist, fd_blockstore_t * blockstore, fd_replay_notif_msg_t * msg);
+void geys_history_save(geys_fd_ctx_t * fd, geys_history_t * hist, fd_blockstore_t * blockstore, fd_replay_notif_msg_t * msg);
 
 ulong geys_history_first_slot(geys_history_t * hist);
 
