@@ -103,15 +103,17 @@ generate_replay_exec_slot_msg( fd_exec_slot_ctx_t * slot_ctx,
 }
 
 static inline void
-generate_hash_bank_msg( ulong task_infos_gaddr,
-                        ulong lt_hash_gaddr,
-                        ulong start_idx,
-                        ulong end_idx,
+generate_hash_bank_msg( ulong                               task_infos_gaddr,
+                        ulong                               lt_hash_gaddr,
+                        ulong                               start_idx,
+                        ulong                               end_idx,
+                        ulong                               curr_slot,
                         fd_runtime_public_hash_bank_msg_t * hash_msg_out ) {
   hash_msg_out->task_infos_gaddr = task_infos_gaddr;
   hash_msg_out->lthash_gaddr     = lt_hash_gaddr;
   hash_msg_out->start_idx        = start_idx;
   hash_msg_out->end_idx          = end_idx;
+  hash_msg_out->slot             = curr_slot;
 }
 
 static inline void

@@ -227,6 +227,7 @@ struct fd_runtime_public_hash_bank_msg {
   ulong lthash_gaddr;
   ulong start_idx;
   ulong end_idx;
+  ulong slot;
 };
 typedef struct fd_runtime_public_hash_bank_msg fd_runtime_public_hash_bank_msg_t;
 

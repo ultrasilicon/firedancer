@@ -601,7 +601,7 @@ block_finalize_tiles_cb( void * para_arg_1,
     fd_replay_out_link_t * exec_out = &ctx->exec_out[ worker_idx ];
 
     fd_runtime_public_hash_bank_msg_t * hash_msg = (fd_runtime_public_hash_bank_msg_t *)fd_chunk_to_laddr( exec_out->mem, exec_out->chunk );
-    generate_hash_bank_msg( task_infos_gaddr, lt_hash_gaddr, start_idx, end_idx, hash_msg );
+    generate_hash_bank_msg( task_infos_gaddr, lt_hash_gaddr, start_idx, end_idx, ctx->curr_slot, hash_msg );
 
     ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
     fd_stem_publish( stem,
