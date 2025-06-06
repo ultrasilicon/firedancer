@@ -171,23 +171,6 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
     FD_TEST(n);
   }
 
-  (void)manifest_global;
-
-  // fd_exec_epoch_ctx_t * epoch_ctx   = slot_ctx->epoch_ctx;
-  // fd_epoch_bank_t *     epoch_bank  = fd_exec_epoch_ctx_epoch_bank( epoch_ctx );
-
-  // for ( fd_vote_accounts_pair_t_mapnode_t * n = fd_vote_accounts_pair_t_map_minimum(
-  //         epoch_bank->stakes.vote_accounts.vote_accounts_pool,
-  //         epoch_bank->stakes.vote_accounts.vote_accounts_root );
-  //         n;
-  //         n = fd_vote_accounts_pair_t_map_successor( epoch_bank->stakes.vote_accounts.vote_accounts_pool, n ) ) {
-
-  //     const fd_pubkey_t null_pubkey = {{ 0 }};
-  //     if ( memcmp( &n->elem.key, &null_pubkey, FD_PUBKEY_FOOTPRINT ) == 0 ) {
-  //       continue;
-  //     }
-  // }
-
   fd_versioned_bank_t const * oldbank = &manifest->bank;
 
 
@@ -199,7 +182,6 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
   fd_bank_mgr_stakes_save( slot_ctx->bank_mgr );
 
   stakes = fd_bank_mgr_stakes_query( slot_ctx->bank_mgr );
-
 
   /* Index vote accounts */
 
