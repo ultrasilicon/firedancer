@@ -79,7 +79,12 @@ fd_bank_mgr_##name##_modify( fd_bank_mgr_t * bank_mgr ) {                       
   if( FD_UNLIKELY( !mod_rec ) ) {                                                                  \
     FD_LOG_CRIT(( "Failed to modify bank manager record" ));                                       \
   }                                                                                                \
-  return fd_funk_val( mod_rec, fd_funk_wksp( bank_mgr->funk ) );                                   \
+  void * val = fd_funk_val( mod_rec, fd_funk_wksp( bank_mgr->funk ) );                             \
+  if( FD_UNLIKELY( fd_ulong_align_up( (ulong)val, fd_bank_mgr_##name##_align ) != (ulong)val ) ) { \
+    FD_LOG_WARNING(( "Failed to align bank manager record" ));                                     \
+    return val;                                                                                    \
+  }                                                                                                \
+  return val;                                                                                      \
 }                                                                                                  \
 int                                                                                                \
 fd_bank_mgr_##name##_save( fd_bank_mgr_t * bank_mgr ) {                                            \

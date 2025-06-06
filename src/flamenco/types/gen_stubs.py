@@ -1715,8 +1715,10 @@ class MapMember(TypeNode):
             print(f'    size += fd_bincode_compact_u16_size( &{self.name}_len );', file=body)
         else:
             print('    size += sizeof(ulong);', file=body)
+        print(f'    ulong max = {mapname}_max( self->{self.name}_pool );', file=body)
+        print(f'    size += {mapname}_footprint( max );', file=body)
         print(f'    for( {nodename} * n = {mapname}_minimum( self->{self.name}_pool, self->{self.name}_root ); n; n = {mapname}_successor( self->{self.name}_pool, n ) ) {{', file=body);
-        print(f'      size += {namespace}_{self.element}_size( &n->elem );', file=body)
+        print(f'      size += {namespace}_{self.element}_size( &n->elem ) - sizeof({self.elem_type()});', file=body)
         print('    }', file=body)
         print('  } else {', file=body)
         if self.compact:

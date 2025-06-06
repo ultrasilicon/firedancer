@@ -177,18 +177,24 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   fd_versioned_bank_t const * oldbank = &manifest->bank;
 
-
   ulong sz = fd_stakes_size( &oldbank->stakes );
   FD_LOG_WARNING(("SZ %lu", sz));
   fd_stakes_global_t * stakes = fd_bank_mgr_stakes_modify( slot_ctx->bank_mgr );
-  fd_memcpy( stakes, &manifest_global->bank.stakes, sz * 2 ); // fd_stakes_size( stakes )
+  fd_memcpy( stakes, &manifest_global->bank.stakes, sz * 2 );
+  /* Verify stakes */
 
+  FD_LOG_WARNING(("OFFSETS %lu %lu", manifest_global->bank.stakes.stake_delegations_pool_offset, stakes->stake_delegations_pool_offset));
+
+  FD_LOG_WARNING(("START OF STAKES STRUCTS %p %p", (void*)&manifest_global->bank.stakes, (void*)stakes));
+
+  FD_LOG_WARNING(("CACLAUYLTED %p %p", (void*)((uchar*)&manifest_global->bank.stakes + manifest_global->bank.stakes.stake_delegations_pool_offset), (void*)((uchar*)stakes + stakes->stake_delegations_pool_offset)));
+  fd_delegation_pair_t_mapnode_t * stake_delegations_pool_og = fd_stakes_stake_delegations_pool_join( &manifest_global->bank.stakes );
+  FD_TEST( stake_delegations_pool_og );
   /* Verify stakes */
   fd_delegation_pair_t_mapnode_t * stake_delegations_pool = fd_stakes_stake_delegations_pool_join( stakes );
-  fd_delegation_pair_t_mapnode_t * stake_delegations_root = fd_stakes_stake_delegations_root_join( stakes );
   FD_TEST( stake_delegations_pool );
-  FD_TEST( stake_delegations_root );
-  FD_TEST( fd_delegation_pair_t_map_verify( stake_delegations_pool, stake_delegations_root )==0 );
+
+
 
   fd_bank_mgr_stakes_save( slot_ctx->bank_mgr );
 

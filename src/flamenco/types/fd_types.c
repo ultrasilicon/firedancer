@@ -700,8 +700,10 @@ ulong fd_block_hash_queue_size( fd_block_hash_queue_t const * self ) {
   }
   if( self->ages_root ) {
     size += sizeof(ulong);
+    ulong max = fd_hash_hash_age_pair_t_map_max( self->ages_pool );
+    size += fd_hash_hash_age_pair_t_map_footprint( max );
     for( fd_hash_hash_age_pair_t_mapnode_t * n = fd_hash_hash_age_pair_t_map_minimum( self->ages_pool, self->ages_root ); n; n = fd_hash_hash_age_pair_t_map_successor( self->ages_pool, n ) ) {
-      size += fd_hash_hash_age_pair_size( &n->elem );
+      size += fd_hash_hash_age_pair_size( &n->elem ) - sizeof(fd_hash_hash_age_pair_t);
     }
   } else {
     size += sizeof(ulong);
@@ -1675,8 +1677,10 @@ ulong fd_vote_accounts_size( fd_vote_accounts_t const * self ) {
   ulong size = 0;
   if( self->vote_accounts_root ) {
     size += sizeof(ulong);
+    ulong max = fd_vote_accounts_pair_t_map_max( self->vote_accounts_pool );
+    size += fd_vote_accounts_pair_t_map_footprint( max );
     for( fd_vote_accounts_pair_t_mapnode_t * n = fd_vote_accounts_pair_t_map_minimum( self->vote_accounts_pool, self->vote_accounts_root ); n; n = fd_vote_accounts_pair_t_map_successor( self->vote_accounts_pool, n ) ) {
-      size += fd_vote_accounts_pair_size( &n->elem );
+      size += fd_vote_accounts_pair_size( &n->elem ) - sizeof(fd_vote_accounts_pair_t);
     }
   } else {
     size += sizeof(ulong);
@@ -1842,8 +1846,10 @@ ulong fd_account_keys_size( fd_account_keys_t const * self ) {
   ulong size = 0;
   if( self->account_keys_root ) {
     size += sizeof(ulong);
+    ulong max = fd_account_keys_pair_t_map_max( self->account_keys_pool );
+    size += fd_account_keys_pair_t_map_footprint( max );
     for( fd_account_keys_pair_t_mapnode_t * n = fd_account_keys_pair_t_map_minimum( self->account_keys_pool, self->account_keys_root ); n; n = fd_account_keys_pair_t_map_successor( self->account_keys_pool, n ) ) {
-      size += fd_account_keys_pair_size( &n->elem );
+      size += fd_account_keys_pair_size( &n->elem ) - sizeof(fd_account_keys_pair_t);
     }
   } else {
     size += sizeof(ulong);
@@ -1966,8 +1972,10 @@ ulong fd_stake_weights_size( fd_stake_weights_t const * self ) {
   ulong size = 0;
   if( self->stake_weights_root ) {
     size += sizeof(ulong);
+    ulong max = fd_stake_weight_t_map_max( self->stake_weights_pool );
+    size += fd_stake_weight_t_map_footprint( max );
     for( fd_stake_weight_t_mapnode_t * n = fd_stake_weight_t_map_minimum( self->stake_weights_pool, self->stake_weights_root ); n; n = fd_stake_weight_t_map_successor( self->stake_weights_pool, n ) ) {
-      size += fd_stake_weight_size( &n->elem );
+      size += fd_stake_weight_size( &n->elem ) - sizeof(fd_stake_weight_t);
     }
   } else {
     size += sizeof(ulong);
@@ -2205,7 +2213,7 @@ static int fd_stakes_decode_footprint_inner( fd_bincode_decode_ctx_t * ctx, ulon
   if( FD_UNLIKELY( err ) ) return err;
   ulong stake_delegations_len = 0UL;
   err = fd_bincode_uint64_decode( &stake_delegations_len, ctx );
-  ulong stake_delegations_cnt = fd_ulong_max( stake_delegations_len, 2000000 );
+  ulong stake_delegations_cnt = fd_ulong_max( stake_delegations_len, 20000 );
   *total_sz += fd_delegation_pair_t_map_align() + fd_delegation_pair_t_map_footprint( stake_delegations_cnt );
   if( FD_UNLIKELY( err ) ) return err;
   for( ulong i=0; i < stake_delegations_len; i++ ) {
@@ -2233,7 +2241,7 @@ static void fd_stakes_decode_inner( void * struct_mem, void * * alloc_mem, fd_bi
   fd_vote_accounts_decode_inner( &self->vote_accounts, alloc_mem, ctx );
   ulong stake_delegations_len;
   fd_bincode_uint64_decode_unsafe( &stake_delegations_len, ctx );
-  self->stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, fd_ulong_max( stake_delegations_len, 2000000 ) );
+  self->stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, fd_ulong_max( stake_delegations_len, 20000 ) );
   self->stake_delegations_root = NULL;
   for( ulong i=0; i < stake_delegations_len; i++ ) {
     fd_delegation_pair_t_mapnode_t * node = fd_delegation_pair_t_map_acquire( self->stake_delegations_pool );
@@ -2259,7 +2267,7 @@ static void fd_stakes_decode_inner_global( void * struct_mem, void * * alloc_mem
   ulong stake_delegations_len;
   fd_bincode_uint64_decode_unsafe( &stake_delegations_len, ctx );
   *alloc_mem = (void*)fd_ulong_align_up( (ulong)*alloc_mem, fd_delegation_pair_t_map_align() );
-  fd_delegation_pair_t_mapnode_t * stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, fd_ulong_max( stake_delegations_len, 2000000 ) );
+  fd_delegation_pair_t_mapnode_t * stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, fd_ulong_max( stake_delegations_len, 20000 ) );
   fd_delegation_pair_t_mapnode_t * stake_delegations_root = NULL;
   for( ulong i=0; i < stake_delegations_len; i++ ) {
     fd_delegation_pair_t_mapnode_t * node = fd_delegation_pair_t_map_acquire( stake_delegations_pool );
@@ -2304,8 +2312,10 @@ ulong fd_stakes_size( fd_stakes_t const * self ) {
   size += fd_vote_accounts_size( &self->vote_accounts );
   if( self->stake_delegations_root ) {
     size += sizeof(ulong);
+    ulong max = fd_delegation_pair_t_map_max( self->stake_delegations_pool );
+    size += fd_delegation_pair_t_map_footprint( max );
     for( fd_delegation_pair_t_mapnode_t * n = fd_delegation_pair_t_map_minimum( self->stake_delegations_pool, self->stake_delegations_root ); n; n = fd_delegation_pair_t_map_successor( self->stake_delegations_pool, n ) ) {
-      size += fd_delegation_pair_size( &n->elem );
+      size += fd_delegation_pair_size( &n->elem ) - sizeof(fd_delegation_pair_t);
     }
   } else {
     size += sizeof(ulong);
@@ -2474,8 +2484,10 @@ ulong fd_stakes_stake_size( fd_stakes_stake_t const * self ) {
   size += fd_vote_accounts_size( &self->vote_accounts );
   if( self->stake_delegations_root ) {
     size += sizeof(ulong);
+    ulong max = fd_stake_pair_t_map_max( self->stake_delegations_pool );
+    size += fd_stake_pair_t_map_footprint( max );
     for( fd_stake_pair_t_mapnode_t * n = fd_stake_pair_t_map_minimum( self->stake_delegations_pool, self->stake_delegations_root ); n; n = fd_stake_pair_t_map_successor( self->stake_delegations_pool, n ) ) {
-      size += fd_stake_pair_size( &n->elem );
+      size += fd_stake_pair_size( &n->elem ) - sizeof(fd_stake_pair_t);
     }
   } else {
     size += sizeof(ulong);
@@ -8967,8 +8979,10 @@ ulong fd_clock_timestamp_votes_size( fd_clock_timestamp_votes_t const * self ) {
   ulong size = 0;
   if( self->votes_root ) {
     size += sizeof(ulong);
+    ulong max = fd_clock_timestamp_vote_t_map_max( self->votes_pool );
+    size += fd_clock_timestamp_vote_t_map_footprint( max );
     for( fd_clock_timestamp_vote_t_mapnode_t * n = fd_clock_timestamp_vote_t_map_minimum( self->votes_pool, self->votes_root ); n; n = fd_clock_timestamp_vote_t_map_successor( self->votes_pool, n ) ) {
-      size += fd_clock_timestamp_vote_size( &n->elem );
+      size += fd_clock_timestamp_vote_size( &n->elem ) - sizeof(fd_clock_timestamp_vote_t);
     }
   } else {
     size += sizeof(ulong);
@@ -10173,8 +10187,10 @@ ulong fd_calculate_stake_vote_rewards_result_size( fd_calculate_stake_vote_rewar
   size += fd_stake_reward_calculation_size( &self->stake_reward_calculation );
   if( self->vote_reward_map_root ) {
     size += sizeof(ulong);
+    ulong max = fd_vote_reward_t_map_max( self->vote_reward_map_pool );
+    size += fd_vote_reward_t_map_footprint( max );
     for( fd_vote_reward_t_mapnode_t * n = fd_vote_reward_t_map_minimum( self->vote_reward_map_pool, self->vote_reward_map_root ); n; n = fd_vote_reward_t_map_successor( self->vote_reward_map_pool, n ) ) {
-      size += fd_vote_reward_size( &n->elem );
+      size += fd_vote_reward_size( &n->elem ) - sizeof(fd_vote_reward_t);
     }
   } else {
     size += sizeof(ulong);
@@ -10434,8 +10450,10 @@ ulong fd_partitioned_rewards_calculation_size( fd_partitioned_rewards_calculatio
   ulong size = 0;
   if( self->vote_reward_map_root ) {
     size += sizeof(ulong);
+    ulong max = fd_vote_reward_t_map_max( self->vote_reward_map_pool );
+    size += fd_vote_reward_t_map_footprint( max );
     for( fd_vote_reward_t_mapnode_t * n = fd_vote_reward_t_map_minimum( self->vote_reward_map_pool, self->vote_reward_map_root ); n; n = fd_vote_reward_t_map_successor( self->vote_reward_map_pool, n ) ) {
-      size += fd_vote_reward_size( &n->elem );
+      size += fd_vote_reward_size( &n->elem ) - sizeof(fd_vote_reward_t);
     }
   } else {
     size += sizeof(ulong);
@@ -25283,8 +25301,10 @@ ulong fd_epoch_info_size( fd_epoch_info_t const * self ) {
   } while(0);
   if( self->vote_states_root ) {
     size += sizeof(ulong);
+    ulong max = fd_vote_info_pair_t_map_max( self->vote_states_pool );
+    size += fd_vote_info_pair_t_map_footprint( max );
     for( fd_vote_info_pair_t_mapnode_t * n = fd_vote_info_pair_t_map_minimum( self->vote_states_pool, self->vote_states_root ); n; n = fd_vote_info_pair_t_map_successor( self->vote_states_pool, n ) ) {
-      size += fd_vote_info_pair_size( &n->elem );
+      size += fd_vote_info_pair_size( &n->elem ) - sizeof(fd_vote_info_pair_t);
     }
   } else {
     size += sizeof(ulong);
@@ -25592,8 +25612,10 @@ ulong fd_account_costs_size( fd_account_costs_t const * self ) {
   ulong size = 0;
   if( self->account_costs_root ) {
     size += sizeof(ulong);
+    ulong max = fd_account_costs_pair_t_map_max( self->account_costs_pool );
+    size += fd_account_costs_pair_t_map_footprint( max );
     for( fd_account_costs_pair_t_mapnode_t * n = fd_account_costs_pair_t_map_minimum( self->account_costs_pool, self->account_costs_root ); n; n = fd_account_costs_pair_t_map_successor( self->account_costs_pool, n ) ) {
-      size += fd_account_costs_pair_size( &n->elem );
+      size += fd_account_costs_pair_size( &n->elem ) - sizeof(fd_account_costs_pair_t);
     }
   } else {
     size += sizeof(ulong);

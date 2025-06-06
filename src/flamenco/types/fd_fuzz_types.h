@@ -410,7 +410,7 @@ void *fd_stakes_generate( void *mem, void **alloc_mem, fd_rng_t * rng ) {
   fd_stakes_new(mem);
   fd_vote_accounts_generate( &self->vote_accounts, alloc_mem, rng );
   ulong stake_delegations_len = fd_rng_ulong( rng ) % 8;
-  self->stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, fd_ulong_max( stake_delegations_len, 2000000 ) );
+  self->stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, fd_ulong_max( stake_delegations_len, 20000 ) );
   self->stake_delegations_root = NULL;
   for( ulong i=0; i < stake_delegations_len; i++ ) {
     fd_delegation_pair_t_mapnode_t * node = fd_delegation_pair_t_map_acquire( self->stake_delegations_pool );

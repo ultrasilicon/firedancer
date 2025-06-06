@@ -337,7 +337,7 @@
       "alignment": "128",
       "fields": [
         { "name": "vote_accounts", "type": "vote_accounts" },
-        { "name": "stake_delegations", "type": "map", "element": "delegation_pair", "key": "account", "minalloc": 2000000 },
+        { "name": "stake_delegations", "type": "map", "element": "delegation_pair", "key": "account", "minalloc": 20000 },
         { "name": "unused", "type": "ulong" },
         { "name": "epoch", "type": "ulong" },
         { "name": "stake_history", "type": "stake_history" }
