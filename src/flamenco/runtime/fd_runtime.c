@@ -2234,7 +2234,7 @@ fd_update_stake_delegations( fd_exec_slot_ctx_t * slot_ctx,
       entry = fd_delegation_pair_t_map_acquire( stake_delegations_pool );
       if( FD_UNLIKELY( !entry ) ) {
         FD_TEST( 0 == fd_delegation_pair_t_map_verify( stake_delegations_pool, stake_delegations_root ) );
-        FD_LOG_CRIT(( "stake_delegations_pool full" ));
+        FD_LOG_CRIT(( "stake_delegations_pool full %lu", fd_delegation_pair_t_map_size( stake_delegations_pool, stake_delegations_root ) ));
       }
       entry->elem.account    = temp_info->stake_infos[idx].account;
       entry->elem.delegation = temp_info->stake_infos[idx].stake.delegation;

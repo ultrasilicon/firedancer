@@ -2213,7 +2213,7 @@ static int fd_stakes_decode_footprint_inner( fd_bincode_decode_ctx_t * ctx, ulon
   if( FD_UNLIKELY( err ) ) return err;
   ulong stake_delegations_len = 0UL;
   err = fd_bincode_uint64_decode( &stake_delegations_len, ctx );
-  ulong stake_delegations_cnt = fd_ulong_max( stake_delegations_len, 20000 );
+  ulong stake_delegations_cnt = fd_ulong_max( stake_delegations_len, 2000000 );
   *total_sz += fd_delegation_pair_t_map_align() + fd_delegation_pair_t_map_footprint( stake_delegations_cnt );
   if( FD_UNLIKELY( err ) ) return err;
   for( ulong i=0; i < stake_delegations_len; i++ ) {
@@ -2241,7 +2241,7 @@ static void fd_stakes_decode_inner( void * struct_mem, void * * alloc_mem, fd_bi
   fd_vote_accounts_decode_inner( &self->vote_accounts, alloc_mem, ctx );
   ulong stake_delegations_len;
   fd_bincode_uint64_decode_unsafe( &stake_delegations_len, ctx );
-  self->stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, fd_ulong_max( stake_delegations_len, 20000 ) );
+  self->stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, fd_ulong_max( stake_delegations_len, 2000000 ) );
   self->stake_delegations_root = NULL;
   for( ulong i=0; i < stake_delegations_len; i++ ) {
     fd_delegation_pair_t_mapnode_t * node = fd_delegation_pair_t_map_acquire( self->stake_delegations_pool );
@@ -2267,7 +2267,7 @@ static void fd_stakes_decode_inner_global( void * struct_mem, void * * alloc_mem
   ulong stake_delegations_len;
   fd_bincode_uint64_decode_unsafe( &stake_delegations_len, ctx );
   *alloc_mem = (void*)fd_ulong_align_up( (ulong)*alloc_mem, fd_delegation_pair_t_map_align() );
-  fd_delegation_pair_t_mapnode_t * stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, fd_ulong_max( stake_delegations_len, 20000 ) );
+  fd_delegation_pair_t_mapnode_t * stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, fd_ulong_max( stake_delegations_len, 2000000 ) );
   fd_delegation_pair_t_mapnode_t * stake_delegations_root = NULL;
   for( ulong i=0; i < stake_delegations_len; i++ ) {
     fd_delegation_pair_t_mapnode_t * node = fd_delegation_pair_t_map_acquire( stake_delegations_pool );
