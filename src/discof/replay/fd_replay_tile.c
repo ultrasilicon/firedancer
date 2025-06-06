@@ -1674,7 +1674,6 @@ read_snapshot( void *              _ctx,
   ulong        base_slot = 0UL;
   if( strcmp( snapshot, "funk" )==0 || strncmp( snapshot, "wksp:", 5 )==0 ) {
     /* Funk already has a snapshot loaded */
-    fd_runtime_recover_banks( ctx->slot_ctx, 1, ctx->runtime_spad );
     base_slot = ctx->slot_ctx->slot;
     kickoff_repair_orphans( ctx, stem );
   } else {

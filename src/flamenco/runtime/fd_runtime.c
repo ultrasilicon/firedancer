@@ -3833,8 +3833,6 @@ fd_runtime_process_genesis_block( fd_exec_slot_ctx_t * slot_ctx,
     FD_LOG_ERR(( "Failed to update bank hash with error=%d", result ));
   }
 
-  FD_TEST( FD_RUNTIME_EXECUTE_SUCCESS==fd_runtime_save_epoch_bank( slot_ctx ) );
-
   return FD_RUNTIME_EXECUTE_SUCCESS;
 }
 

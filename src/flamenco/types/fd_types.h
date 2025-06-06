@@ -1825,13 +1825,6 @@ struct fd_cluster_version {
 typedef struct fd_cluster_version fd_cluster_version_t;
 #define FD_CLUSTER_VERSION_ALIGN alignof(fd_cluster_version_t)
 
-/* Encoded Size: Fixed (8 bytes) */
-struct fd_epoch_bank {
-  ulong filler;
-};
-typedef struct fd_epoch_bank fd_epoch_bank_t;
-#define FD_EPOCH_BANK_ALIGN alignof(fd_epoch_bank_t)
-
 /* Encoded Size: Fixed (49 bytes) */
 struct fd_stake_reward {
   ulong prev;
@@ -4627,18 +4620,6 @@ static inline int fd_cluster_version_decode_footprint( fd_bincode_decode_ctx_t *
   return 0;
 }
 void * fd_cluster_version_decode( void * mem, fd_bincode_decode_ctx_t * ctx );
-
-static inline void fd_epoch_bank_new( fd_epoch_bank_t * self ) { fd_memset( self, 0, sizeof(fd_epoch_bank_t) ); }
-int fd_epoch_bank_encode( fd_epoch_bank_t const * self, fd_bincode_encode_ctx_t * ctx );
-void fd_epoch_bank_walk( void * w, fd_epoch_bank_t const * self, fd_types_walk_fn_t fun, const char *name, uint level );
-ulong fd_epoch_bank_size( fd_epoch_bank_t const * self );
-static inline ulong fd_epoch_bank_align( void ) { return FD_EPOCH_BANK_ALIGN; }
-static inline int fd_epoch_bank_decode_footprint( fd_bincode_decode_ctx_t * ctx, ulong * total_sz ) {
-  *total_sz += sizeof(fd_epoch_bank_t);
-  if( (ulong)ctx->data + 8UL > (ulong)ctx->dataend ) { return FD_BINCODE_ERR_OVERFLOW; };
-  return 0;
-}
-void * fd_epoch_bank_decode( void * mem, fd_bincode_decode_ctx_t * ctx );
 
 static inline void fd_stake_reward_new( fd_stake_reward_t * self ) { fd_memset( self, 0, sizeof(fd_stake_reward_t) ); }
 int fd_stake_reward_encode( fd_stake_reward_t const * self, fd_bincode_encode_ctx_t * ctx );

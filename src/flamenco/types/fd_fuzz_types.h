@@ -1601,14 +1601,6 @@ void *fd_cluster_version_generate( void *mem, void **alloc_mem, fd_rng_t * rng )
   return mem;
 }
 
-void *fd_epoch_bank_generate( void *mem, void **alloc_mem, fd_rng_t * rng ) {
-  fd_epoch_bank_t *self = (fd_epoch_bank_t *) mem;
-  *alloc_mem = (uchar *) *alloc_mem + sizeof(fd_epoch_bank_t);
-  fd_epoch_bank_new(mem);
-  self->filler = fd_rng_ulong( rng );
-  return mem;
-}
-
 void *fd_stake_reward_generate( void *mem, void **alloc_mem, fd_rng_t * rng ) {
   fd_stake_reward_t *self = (fd_stake_reward_t *) mem;
   *alloc_mem = (uchar *) *alloc_mem + sizeof(fd_stake_reward_t);

@@ -1063,13 +1063,6 @@
       ]
     },
     {
-      "name": "epoch_bank",
-      "type": "struct",
-      "fields": [
-        { "name": "filler", "type": "ulong" }
-      ]
-    },
-    {
       "name": "stake_reward",
       "type": "struct",
       "fields": [

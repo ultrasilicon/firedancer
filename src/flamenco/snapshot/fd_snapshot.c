@@ -52,8 +52,6 @@ fd_hashes_load( fd_exec_slot_ctx_t * slot_ctx ) {
   ulong * execution_fees = fd_bank_mgr_execution_fees_modify( slot_ctx->bank_mgr );
   FD_STORE( ulong, execution_fees, 0UL );
   fd_bank_mgr_execution_fees_save( slot_ctx->bank_mgr );
-
-  fd_runtime_save_epoch_bank( slot_ctx );
 }
 
 static int
@@ -167,8 +165,6 @@ fd_snapshot_load_manifest_and_status_cache( fd_snapshot_load_ctx_t * ctx,
     FD_LOG_ERR(( "Failed to parse snapshot src" ));
   }
   src->snapshot_dir = ctx->snapshot_dir;
-
-  fd_exec_epoch_ctx_bank_mem_clear( ctx->slot_ctx->epoch_ctx );
 
   fd_funk_t *     funk     = ctx->slot_ctx->funk;
   fd_funk_txn_t * funk_txn = ctx->slot_ctx->funk_txn;

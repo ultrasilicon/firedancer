@@ -16,7 +16,6 @@
 struct fd_restart_tile_ctx {
   fd_restart_t *        restart;
   fd_funk_t             funk[1];
-  fd_epoch_bank_t       epoch_bank;
   int                   is_funk_active;
   char                  funk_file[ PATH_MAX ];
   fd_spad_t *           runtime_spad;
@@ -389,31 +388,31 @@ after_credit( fd_restart_tile_ctx_t * ctx,
 
     /* Decode the epoch bank from funk, referencing fd_runtime_recover_banks() in fd_runtime_init.c */
     {
-      fd_funk_rec_key_t     id = fd_runtime_epoch_bank_key();
-      fd_funk_rec_query_t   query[1];
-      fd_funk_rec_t const * rec = fd_funk_rec_query_try( ctx->funk, NULL, &id, query );
-      void *                val = fd_funk_val( rec, fd_funk_wksp( ctx->funk ) );
-      if( fd_funk_val_sz( rec ) < sizeof(uint) ) {
-        FD_LOG_ERR(("failed to read banks record: empty record"));
-      }
-      uint magic = *(uint*)val;
-      if( FD_UNLIKELY( magic!=FD_RUNTIME_ENC_BINCODE ) ) {
-          FD_LOG_ERR(( "failed to read banks record: invalid magic number" ));
-      }
+      // fd_funk_rec_key_t     id = fd_runtime_epoch_bank_key();
+      // fd_funk_rec_query_t   query[1];
+      // fd_funk_rec_t const * rec = fd_funk_rec_query_try( ctx->funk, NULL, &id, query );
+      // void *                val = fd_funk_val( rec, fd_funk_wksp( ctx->funk ) );
+      // if( fd_funk_val_sz( rec ) < sizeof(uint) ) {
+      //   FD_LOG_ERR(("failed to read banks record: empty record"));
+      // }
+      // uint magic = *(uint*)val;
+      // if( FD_UNLIKELY( magic!=FD_RUNTIME_ENC_BINCODE ) ) {
+      //     FD_LOG_ERR(( "failed to read banks record: invalid magic number" ));
+      // }
 
-      int err;
-      fd_epoch_bank_t * epoch_bank = fd_bincode_decode_spad(
-          epoch_bank, ctx->runtime_spad,
-          (uchar *)val          + sizeof(uint),
-          fd_funk_val_sz( rec ) - sizeof(uint),
-          &err );
-      if( FD_UNLIKELY( err ) ) {
-        FD_LOG_ERR(( "failed to read banks record: invalid decode" ));
-      }
+      // int err;
+      // fd_epoch_bank_t * epoch_bank = fd_bincode_decode_spad(
+      //     epoch_bank, ctx->runtime_spad,
+      //     (uchar *)val          + sizeof(uint),
+      //     fd_funk_val_sz( rec ) - sizeof(uint),
+      //     &err );
+      // if( FD_UNLIKELY( err ) ) {
+      //   FD_LOG_ERR(( "failed to read banks record: invalid decode" ));
+      // }
 
-      ctx->epoch_bank = *epoch_bank;
+      // ctx->epoch_bank = *epoch_bank;
 
-      FD_TEST( !fd_funk_rec_query_test( query ) );
+      // FD_TEST( !fd_funk_rec_query_test( query ) );
     }
 
     /* Decode the slot history sysvar, referencing fd_sysvar_slot_history_read in fd_sysvar_slot_history.c */

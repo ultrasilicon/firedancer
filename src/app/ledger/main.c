@@ -1156,10 +1156,6 @@ ingest( fd_ledger_args_t * args ) {
     fd_runtime_read_genesis( slot_ctx, args->genesis, args->snapshot != NULL, NULL, args->runtime_spad );
   }
 
-  if( !args->snapshot && (args->restore_funk != NULL || args->restore != NULL) ) {
-    fd_runtime_recover_banks( slot_ctx, 1, args->runtime_spad );
-  }
-
   /* At this point the account state has been ingested into funk. Intake rocksdb */
   if( args->start_slot == 0 ) {
     args->start_slot = slot_ctx->slot + 1;
@@ -1271,7 +1267,6 @@ replay( fd_ledger_args_t * args ) {
   void * epoch_ctx_mem = fd_spad_alloc_check( spad, FD_EXEC_EPOCH_CTX_ALIGN, fd_exec_epoch_ctx_footprint( args->vote_acct_max ) );
   fd_memset( epoch_ctx_mem, 0, fd_exec_epoch_ctx_footprint( args->vote_acct_max ) );
   args->epoch_ctx = fd_exec_epoch_ctx_join( fd_exec_epoch_ctx_new( epoch_ctx_mem, args->vote_acct_max ) );
-  fd_exec_epoch_ctx_bank_mem_clear( args->epoch_ctx );
 
   /* TODO: This is very hacky, needs to be cleaned up */
 

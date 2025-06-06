@@ -9649,40 +9649,6 @@ ulong fd_cluster_version_size( fd_cluster_version_t const * self ) {
   return size;
 }
 
-int fd_epoch_bank_encode( fd_epoch_bank_t const * self, fd_bincode_encode_ctx_t * ctx ) {
-  int err;
-  err = fd_bincode_uint64_encode( self->filler, ctx );
-  if( FD_UNLIKELY( err ) ) return err;
-  return FD_BINCODE_SUCCESS;
-}
-static inline int fd_epoch_bank_decode_footprint_inner( fd_bincode_decode_ctx_t * ctx, ulong * total_sz ) {
-  if( (ulong)ctx->data + 8UL > (ulong)ctx->dataend ) { return FD_BINCODE_ERR_OVERFLOW; };
-  ctx->data = (void *)( (ulong)ctx->data + 8UL );
-  return 0;
-}
-static void fd_epoch_bank_decode_inner( void * struct_mem, void * * alloc_mem, fd_bincode_decode_ctx_t * ctx ) {
-  fd_epoch_bank_t * self = (fd_epoch_bank_t *)struct_mem;
-  fd_bincode_uint64_decode_unsafe( &self->filler, ctx );
-}
-void * fd_epoch_bank_decode( void * mem, fd_bincode_decode_ctx_t * ctx ) {
-  fd_epoch_bank_t * self = (fd_epoch_bank_t *)mem;
-  fd_epoch_bank_new( self );
-  void * alloc_region = (uchar *)mem + sizeof(fd_epoch_bank_t);
-  void * * alloc_mem = &alloc_region;
-  fd_epoch_bank_decode_inner( mem, alloc_mem, ctx );
-  return self;
-}
-void fd_epoch_bank_walk( void * w, fd_epoch_bank_t const * self, fd_types_walk_fn_t fun, const char *name, uint level ) {
-  fun( w, self, name, FD_FLAMENCO_TYPE_MAP, "fd_epoch_bank", level++ );
-  fun( w, &self->filler, "filler", FD_FLAMENCO_TYPE_ULONG, "ulong", level );
-  fun( w, self, name, FD_FLAMENCO_TYPE_MAP_END, "fd_epoch_bank", level-- );
-}
-ulong fd_epoch_bank_size( fd_epoch_bank_t const * self ) {
-  ulong size = 0;
-  size += sizeof(ulong);
-  return size;
-}
-
 int fd_stake_reward_encode( fd_stake_reward_t const * self, fd_bincode_encode_ctx_t * ctx ) {
   int err;
   err = fd_pubkey_encode( &self->stake_pubkey, ctx );

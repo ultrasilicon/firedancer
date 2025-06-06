@@ -1252,12 +1252,10 @@ fd_accounts_hash_inc_no_txn( fd_funk_t *                 funk,
 int
 fd_snapshot_service_hash( fd_hash_t *       accounts_hash,
                           fd_hash_t *       snapshot_hash,
-                          fd_epoch_bank_t * epoch_bank,
                           fd_funk_t *       funk,
                           fd_tpool_t *      tpool,
                           fd_spad_t *       runtime_spad,
                           fd_features_t *   features ) {
-  (void)epoch_bank;
 
   fd_sha256_t h;
 
@@ -1288,7 +1286,6 @@ fd_snapshot_service_hash( fd_hash_t *       accounts_hash,
 int
 fd_snapshot_service_inc_hash( fd_hash_t *                 accounts_hash,
                               fd_hash_t *                 snapshot_hash,
-                              fd_epoch_bank_t *           epoch_bank,
                               fd_funk_t *                 funk,
                               fd_funk_rec_key_t const * * pubkeys,
                               ulong                       pubkeys_len,
@@ -1298,7 +1295,6 @@ fd_snapshot_service_inc_hash( fd_hash_t *                 accounts_hash,
   fd_accounts_hash_inc_no_txn( funk, accounts_hash, pubkeys, pubkeys_len, 0UL, spad, features );
 
   int should_include_eah = 0;
-  (void)epoch_bank;
 
   if( should_include_eah ) {
     fd_sha256_init( &h );

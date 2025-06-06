@@ -136,35 +136,6 @@ get_slot_from_commitment_level( struct json_values * values, fd_rpc_ctx_t * ctx 
   }
 }
 
-static fd_epoch_bank_t *
-read_epoch_bank( fd_rpc_ctx_t * ctx ) {
-  fd_funk_rec_key_t recid = fd_runtime_epoch_bank_key();
-
-  ulong vallen;
-  const void * val = read_account( ctx, &recid, &vallen );
-  if( val == NULL ) {
-    FD_LOG_WARNING(( "failed to decode epoch_bank" ));
-    return NULL;
-  }
-  uint magic = *(uint*)val;
-  if( FD_UNLIKELY( magic != FD_RUNTIME_ENC_BINCODE ) ) {
-    FD_LOG_ERR(("failed to read banks record: invalid magic number"));
-  }
-
-  fd_epoch_bank_t * epoch_bank = fd_bincode_decode_spad(
-      epoch_bank,
-      ctx->global->spad,
-      val    + sizeof(uint),
-      vallen - sizeof(uint),
-      NULL );
-  if( FD_UNLIKELY( !epoch_bank ) ) {
-    FD_LOG_WARNING(( "failed to decode epoch_bank" ));
-    return NULL;
-  }
-
-  return epoch_bank;
-}
-
 /*
 static const char *
 block_flags_to_confirmation_status( uchar flags ) {
@@ -674,11 +645,7 @@ method_getEpochInfo(struct json_values* values, fd_rpc_ctx_t * ctx) {
       fd_method_error(ctx, -1, "unable to find slot info");
       return 0;
     }
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx);
-    if( epoch_bank == NULL ) {
-      fd_method_error(ctx, -1, "unable to read epoch_bank");
-      return 0;
-    }
+
     ulong slot_index = 0UL;
     // ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, slot, &slot_index );
     ulong epoch = 0UL;
@@ -703,11 +670,6 @@ method_getEpochSchedule(struct json_values* values, fd_rpc_ctx_t * ctx) {
   (void)values;
   FD_SPAD_FRAME_BEGIN( ctx->global->spad ) {
     fd_webserver_t * ws = &ctx->global->ws;
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx);
-    if( FD_UNLIKELY( !epoch_bank ) ) {
-      fd_method_simple_error( ctx, -1, "unable to read epoch_bank" );
-      return 0;
-    }
     (void)ws;
     // fd_web_reply_sprintf(ws, "{\"jsonrpc\":\"2.0\",\"result\":{\"firstNormalEpoch\":%lu,\"firstNormalSlot\":%lu,\"leaderScheduleSlotOffset\":%lu,\"slotsPerEpoch\":%lu,\"warmup\":%s},\"id\":%s}" CRLF,
     //                      epoch_bank->epoch_schedule.first_normal_epoch,
@@ -773,11 +735,6 @@ static int
 method_getGenesisHash(struct json_values* values, fd_rpc_ctx_t * ctx) {
   (void)values;
   FD_SPAD_FRAME_BEGIN( ctx->global->spad ) {
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx);
-    if( epoch_bank == NULL ) {
-      fd_method_error(ctx, -1, "unable to read epoch_bank");
-      return 0;
-    }
     fd_webserver_t * ws = &ctx->global->ws;
     fd_web_reply_sprintf(ws, "{\"jsonrpc\":\"2.0\",\"result\":\"");
     // fd_web_reply_encode_base58(ws, epoch_bank->genesis_hash.uc, sizeof(fd_pubkey_t));
@@ -921,11 +878,6 @@ method_getLeaderSchedule(struct json_values* values, fd_rpc_ctx_t * ctx) {
     fd_webserver_t * ws = &ctx->global->ws;
 
     // ulong slot = get_slot_from_commitment_level( values, ctx );
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx);
-    if( epoch_bank == NULL ) {
-      fd_method_error(ctx, -1, "unable to read epoch_bank");
-      return 0;
-    }
     //ulong slot_index;
     //ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, slot, &slot_index );
     ulong epoch = 0UL;
@@ -1013,11 +965,6 @@ method_getMinimumBalanceForRentExemption(struct json_values* values, fd_rpc_ctx_
     const void* size = json_get_value(values, PATH_SIZE, 3, &size_sz);
     ulong sizen = (size == NULL ? 0UL : (ulong)(*(long*)size));
     (void)sizen;
-    fd_epoch_bank_t * epoch_bank  = read_epoch_bank( ctx );
-    if( epoch_bank == NULL ) {
-      fd_method_error(ctx, -1, "unable to read epoch_bank");
-      return 0;
-    }
     // ulong min_balance = fd_rent_exempt_minimum_balance( &epoch_bank->rent, sizen );
     ulong min_balance = 0UL;
 
