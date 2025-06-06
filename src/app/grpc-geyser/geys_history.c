@@ -3,6 +3,9 @@
 #include "../../ballet/txn/fd_txn.h"
 #include "../../flamenco/runtime/fd_blockstore.h"
 #include "../../discof/replay/fd_replay_notif.h"
+#include "../../flamenco/runtime/fd_acc_mgr.h"
+#include "../../flamenco/types/fd_types.h"
+#include "geys_filter.h"
 #include <unistd.h>
 
 struct geys_block {
@@ -76,6 +79,8 @@ typedef struct geys_acct_map_elem geys_acct_map_elem_t;
 
 struct geys_history {
   fd_spad_t * spad;
+  fd_funk_t * funk;
+  geys_filter_t * filt;
   geys_block_t * block_map;
   ulong block_cnt;
   geys_txn_t * txn_map;
@@ -94,6 +99,8 @@ geys_history_create(geys_history_args_t * args) {
   memset(hist, 0, sizeof(geys_history_t));
   hist->spad = spad;
 
+  hist->funk = args->funk;
+
   hist->first_slot = ULONG_MAX;
   hist->latest_slot = 0;
 
@@ -111,6 +118,11 @@ geys_history_create(geys_history_args_t * args) {
   hist->file_totsz = 0;
 
   return hist;
+}
+
+void
+geys_history_set_filter(geys_history_t * hist, geys_filter_t * filt) {
+  hist->filt = filt;
 }
 
 void
@@ -145,6 +157,11 @@ geys_history_save(geys_fd_ctx_t * fd, geys_history_t * hist, fd_blockstore_t * b
     blk->file_size = blk_sz;
     hist->file_totsz += blk_sz;
     hist->block_cnt ++;
+
+    fd_funk_txn_map_t * txn_map = fd_funk_txn_map( hist->funk );
+    fd_funk_txn_xid_t xid;
+    xid.ul[0] = xid.ul[1] = info->slot_exec.slot;
+    fd_funk_txn_t * funk_txn = fd_funk_txn_query( &xid, txn_map );
 
     ulong blockoff = 0;
     while (blockoff < blk_sz) {
@@ -193,11 +210,21 @@ geys_history_save(geys_fd_ctx_t * fd, geys_history_t * hist, fd_blockstore_t * b
           memcpy(&sig0, (const uchar*)sigs, sizeof(sig0));
           fd_pubkey_t * accs = (fd_pubkey_t *)((uchar *)raw + txn->acct_addr_off);
           for( int i = 0UL; i < txn->acct_addr_cnt; i++ ) {
-            // bool writable = ((i < txn->signature_cnt - txn->readonly_signed_cnt) ||
-            //                 ((i >= txn->signature_cnt) && (i < txn->acct_addr_cnt - txn->readonly_unsigned_cnt)));
-            // if( writable ) geys_fd_txn_acct_callback( fd, txn, &accs[i] );
+            bool writable = ((i < txn->signature_cnt - txn->readonly_signed_cnt) ||
+                             ((i >= txn->signature_cnt) && (i < txn->acct_addr_cnt - txn->readonly_unsigned_cnt)));
+            if( !writable ) continue;
 
-            if( !memcmp(&accs[i], fd_solana_vote_program_id.key, sizeof(fd_pubkey_t)) ) continue; /* Ignore votes */
+            fd_spad_push(hist->spad);
+
+            fd_funk_rec_key_t recid = fd_funk_acc_key(&accs[i]);
+            ulong val_sz;
+            const uchar * val = (const uchar *) fd_funk_rec_query_copy( hist->funk, funk_txn, &recid, fd_spad_virtual(hist->spad), &val_sz );
+            if( val ) {
+              geys_filter_acct(hist->filt, info->slot_exec.slot, &accs[i], (fd_account_meta_t *)val, val + sizeof(fd_account_meta_t), val_sz - sizeof(fd_account_meta_t));
+            }
+
+            fd_spad_pop(hist->spad);
+
             if( !geys_acct_map_pool_free( hist->acct_pool ) ) continue;
 
             geys_acct_map_elem_t * ele = geys_acct_map_pool_ele_acquire( hist->acct_pool );

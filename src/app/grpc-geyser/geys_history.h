@@ -8,15 +8,22 @@ typedef struct fd_replay_notif_msg fd_replay_notif_msg_t;
 typedef union fd_hash fd_hash_t;
 typedef union fd_hash fd_pubkey_t;
 typedef struct geys_fd_ctx geys_fd_ctx_t;
+struct fd_funk_private;
+typedef struct fd_funk_private fd_funk_t;
+struct geys_filter;
+typedef struct geys_filter geys_filter_t;
 
 struct geys_history_args {
-  uint                 block_index_max;
-  uint                 txn_index_max;
-  uint                 acct_index_max;
-  char                 history_file[ PATH_MAX ];
+  uint        block_index_max;
+  uint        txn_index_max;
+  uint        acct_index_max;
+  char        history_file[ PATH_MAX ];
+
+  fd_funk_t * funk;
+  geys_filter_t * filt;
 
   /* Bump allocator */
-  fd_spad_t *          spad;
+  fd_spad_t * spad;
 };
 typedef struct geys_history_args geys_history_args_t;
 
@@ -29,6 +36,8 @@ struct geys_txn_key {
 typedef struct geys_txn_key geys_txn_key_t;
 
 geys_history_t * geys_history_create(geys_history_args_t * args);
+
+void geys_history_set_filter(geys_history_t * hist, geys_filter_t * filt);
 
 void geys_history_save(geys_fd_ctx_t * fd, geys_history_t * hist, fd_blockstore_t * blockstore, fd_replay_notif_msg_t * msg);
 

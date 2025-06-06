@@ -174,7 +174,9 @@ class GeyserClient {
       rpc->Write(request);
       rpc->WritesDone();
 
-      while( rpc->Read(&update) ) { }
+      while( rpc->Read(&update) ) {
+        std::cout << "*" << std::endl;
+      }
       rpc->Finish();
     }
 

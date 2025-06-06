@@ -6,11 +6,13 @@
 extern "C" {
 #include "geys_fd_loop.h"
 #include "geys_history.h"
+#include "geys_filter.h"
 }
 
 class GeyserServiceImpl final : public geyser::Geyser::CallbackService{
     geys_fd_ctx_t * _loop_ctx;
     geys_history_t * _hist_ctx;
+    geys_filter_t * filt_;
 
   public:
     GeyserServiceImpl(geys_fd_ctx_t * loop_ctx);

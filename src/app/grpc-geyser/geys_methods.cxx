@@ -1,13 +1,16 @@
-#include "geys_methods.hxx"
-
 extern "C" {
 #include "../firedancer/version.h"
 #include "../../discof/replay/fd_replay_notif.h"
 #include "../../ballet/base58/fd_base58.h"
+#include "geys_filter.h"
 }
+
+#include "geys_methods.hxx"
+#include "geys_filter_2.hxx"
 
 GeyserServiceImpl::GeyserServiceImpl(geys_fd_ctx_t * loop_ctx)
   : _loop_ctx(loop_ctx), _hist_ctx(geys_fd_get_history(loop_ctx)) {
+  geys_history_set_filter(_hist_ctx, filt_ = geys_filter_create());
 }
 
 GeyserServiceImpl::~GeyserServiceImpl() {
@@ -15,24 +18,7 @@ GeyserServiceImpl::~GeyserServiceImpl() {
 
 ::grpc::ServerBidiReactor<::geyser::SubscribeRequest, ::geyser::SubscribeUpdate>*
 GeyserServiceImpl::Subscribe(::grpc::CallbackServerContext* context) {
-  class Reactor : public grpc::ServerBidiReactor<::geyser::SubscribeRequest, ::geyser::SubscribeUpdate> {
-    public:
-      Reactor(GeyserServiceImpl * serv) : serv_(serv) {
-        StartRead(&request_);
-      }
-      void OnReadDone(bool ok) override {
-        if (ok) {
-        } else {
-          Finish(::grpc::Status::OK);
-        }
-      }
-      void OnDone() override {
-        delete this;
-      }
-      GeyserServiceImpl * serv_;
-      ::geyser::SubscribeRequest request_;
-  };
-  return new Reactor(this);
+  return new GeyserSubscribeReactor(this, filt_);
 }
 
 ::grpc::ServerUnaryReactor*

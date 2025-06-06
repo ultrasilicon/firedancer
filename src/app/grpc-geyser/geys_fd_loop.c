@@ -1,6 +1,7 @@
 #define _DEFAULT_SOURCE
 
 #include "geys_fd_loop.h"
+#include "geys_filter.h"
 #include "../../funk/fd_funk_filemap.h"
 #include "../../tango/fd_tango_base.h"
 #include "../../util/wksp/fd_wksp_private.h"
@@ -15,6 +16,7 @@
 
 struct geys_fd_ctx {
   fd_spad_t * spad;
+  fd_funk_t funk_join[1];
   fd_funk_t * funk;
   fd_blockstore_t blockstore_ljoin;
   fd_blockstore_t * blockstore;
@@ -34,11 +36,11 @@ geys_fd_init( geys_fd_loop_args_t * args ) {
   memset( ctx, 0, sizeof(geys_fd_ctx_t) );
 
   FD_LOG_NOTICE(( "attaching to funk file \"%s\"", args->funk_file ));
-  fd_funk_t funk_join[1];
-  ctx->funk = fd_funk_open_file( funk_join, args->funk_file, 1, 0, 0, 0, 0, FD_FUNK_READONLY, NULL );
+  ctx->funk = fd_funk_open_file( ctx->funk_join, args->funk_file, 1, 0, 0, 0, 0, FD_FUNK_READONLY, NULL );
   if( !ctx->funk ) {
     FD_LOG_ERR(( "failed to join funk" ));
   }
+  args->history.funk = ctx->funk;
 
   FD_LOG_NOTICE(( "attaching to workspace \"%s\"", args->blockstore_wksp ));
   fd_wksp_t * wksp = fd_wksp_attach( args->blockstore_wksp );
