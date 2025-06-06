@@ -1,7 +1,7 @@
 #include "fd_block_harness.h"
 
 /* Common helper method for populating each epoch's vote cache. */
-static void
+static void FD_FN_UNUSED
 fd_runtime_fuzz_block_update_votes_cache( fd_exec_slot_ctx_t *                 slot_ctx,
                                           fd_vote_accounts_pair_t_mapnode_t *  pool,
                                           fd_vote_accounts_pair_t_mapnode_t ** root,
@@ -134,7 +134,6 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
 
   /* Set up epoch context and epoch bank */
   /* TODO: Do we need any more of these? */
-  fd_epoch_bank_t * epoch_bank    = fd_exec_epoch_ctx_epoch_bank( epoch_ctx );
 
   /* All bank mgr stuff here. */
   fd_bank_mgr_t   bank_mgr_obj;
@@ -194,42 +193,42 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   fd_memcpy( rent_bm, rent, sizeof(fd_rent_t) );
   fd_bank_mgr_rent_save( bank_mgr );
 
-  epoch_bank->stakes.epoch = fd_slot_to_epoch( epoch_schedule, *prev_slot, NULL );
+  //epoch_bank->stakes.epoch = fd_slot_to_epoch( epoch_schedule, *prev_slot, NULL );
 
   /* Update stake cache for epoch T */
-  for( uint i=0U; i<test_ctx->epoch_ctx.stake_accounts_count; i++ ) {
-    fd_pubkey_t voter_pubkey;
-    fd_memcpy( &voter_pubkey, test_ctx->epoch_ctx.stake_accounts[i].voter_pubkey, sizeof(fd_pubkey_t) );
+  // for( uint i=0U; i<test_ctx->epoch_ctx.stake_accounts_count; i++ ) {
+  //   fd_pubkey_t voter_pubkey;
+  //   fd_memcpy( &voter_pubkey, test_ctx->epoch_ctx.stake_accounts[i].voter_pubkey, sizeof(fd_pubkey_t) );
 
-    fd_pubkey_t stake_account;
-    fd_memcpy( &stake_account, test_ctx->epoch_ctx.stake_accounts[i].stake_account_pubkey, sizeof(fd_pubkey_t) );
+  //   fd_pubkey_t stake_account;
+  //   fd_memcpy( &stake_account, test_ctx->epoch_ctx.stake_accounts[i].stake_account_pubkey, sizeof(fd_pubkey_t) );
 
-    ulong  stake                = test_ctx->epoch_ctx.stake_accounts[i].stake;
-    ulong  activation_epoch     = test_ctx->epoch_ctx.stake_accounts[i].activation_epoch;
-    ulong  deactivation_epoch   = test_ctx->epoch_ctx.stake_accounts[i].deactivation_epoch;
-    double warmup_cooldown_rate = test_ctx->epoch_ctx.stake_accounts[i].warmup_cooldown_rate;
+  //   ulong  stake                = test_ctx->epoch_ctx.stake_accounts[i].stake;
+  //   ulong  activation_epoch     = test_ctx->epoch_ctx.stake_accounts[i].activation_epoch;
+  //   ulong  deactivation_epoch   = test_ctx->epoch_ctx.stake_accounts[i].deactivation_epoch;
+  //   double warmup_cooldown_rate = test_ctx->epoch_ctx.stake_accounts[i].warmup_cooldown_rate;
 
-    fd_delegation_pair_t_mapnode_t * stake_node = fd_delegation_pair_t_map_acquire( epoch_bank->stakes.stake_delegations_pool );
-    fd_memcpy( &stake_node->elem.account, &stake_account, sizeof(fd_pubkey_t) );
-    fd_memcpy( &stake_node->elem.delegation.voter_pubkey, &voter_pubkey, sizeof(fd_pubkey_t) );
-    stake_node->elem.delegation.stake                = stake;
-    stake_node->elem.delegation.activation_epoch     = activation_epoch;
-    stake_node->elem.delegation.deactivation_epoch   = deactivation_epoch;
-    stake_node->elem.delegation.warmup_cooldown_rate = warmup_cooldown_rate;
+  //   fd_delegation_pair_t_mapnode_t * stake_node = fd_delegation_pair_t_map_acquire( epoch_bank->stakes.stake_delegations_pool );
+  //   fd_memcpy( &stake_node->elem.account, &stake_account, sizeof(fd_pubkey_t) );
+  //   fd_memcpy( &stake_node->elem.delegation.voter_pubkey, &voter_pubkey, sizeof(fd_pubkey_t) );
+  //   stake_node->elem.delegation.stake                = stake;
+  //   stake_node->elem.delegation.activation_epoch     = activation_epoch;
+  //   stake_node->elem.delegation.deactivation_epoch   = deactivation_epoch;
+  //   stake_node->elem.delegation.warmup_cooldown_rate = warmup_cooldown_rate;
 
-    fd_delegation_pair_t_map_insert( epoch_bank->stakes.stake_delegations_pool,
-                                     &epoch_bank->stakes.stake_delegations_root,
-                                     stake_node );
-  }
+  //   fd_delegation_pair_t_map_insert( epoch_bank->stakes.stake_delegations_pool,
+  //                                    &epoch_bank->stakes.stake_delegations_root,
+  //                                    stake_node );
+  // }
 
   /* Update vote cache for epoch T */
-  fd_runtime_fuzz_block_update_votes_cache( slot_ctx,
-                                            epoch_bank->stakes.vote_accounts.vote_accounts_pool,
-                                            &epoch_bank->stakes.vote_accounts.vote_accounts_root,
-                                            test_ctx->epoch_ctx.vote_accounts_t,
-                                            test_ctx->epoch_ctx.vote_accounts_t_count,
-                                            runner->spad,
-                                            1 );
+  // fd_runtime_fuzz_block_update_votes_cache( slot_ctx,
+  //                                           epoch_bank->stakes.vote_accounts.vote_accounts_pool,
+  //                                           &epoch_bank->stakes.vote_accounts.vote_accounts_root,
+  //                                           test_ctx->epoch_ctx.vote_accounts_t,
+  //                                           test_ctx->epoch_ctx.vote_accounts_t_count,
+  //                                           runner->spad,
+  //                                           1 );
 
   /* Update vote cache for epoch T-1 */
   // fd_runtime_fuzz_block_update_votes_cache( slot_ctx,

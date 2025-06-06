@@ -198,19 +198,6 @@ prepare_new_epoch_execution( fd_exec_tile_ctx_t *            ctx,
   ctx->txn_ctx->schedule = epoch_msg->epoch_schedule;
   ctx->txn_ctx->rent     = epoch_msg->rent;
 
-  uchar * stakes_enc = fd_wksp_laddr_fast( ctx->runtime_public_wksp, epoch_msg->stakes_encoded_gaddr );
-  if( FD_UNLIKELY( !stakes_enc ) ) {
-    FD_LOG_ERR(( "Could not get laddr for encoded stakes" ));
-  }
-
-  // FIXME account for this in exec spad footprint
-  int err;
-  fd_stakes_t * stakes = fd_bincode_decode_spad( stakes, ctx->exec_spad, stakes_enc, epoch_msg->stakes_encoded_sz, &err );
-  if( FD_UNLIKELY( err ) ) {
-    FD_LOG_ERR(( "Could not decode stakes" ));
-  }
-  ctx->txn_ctx->stakes = *stakes;
-
   /* TODO: The bank hash cmp obj can likely be shared once at boot and
       there is no need to pass it forward every epoch. The proper
       solution here is probably to create a new message type. */

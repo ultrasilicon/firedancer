@@ -98,6 +98,7 @@ fd_exec_slot_ctx_delete( void * mem );
 fd_exec_slot_ctx_t *
 fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         ctx,
                           fd_solana_manifest_t const * manifest,
+                          fd_solana_manifest_global_t * manifest_global,
                           fd_spad_t *                  spad );
 
 /* fd_exec_slot_ctx_recover re-initializes the current slot

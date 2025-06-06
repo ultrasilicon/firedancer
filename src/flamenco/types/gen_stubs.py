@@ -363,7 +363,7 @@ class PrimitiveMember(TypeNode):
 
     def emitSize(self, inner, indent=''):
         if self.encode:
-            PrimitiveMember.emitSizeMap[self.type](self.name, self.varint, inner, indent);
+            PrimitiveMember.emitSizeMap[self.type](self.name, self.varint, inner, indent)
 
     emitWalkMap = {
         "char" :      lambda n, inner: print(f'  fun( w, &self->{inner}{n}, "{n}", FD_FLAMENCO_TYPE_SCHAR, "char", level );', file=body),
@@ -1641,7 +1641,7 @@ class MapMember(TypeNode):
         print(f'  }}', file=body)
 
         print(f'  self->{self.name}_pool_offset = (ulong){mapname}_leave( {self.name}_pool ) - (ulong)struct_mem;', file=body)
-        print(f'  self->{self.name}_root_offset = (ulong){mapname}_leave( {self.name}_root ) - (ulong)struct_mem;', file=body)
+        print(f'  self->{self.name}_root_offset = (ulong){self.name}_root - (ulong)struct_mem;', file=body)
 
     def emitEncode(self):
         element_type = self.elem_type()

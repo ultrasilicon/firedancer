@@ -68,22 +68,7 @@ generate_replay_exec_epoch_msg( fd_exec_slot_ctx_t * slot_ctx,
       FD_LOG_ERR(( "Failed to get gaddr for bank hash cmp" ));
     }
 
-    ulong   stakes_encode_sz  = fd_stakes_size( &slot_ctx->epoch_ctx->epoch_bank.stakes ) + 128UL;
-    uchar * stakes_encode_mem = fd_spad_alloc( runtime_spad,
-                                               fd_stakes_align(),
-                                               stakes_encode_sz );
-
-    fd_bincode_encode_ctx_t encode = {
-      .data    = stakes_encode_mem,
-      .dataend = stakes_encode_mem + stakes_encode_sz
-    };
-    int err = fd_stakes_encode( &slot_ctx->epoch_ctx->epoch_bank.stakes, &encode );
-    if( FD_UNLIKELY( err ) ) {
-      FD_LOG_ERR(( "Failed to encode stakes" ));
-    }
-
-    epoch_msg_out->stakes_encoded_gaddr = fd_wksp_gaddr_fast( runtime_public_wksp, stakes_encode_mem );
-    epoch_msg_out->stakes_encoded_sz    = stakes_encode_sz;
+    (void)runtime_spad;
 }
 
 /* generate_replay_exec_slot_msg formats memory at slot_msg_out to be

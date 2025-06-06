@@ -278,6 +278,27 @@ fd_snapshot_restore_manifest( fd_snapshot_restore_t * restore ) {
     return err;
   }
 
+  fd_bincode_decode_ctx_t ctx = {
+    .data = restore->buf,
+    .dataend = restore->buf + restore->buf_sz,
+  };
+  ulong total_sz = 0UL;
+  err = fd_solana_manifest_decode_footprint( &ctx, &total_sz );
+  if( FD_UNLIKELY( err ) ) {
+    FD_LOG_WARNING(( "fd_solana_manifest_decode_footprint failed (%d)", err ));
+    return err;
+  }
+  FD_LOG_WARNING(("TOTAL SZ %lu", total_sz));
+  uchar * mem = fd_spad_alloc( restore->spad, 1024UL, total_sz );
+  (void)mem;
+  fd_solana_manifest_global_t * manifest_global = fd_solana_manifest_decode_global( mem, &ctx );
+  FD_TEST( manifest_global );
+
+  fd_vote_accounts_pair_global_t_mapnode_t * vote_accounts_pool = fd_vote_accounts_vote_accounts_pool_join( &manifest_global->bank.stakes.vote_accounts );
+  fd_vote_accounts_pair_global_t_mapnode_t * vote_accounts_root = fd_vote_accounts_vote_accounts_root_join( &manifest_global->bank.stakes.vote_accounts );
+  FD_TEST( vote_accounts_pool );
+  FD_TEST( vote_accounts_root );
+
   if( manifest->bank_incremental_snapshot_persistence ) {
     FD_LOG_NOTICE(( "Incremental snapshot has incremental snapshot persistence with full acc_hash=%s and incremental acc_hash=%s",
                     FD_BASE58_ENC_32_ALLOCA(&manifest->bank_incremental_snapshot_persistence->full_hash),
@@ -300,7 +321,7 @@ fd_snapshot_restore_manifest( fd_snapshot_restore_t * restore ) {
      This destroys all remaining fields with the slot context valloc. */
 
   if( restore->cb_manifest ) {
-    err = restore->cb_manifest( restore->cb_manifest_ctx, manifest, restore->spad );
+    err = restore->cb_manifest( restore->cb_manifest_ctx, manifest, manifest_global, restore->spad );
   }
 
   /* Read AccountVec map */

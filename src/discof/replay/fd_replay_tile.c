@@ -1869,10 +1869,13 @@ init_after_snapshot( fd_replay_tile_ctx_t * ctx,
   ulong * eah_start_slot = fd_bank_mgr_eah_start_slot_query( ctx->slot_ctx->bank_mgr );
   ulong * eah_stop_slot = fd_bank_mgr_eah_stop_slot_query( ctx->slot_ctx->bank_mgr );
 
+  fd_stakes_global_t * stakes = fd_bank_mgr_stakes_query( ctx->slot_ctx->bank_mgr );
+  fd_vote_accounts_global_t * vote_accounts = &stakes->vote_accounts;
+
   fd_epoch_init( ctx->epoch,
                  *eah_start_slot,
                  *eah_stop_slot,
-                 &snapshot_fork->slot_ctx->epoch_ctx->epoch_bank.stakes.vote_accounts );
+                 vote_accounts );
   fd_ghost_init( ctx->ghost, snapshot_slot );
 
   fd_funk_rec_key_t key = { 0 };

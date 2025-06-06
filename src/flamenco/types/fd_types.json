@@ -324,6 +324,7 @@
     {
       "name": "stake_pair",
       "type": "struct",
+      "constructor": true,
       "fields": [
         { "name": "account", "type": "pubkey" },
         { "name": "stake", "type": "stake" }
@@ -333,6 +334,7 @@
       "name": "stakes",
       "type": "struct",
       "global": true,
+      "alignment": "128",
       "fields": [
         { "name": "vote_accounts", "type": "vote_accounts" },
         { "name": "stake_delegations", "type": "map", "element": "delegation_pair", "key": "account" },
@@ -579,6 +581,7 @@
     {
       "name": "solana_manifest",
       "type": "struct",
+      "global": true,
       "fields": [
         { "name": "bank",                                  "type": "versioned_bank" },
         { "name": "accounts_db",                           "type": "solana_accounts_db_fields" },
@@ -1090,9 +1093,8 @@
     {
       "name": "epoch_bank",
       "type": "struct",
-      "archival": "true",
       "fields": [
-        { "name": "stakes", "type": "stakes" }
+        { "name": "filler", "type": "ulong" }
       ]
     },
     {

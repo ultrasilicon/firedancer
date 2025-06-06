@@ -204,8 +204,6 @@ struct fd_runtime_public_epoch_msg {
   fd_features_t       features;
   fd_epoch_schedule_t epoch_schedule;
   fd_rent_t           rent;
-  ulong               stakes_encoded_gaddr;
-  ulong               stakes_encoded_sz;
   ulong               bank_hash_cmp_gaddr;
 };
 typedef struct fd_runtime_public_epoch_msg fd_runtime_public_epoch_msg_t;

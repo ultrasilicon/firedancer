@@ -59,8 +59,9 @@ fd_hashes_load( fd_exec_slot_ctx_t * slot_ctx ) {
 static int
 restore_manifest( void *                 ctx,
                   fd_solana_manifest_t * manifest,
+                  fd_solana_manifest_global_t * manifest_global,
                   fd_spad_t *            spad ) {
-  return (!!fd_exec_slot_ctx_recover( ctx, manifest, spad ) ? 0 : EINVAL);
+  return (!!fd_exec_slot_ctx_recover( ctx, manifest, manifest_global, spad ) ? 0 : EINVAL);
 }
 
 static int
