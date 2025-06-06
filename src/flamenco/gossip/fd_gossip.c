@@ -1,7 +1,7 @@
 #include "fd_gossip.h"
 #include "fd_gossip_private.h"
 
-#include "fd_crds.h"
+#include "crds/fd_crds.h"
 #include "fd_active_set.h"
 #include "fd_prune_finder.h"
 #include "fd_ping_tracker.h"
@@ -42,7 +42,7 @@ struct fd_gossip_private {
     failed_insert_t * entries;
     ulong             cursor; /* index into next entry to write to */
     ulong             cnt;
-    ulong             max;
+    ulong             cap;
   } failed_inserts;
 
   /* Callbacks */
@@ -118,7 +118,7 @@ fd_gossip_new( void *                shmem,
   gossip->failed_inserts.entries = (failed_insert_t *)failed_inserts;
   gossip->failed_inserts.cursor  = 0UL;
   gossip->failed_inserts.cnt     = 0UL;
-  gossip->failed_inserts.max     = max_values/4;
+  gossip->failed_inserts.cap     = max_values/4;
 
   fd_sha512_init( gossip->sha512 );
   gossip->rng = rng;
@@ -289,7 +289,7 @@ verify_signatures( fd_gossip_view_t const * view,
 
 static ulong
 failed_inserts_start_idx( fd_gossip_t const * gossip ) {
-  return (gossip->failed_inserts.cursor-gossip->failed_inserts.cnt+gossip->failed_inserts.max)%gossip->failed_inserts.max;
+  return (gossip->failed_inserts.cursor-gossip->failed_inserts.cnt+gossip->failed_inserts.cap)%gossip->failed_inserts.cap;
 }
 
 static void
@@ -300,8 +300,8 @@ failed_inserts_append( fd_gossip_t * gossip,
   failed_insert->wallclock_nanos  = now;
   fd_memcpy( failed_insert->hash, hash, 32UL );
 
-  gossip->failed_inserts.cursor = (gossip->failed_inserts.cursor+1UL)%gossip->failed_inserts.max;
-  gossip->failed_inserts.cnt    = fd_ulong_min( gossip->failed_inserts.cnt+1UL, gossip->failed_inserts.max );
+  gossip->failed_inserts.cursor = (gossip->failed_inserts.cursor+1UL)%gossip->failed_inserts.cap;
+  gossip->failed_inserts.cnt    = fd_ulong_min( gossip->failed_inserts.cnt+1UL, gossip->failed_inserts.cap );
 }
 
 static void
@@ -313,7 +313,7 @@ failed_inserts_purge( fd_gossip_t * gossip,
     long ts = gossip->failed_inserts.entries[ idx ].wallclock_nanos;
     if( FD_UNLIKELY( ts>=cutoff_nanos ) ) break;
 
-    idx = (idx+1UL)%gossip->failed_inserts.max;
+    idx = (idx+1UL)%gossip->failed_inserts.cap;
     gossip->failed_inserts.cnt--;
   }
 }
@@ -803,7 +803,7 @@ tx_pull_request( fd_gossip_t * gossip,
     uchar const * hash = gossip->failed_inserts.entries[ fi_idx ].hash;
     if( FD_LIKELY( (fd_ulong_load_8( hash )>>shift)!=mask ) ) continue;
     fd_bloom_insert( filter, hash, 32UL );
-    fi_idx = (fi_idx+1UL)%gossip->failed_inserts.max;
+    fi_idx = (fi_idx+1UL)%gossip->failed_inserts.cap;
   }
 
   fd_ip4_port_t peer = fd_crds_sample_peer( gossip->crds );
