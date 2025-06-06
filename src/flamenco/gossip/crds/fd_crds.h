@@ -1,9 +1,9 @@
 #ifndef HEADER_fd_src_flamenco_gossip_fd_crds_h
 #define HEADER_fd_src_flamenco_gossip_fd_crds_h
 
-#include "../../util/fd_util.h"
-#include "../../util/net/fd_net_headers.h"
-#include "fd_gossip_private.h"
+#include "../../../util/fd_util.h"
+#include "../../../util/net/fd_net_headers.h"
+#include "../fd_gossip_private.h"
 
 struct fd_crds_entry_private;
 typedef struct fd_crds_entry_private fd_crds_entry_t;
@@ -103,28 +103,38 @@ void
 fd_crds_release( fd_crds_t *       crds,
                  fd_crds_entry_t * value );
 
-/* fd_crds_populate_upsert fills in the minimum information necessary
-   for a valid fd_crds_upserts query. Supplied view and payload are
-   assumed to be error free (i.e., no possibility of OOBs when correctly
-   used). */
+/* fd_crds_populate_preflight fills in the minimum information necessary
+   for valid calls to the following functions
+      - fd_crds_upserts()
+      - fd_crds_value_hash()
+
+   This avoids a full memcpy of the CRDS data, which is only needed in
+   fd_crds_insert(). Supplied view and payload are assumed to be error
+   free (i.e., no possibility of OOBs when correctly used). */
 
 void
-fd_crds_populate_upsert( fd_gossip_view_crds_value_t const * view,
-                         uchar const *                       view_payload,
-                         fd_crds_entry_t *                   out_value );
+fd_crds_populate_preflight( fd_gossip_view_crds_value_t const * view,
+                            uchar const *                       view_payload,
+                            fd_crds_entry_t *                   out_value );
 
-/* fd_crds_populate_insert fills in the information necessary
+/* fd_crds_populate_full fills in the information necessary
    for a valid fd_crds_insert call from a given CRDS view and the corresponding
    payload. view and payload are assumed to be error free (i.e., no possibility
-   of OOBs when correctly used). has_upsert_info can be set if the entry was
-   previously populated with fd_crds_populate_upsert. */
+   of OOBs when correctly used).
+
+   Contact Info (CI) messages will also additionally populate an entry in the
+   crds contact info table.
+
+   has_preflight_info can be set if the entry was
+   previously populated with fd_crds_populate_preflight. */
 
 void
-fd_crds_populate_insert( fd_gossip_view_crds_value_t const * view,
-                         uchar const *                       view_payload,
-                         long                                now,
-                         uchar                               has_upsert_info,
-                         fd_crds_entry_t *                   out_value );
+fd_crds_populate_full( fd_crds_t *                         crds,
+                       fd_gossip_view_crds_value_t const * view,
+                       uchar const *                       view_payload,
+                       long                                now,
+                       uchar                               has_upsert_info,
+                       fd_crds_entry_t *                   out_value );
 
 /* fd_crds_upserts checks if inserting the value into the CRDS would
    succeed.  An insert will fail if the value is already present in the
@@ -148,6 +158,12 @@ fd_crds_insert( fd_crds_t *       crds,
 
 uchar const *
 fd_crds_value_hash( fd_crds_entry_t const * value );
+
+/* Returns 1 if the provided pubkey (assumed 32b) has a corresponding Contact Info
+   entry in the table. */
+int
+fd_crds_has_contact_info( fd_crds_t const * crds,
+                          uchar const *     pubkey );
 
 ulong
 fd_crds_purged_len( fd_crds_t * crds );

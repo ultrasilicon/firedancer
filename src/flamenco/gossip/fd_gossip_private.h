@@ -41,9 +41,36 @@
 #define FD_NANOSEC_TO_MILLI(_ts_) ((long)(_ts_/1000000))
 #define FD_MILLI_TO_NANOSEC(_ts_) ((long)(_ts_*1000000))
 
+struct fd_gossip_view_ipaddr {
+  uchar   is_ip6;
+  union {
+    uint   ip4_addr;
+    ushort ip6_addr_off; /* Offset to 16-byte value */
+  };
+};
+
+typedef struct fd_gossip_view_ipaddr fd_gossip_view_ipaddr_t;
+
+struct fd_gossip_view_socket {
+  uchar   key;
+  uchar   index;
+  ushort  offset; /* NOTE: this is a varint in encoded form */
+};
+
+typedef struct fd_gossip_view_socket fd_gossip_view_socket_t;
+
 struct fd_gossip_view_contact_info {
-  long   instance_creation_wallclock_nanos;
-  ushort shred_version;
+  long                    instance_creation_wallclock_nanos;
+  ushort                  shred_version;
+
+  ushort                  addrs_len;
+  fd_gossip_view_ipaddr_t addrs[ 16UL ];    /* TODO: calculate length bounds */
+
+  ushort                  sockets_len;
+  fd_gossip_view_socket_t sockets[ 16UL ];  /* TODO: calculate length bounds */
+
+  ushort                  ext_len;
+  ushort                  ext_off;
 };
 
 typedef struct fd_gossip_view_contact_info fd_gossip_view_contact_info_t;

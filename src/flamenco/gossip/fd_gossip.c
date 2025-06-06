@@ -376,9 +376,9 @@ rx_pull_response( fd_gossip_t *                          gossip,
     fd_crds_entry_t * candidate =  fd_crds_acquire( gossip->crds );
 
     /* Fill up with information needed for upsert */
-    fd_crds_populate_upsert( &pull_response->crds_values[i],
-                             payload,
-                             candidate );
+    fd_crds_populate_preflight( &pull_response->crds_values[i],
+                                payload,
+                                candidate );
 
     int upserts = fd_crds_upserts( gossip->crds, candidate );
 
@@ -400,12 +400,14 @@ rx_pull_response( fd_gossip_t *                          gossip,
     int error = 0;
 
     if( FD_LIKELY( accept_after_nanos<=pull_response->crds_values[ i ].wallclock_nanos ) ||
-                   fd_crds_has_contact_info( pull_response->sender_pubkey ) ) {
-      fd_crds_populate_insert( &pull_response->crds_values[i],
-                               payload,
-                               now,
-                               1, /* has_upsert_info */
-                               candidate );
+                   fd_crds_has_contact_info( gossip->crds,
+                                             payload+pull_response->crds_values[i].pubkey_off ) ) {
+      fd_crds_populate_full( gossip->crds,
+                             &pull_response->crds_values[i],
+                             payload,
+                             now,
+                             1, /* has_upsert_info */
+                             candidate );
       error = fd_crds_insert( gossip->crds, candidate, 0 /* from_push_msg */ );
     } else {
       failed_inserts_append( gossip, fd_crds_value_hash( candidate ), now );
@@ -433,13 +435,19 @@ rx_push( fd_gossip_t *                 gossip,
     fd_crds_entry_t * candidate = fd_crds_acquire( gossip->crds );
     /* Separate upsert check prior to insertion to save us a memcpy if not upserting.
 
-       FIXME: We still need to call crds_insert so that the purge table is correctly updated,
-       but we don't need to perform the full memcpy since the insert call terminates prior
-       to any insertion in this case. This is pretty confusing, will need to clean up. */
-    fd_crds_populate_upsert( value, payload, candidate );
+       FIXME: Even if new value does not upsert, we still need to call crds_insert
+       so that the purge table is correctly updated, but we don't need to perform
+       the full population since the insert call terminates prior to any insertion
+       in this case. This is pretty confusing, will need to clean up. */
+    fd_crds_populate_preflight( value, payload, candidate );
 
     if( FD_UNLIKELY( fd_crds_upserts( gossip->crds, candidate ) ) ) {
-      fd_crds_populate_insert( value, payload, now, 1 /* has_upsert_info */, candidate );
+      fd_crds_populate_full( gossip->crds,
+                             value,
+                             payload,
+                             now,
+                             1 /* has_upsert_info */,
+                             candidate );
     }
 
     int error            = fd_crds_insert( gossip->crds, candidate, 1 /* from_push_msg */ );
