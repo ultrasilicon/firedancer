@@ -1778,34 +1778,6 @@ struct fd_feature_entry {
 typedef struct fd_feature_entry fd_feature_entry_t;
 #define FD_FEATURE_ENTRY_ALIGN alignof(fd_feature_entry_t)
 
-/* Encoded Size: Dynamic */
-struct fd_firedancer_bank {
-  fd_stakes_t stakes;
-  fd_recent_block_hashes_t recent_block_hashes;
-  fd_clock_timestamp_votes_t timestamp_votes;
-  ulong slot;
-  ulong prev_slot;
-  fd_hash_t poh;
-  ulong capitalization;
-  ulong block_height;
-  ulong lamports_per_signature;
-  ulong hashes_per_tick;
-  ulong ticks_per_slot;
-  uint128 ns_per_slot;
-  ulong genesis_creation_time;
-  double slots_per_year;
-  ulong max_tick_height;
-  fd_inflation_t inflation;
-  fd_epoch_schedule_t epoch_schedule;
-  fd_rent_t rent;
-  ulong collected_fees;
-  ulong collected_rent;
-  fd_vote_accounts_t epoch_stakes;
-  fd_sol_sysvar_last_restart_slot_t last_restart_slot;
-};
-typedef struct fd_firedancer_bank fd_firedancer_bank_t;
-#define FD_FIREDANCER_BANK_ALIGN alignof(fd_firedancer_bank_t)
-
 struct fd_cluster_type {
   uint discriminant;
 };
@@ -4602,14 +4574,6 @@ ulong fd_feature_entry_size( fd_feature_entry_t const * self );
 static inline ulong fd_feature_entry_align( void ) { return FD_FEATURE_ENTRY_ALIGN; }
 int fd_feature_entry_decode_footprint( fd_bincode_decode_ctx_t * ctx, ulong * total_sz );
 void * fd_feature_entry_decode( void * mem, fd_bincode_decode_ctx_t * ctx );
-
-void fd_firedancer_bank_new( fd_firedancer_bank_t * self );
-int fd_firedancer_bank_encode( fd_firedancer_bank_t const * self, fd_bincode_encode_ctx_t * ctx );
-void fd_firedancer_bank_walk( void * w, fd_firedancer_bank_t const * self, fd_types_walk_fn_t fun, const char *name, uint level );
-ulong fd_firedancer_bank_size( fd_firedancer_bank_t const * self );
-static inline ulong fd_firedancer_bank_align( void ) { return FD_FIREDANCER_BANK_ALIGN; }
-int fd_firedancer_bank_decode_footprint( fd_bincode_decode_ctx_t * ctx, ulong * total_sz );
-void * fd_firedancer_bank_decode( void * mem, fd_bincode_decode_ctx_t * ctx );
 
 static inline void fd_cluster_type_new_disc( fd_cluster_type_t * self, uint discriminant ) { self->discriminant = discriminant; }
 static inline void fd_cluster_type_new( fd_cluster_type_t * self ) { self->discriminant = (uint)ULONG_MAX; }

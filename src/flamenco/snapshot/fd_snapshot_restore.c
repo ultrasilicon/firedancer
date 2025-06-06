@@ -294,11 +294,6 @@ fd_snapshot_restore_manifest( fd_snapshot_restore_t * restore ) {
   fd_solana_manifest_global_t * manifest_global = fd_solana_manifest_decode_global( mem, &ctx );
   FD_TEST( manifest_global );
 
-  fd_vote_accounts_pair_global_t_mapnode_t * vote_accounts_pool = fd_vote_accounts_vote_accounts_pool_join( &manifest_global->bank.stakes.vote_accounts );
-  fd_vote_accounts_pair_global_t_mapnode_t * vote_accounts_root = fd_vote_accounts_vote_accounts_root_join( &manifest_global->bank.stakes.vote_accounts );
-  FD_TEST( vote_accounts_pool );
-  FD_TEST( vote_accounts_root );
-
   if( manifest->bank_incremental_snapshot_persistence ) {
     FD_LOG_NOTICE(( "Incremental snapshot has incremental snapshot persistence with full acc_hash=%s and incremental acc_hash=%s",
                     FD_BASE58_ENC_32_ALLOCA(&manifest->bank_incremental_snapshot_persistence->full_hash),

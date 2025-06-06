@@ -307,7 +307,7 @@ void *fd_vote_accounts_generate( void *mem, void **alloc_mem, fd_rng_t * rng ) {
   *alloc_mem = (uchar *) *alloc_mem + sizeof(fd_vote_accounts_t);
   fd_vote_accounts_new(mem);
   ulong vote_accounts_len = fd_rng_ulong( rng ) % 8;
-  self->vote_accounts_pool = fd_vote_accounts_pair_t_map_join_new( alloc_mem, fd_ulong_max( vote_accounts_len, 15000 ) );
+  self->vote_accounts_pool = fd_vote_accounts_pair_t_map_join_new( alloc_mem, fd_ulong_max( vote_accounts_len, 50000 ) );
   self->vote_accounts_root = NULL;
   for( ulong i=0; i < vote_accounts_len; i++ ) {
     fd_vote_accounts_pair_t_mapnode_t * node = fd_vote_accounts_pair_t_map_acquire( self->vote_accounts_pool );
@@ -410,7 +410,7 @@ void *fd_stakes_generate( void *mem, void **alloc_mem, fd_rng_t * rng ) {
   fd_stakes_new(mem);
   fd_vote_accounts_generate( &self->vote_accounts, alloc_mem, rng );
   ulong stake_delegations_len = fd_rng_ulong( rng ) % 8;
-  self->stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, stake_delegations_len );
+  self->stake_delegations_pool = fd_delegation_pair_t_map_join_new( alloc_mem, fd_ulong_max( stake_delegations_len, 2000000 ) );
   self->stake_delegations_root = NULL;
   for( ulong i=0; i < stake_delegations_len; i++ ) {
     fd_delegation_pair_t_mapnode_t * node = fd_delegation_pair_t_map_acquire( self->stake_delegations_pool );
@@ -1551,35 +1551,6 @@ void *fd_feature_entry_generate( void *mem, void **alloc_mem, fd_rng_t * rng ) {
     self->description = NULL;
   }
   self->since_slot = fd_rng_ulong( rng );
-  return mem;
-}
-
-void *fd_firedancer_bank_generate( void *mem, void **alloc_mem, fd_rng_t * rng ) {
-  fd_firedancer_bank_t *self = (fd_firedancer_bank_t *) mem;
-  *alloc_mem = (uchar *) *alloc_mem + sizeof(fd_firedancer_bank_t);
-  fd_firedancer_bank_new(mem);
-  fd_stakes_generate( &self->stakes, alloc_mem, rng );
-  fd_recent_block_hashes_generate( &self->recent_block_hashes, alloc_mem, rng );
-  fd_clock_timestamp_votes_generate( &self->timestamp_votes, alloc_mem, rng );
-  self->slot = fd_rng_ulong( rng );
-  self->prev_slot = fd_rng_ulong( rng );
-  fd_hash_generate( &self->poh, alloc_mem, rng );
-  self->capitalization = fd_rng_ulong( rng );
-  self->block_height = fd_rng_ulong( rng );
-  self->lamports_per_signature = fd_rng_ulong( rng );
-  self->hashes_per_tick = fd_rng_ulong( rng );
-  self->ticks_per_slot = fd_rng_ulong( rng );
-  self->ns_per_slot = fd_rng_uint128( rng );
-  self->genesis_creation_time = fd_rng_ulong( rng );
-  self->slots_per_year = fd_rng_double_o( rng );
-  self->max_tick_height = fd_rng_ulong( rng );
-  fd_inflation_generate( &self->inflation, alloc_mem, rng );
-  fd_epoch_schedule_generate( &self->epoch_schedule, alloc_mem, rng );
-  fd_rent_generate( &self->rent, alloc_mem, rng );
-  self->collected_fees = fd_rng_ulong( rng );
-  self->collected_rent = fd_rng_ulong( rng );
-  fd_vote_accounts_generate( &self->epoch_stakes, alloc_mem, rng );
-  fd_sol_sysvar_last_restart_slot_generate( &self->last_restart_slot, alloc_mem, rng );
   return mem;
 }
 

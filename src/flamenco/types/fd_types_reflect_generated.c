@@ -3,7 +3,7 @@
 #include "fd_types_custom.h"
 #include "fd_types_reflect_private.h"
 #pragma GCC diagnostic ignored "-Wpedantic"
-ulong fd_types_vt_list_cnt = 249;
+ulong fd_types_vt_list_cnt = 248;
 fd_types_vt_t const fd_types_vt_list[] = {
   { .name="fd_hash", .name_len=7, .align=FD_HASH_ALIGN, .new_=(void *)fd_hash_new, .decode=(void *)fd_hash_decode, .size=(void *)fd_hash_size, .walk=(void *)fd_hash_walk, .decode_footprint=(void *)fd_hash_decode_footprint, .encode=(void *)fd_hash_encode  },
   { .name="fd_pubkey", .name_len=9, .align=FD_PUBKEY_ALIGN, .new_=(void *)fd_pubkey_new, .decode=(void *)fd_pubkey_decode, .size=(void *)fd_pubkey_size, .walk=(void *)fd_pubkey_walk, .decode_footprint=(void *)fd_pubkey_decode_footprint, .encode=(void *)fd_pubkey_encode  },
@@ -102,7 +102,6 @@ fd_types_vt_t const fd_types_vt_list[] = {
   { .name="fd_config_keys_pair", .name_len=19, .align=FD_CONFIG_KEYS_PAIR_ALIGN, .new_=(void *)fd_config_keys_pair_new, .decode=(void *)fd_config_keys_pair_decode, .size=(void *)fd_config_keys_pair_size, .walk=(void *)fd_config_keys_pair_walk, .decode_footprint=(void *)fd_config_keys_pair_decode_footprint, .encode=(void *)fd_config_keys_pair_encode  },
   { .name="fd_stake_config", .name_len=15, .align=FD_STAKE_CONFIG_ALIGN, .new_=(void *)fd_stake_config_new, .decode=(void *)fd_stake_config_decode, .size=(void *)fd_stake_config_size, .walk=(void *)fd_stake_config_walk, .decode_footprint=(void *)fd_stake_config_decode_footprint, .encode=(void *)fd_stake_config_encode  },
   { .name="fd_feature_entry", .name_len=16, .align=FD_FEATURE_ENTRY_ALIGN, .new_=(void *)fd_feature_entry_new, .decode=(void *)fd_feature_entry_decode, .size=(void *)fd_feature_entry_size, .walk=(void *)fd_feature_entry_walk, .decode_footprint=(void *)fd_feature_entry_decode_footprint, .encode=(void *)fd_feature_entry_encode  },
-  { .name="fd_firedancer_bank", .name_len=18, .align=FD_FIREDANCER_BANK_ALIGN, .new_=(void *)fd_firedancer_bank_new, .decode=(void *)fd_firedancer_bank_decode, .size=(void *)fd_firedancer_bank_size, .walk=(void *)fd_firedancer_bank_walk, .decode_footprint=(void *)fd_firedancer_bank_decode_footprint, .encode=(void *)fd_firedancer_bank_encode  },
   { .name="fd_cluster_type", .name_len=15, .align=FD_CLUSTER_TYPE_ALIGN, .new_=(void *)fd_cluster_type_new, .decode=(void *)fd_cluster_type_decode, .size=(void *)fd_cluster_type_size, .walk=(void *)fd_cluster_type_walk, .decode_footprint=(void *)fd_cluster_type_decode_footprint, .encode=(void *)fd_cluster_type_encode  },
   { .name="fd_rent_fresh_account", .name_len=21, .align=FD_RENT_FRESH_ACCOUNT_ALIGN, .new_=(void *)fd_rent_fresh_account_new, .decode=(void *)fd_rent_fresh_account_decode, .size=(void *)fd_rent_fresh_account_size, .walk=(void *)fd_rent_fresh_account_walk, .decode_footprint=(void *)fd_rent_fresh_account_decode_footprint, .encode=(void *)fd_rent_fresh_account_encode  },
   { .name="fd_rent_fresh_accounts", .name_len=22, .align=FD_RENT_FRESH_ACCOUNTS_ALIGN, .new_=(void *)fd_rent_fresh_accounts_new, .decode=(void *)fd_rent_fresh_accounts_decode, .size=(void *)fd_rent_fresh_accounts_size, .walk=(void *)fd_rent_fresh_accounts_walk, .decode_footprint=(void *)fd_rent_fresh_accounts_decode_footprint, .encode=(void *)fd_rent_fresh_accounts_encode  },
