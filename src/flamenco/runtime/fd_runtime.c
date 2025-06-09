@@ -2741,7 +2741,7 @@ fd_apply_builtin_program_feature_transitions( fd_exec_slot_ctx_t * slot_ctx,
   fd_builtin_program_t const * builtins = fd_builtins();
   for( ulong i=0UL; i<fd_num_builtins(); i++ ) {
     /* https://github.com/anza-xyz/agave/blob/v2.1.0/runtime/src/bank.rs#L6732-L6751 */
-    if( builtins[i].core_bpf_migration_config && FD_FEATURE_ACTIVE_OFFSET( slot_ctx->slot, slot_ctx->epoch_ctx->features, builtins[i].core_bpf_migration_config->enable_feature_offset ) ) {
+    if( builtins[i].core_bpf_migration_config && FD_FEATURE_ACTIVE_OFFSET( slot_ctx->slot, *fd_bank_mgr_features_query( slot_ctx->bank_mgr ), builtins[i].core_bpf_migration_config->enable_feature_offset ) ) {
       FD_LOG_NOTICE(( "Migrating builtin program %s to core BPF", FD_BASE58_ENC_32_ALLOCA( builtins[i].pubkey->key ) ));
       fd_migrate_builtin_to_core_bpf( slot_ctx,
                                       builtins[i].core_bpf_migration_config->upgrade_authority_address,

@@ -13,7 +13,8 @@
    address. */
 
 static void
-fd_feature_restore( fd_exec_slot_ctx_t *    slot_ctx,
+fd_feature_restore( fd_features_t *         features,
+                    fd_exec_slot_ctx_t *    slot_ctx,
                     fd_feature_id_t const * id,
                     uchar const             acct[ static 32 ],
                     fd_spad_t *             runtime_spad ) {
@@ -59,7 +60,7 @@ fd_feature_restore( fd_exec_slot_ctx_t *    slot_ctx,
 
     if( feature->has_activated_at ) {
       FD_LOG_INFO(( "Feature %s activated at %lu", FD_BASE58_ENC_32_ALLOCA( acct ), feature->activated_at ));
-      fd_features_set( &slot_ctx->epoch_ctx->features, id, feature->activated_at );
+      fd_features_set( features, id, feature->activated_at );
     } else {
       FD_LOG_DEBUG(( "Feature %s not activated at %lu", FD_BASE58_ENC_32_ALLOCA( acct ), feature->activated_at ));
     }
@@ -69,13 +70,13 @@ fd_feature_restore( fd_exec_slot_ctx_t *    slot_ctx,
 
 void
 fd_features_restore( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad ) {
+  fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
+
   for( fd_feature_id_t const * id = fd_feature_iter_init();
                                    !fd_feature_iter_done( id );
                                id = fd_feature_iter_next( id ) ) {
-    fd_feature_restore( slot_ctx, id, id->id.key, runtime_spad );
+    fd_feature_restore( features, slot_ctx, id, id->id.key, runtime_spad );
   }
 
-  fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
-  *features = slot_ctx->epoch_ctx->features;
   fd_bank_mgr_features_save( slot_ctx->bank_mgr );
 }

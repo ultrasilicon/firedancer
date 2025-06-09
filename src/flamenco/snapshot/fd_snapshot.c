@@ -494,7 +494,7 @@ fd_snapshot_hash( fd_exec_slot_ctx_t *    slot_ctx,
                       slot_ctx->slot,
                       &hash,
                       runtime_spad,
-                      &slot_ctx->epoch_ctx->features,
+                      fd_bank_mgr_features_query( slot_ctx->bank_mgr ),
                       exec_para_ctx,
                       lt_hash );
 
@@ -509,7 +509,7 @@ fd_snapshot_hash( fd_exec_slot_ctx_t *    slot_ctx,
                            slot_ctx->slot,
                            accounts_hash,
                            runtime_spad,
-                           &slot_ctx->epoch_ctx->features,
+                           fd_bank_mgr_features_query( slot_ctx->bank_mgr ),
                            exec_para_ctx,
                            lt_hash );
 }

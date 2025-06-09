@@ -830,7 +830,7 @@ funk_publish( fd_replay_tile_ctx_t * ctx,
                         ctx->slot_ctx->slot,
                         &out_hash,
                         ctx->runtime_spad,
-                        &ctx->slot_ctx->epoch_ctx->features,
+                        fd_bank_mgr_features_query( ctx->slot_ctx->bank_mgr ),
                         &exec_para_ctx,
                         NULL );
       FD_LOG_NOTICE(( "Done computing epoch account hash (%s)", FD_BASE58_ENC_32_ALLOCA( &out_hash ) ));
@@ -1992,7 +1992,8 @@ init_snapshot( fd_replay_tile_ctx_t * ctx,
   ctx->slot_ctx = fork->slot_ctx;
 
   // Tell the world about the current activate features
-  fd_memcpy( &ctx->runtime_public->features, &ctx->slot_ctx->epoch_ctx->features, sizeof(ctx->runtime_public->features) );
+  fd_features_t * features = fd_bank_mgr_features_query( ctx->slot_ctx->bank_mgr );
+  fd_memcpy( &ctx->runtime_public->features, features, sizeof(ctx->runtime_public->features) );
 
   send_exec_epoch_msg( ctx, stem, ctx->slot_ctx );
 
@@ -2808,7 +2809,8 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->bank_hash_cmp = fd_bank_hash_cmp_join( fd_bank_hash_cmp_new( bank_hash_cmp_shmem ) );
   ctx->epoch_ctx     = fd_exec_epoch_ctx_join( fd_exec_epoch_ctx_new( epoch_ctx_mem, tile->replay.max_vote_accounts ) );
 
-  FD_BANK_MGR_DECL( bank_mgr, ctx->funk, NULL );
+  FD_BANK_MGR_DECL(bank_mgr, ctx->funk, NULL)
+
   fd_cluster_version_t * cluster_version = fd_bank_mgr_cluster_version_modify( bank_mgr );
 
   if( FD_UNLIKELY( sscanf( tile->replay.cluster_version, "%u.%u.%u", &cluster_version->major, &cluster_version->minor, &cluster_version->patch )!=3 ) ) {
@@ -2816,13 +2818,15 @@ unprivileged_init( fd_topo_t *      topo,
   }
   fd_bank_mgr_cluster_version_save( bank_mgr );
 
-  fd_features_enable_cleaned_up( &ctx->epoch_ctx->features, cluster_version );
+  fd_features_t * features = fd_bank_mgr_features_modify( bank_mgr );
+  fd_features_enable_cleaned_up( features, cluster_version );
 
   char const * one_off_features[16];
   for (ulong i = 0; i < tile->replay.enable_features_cnt; i++) {
     one_off_features[i] = tile->replay.enable_features[i];
   }
-  fd_features_enable_one_offs(&ctx->epoch_ctx->features, one_off_features, (uint)tile->replay.enable_features_cnt, 0UL);
+  fd_features_enable_one_offs(features, one_off_features, (uint)tile->replay.enable_features_cnt, 0UL);
+  fd_bank_mgr_features_save( bank_mgr );
 
   ctx->epoch = fd_epoch_join( fd_epoch_new( epoch_mem, FD_VOTER_MAX ) );
   ctx->forks = fd_forks_join( fd_forks_new( forks_mem, FD_BLOCK_MAX, 42UL ) );

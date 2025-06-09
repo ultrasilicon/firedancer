@@ -433,7 +433,7 @@ runtime_replay( fd_ledger_args_t * ledger_args ) {
         .status_cache   = ledger_args->slot_ctx->status_cache,
         .tpool          = ledger_args->snapshot_tpool,
         .spad           = ledger_args->runtime_spad,
-        .features       = &ledger_args->slot_ctx->epoch_ctx->features
+        .features       = fd_bank_mgr_features_query( ledger_args->slot_ctx->bank_mgr )
       };
 
       fd_tpool_exec( ledger_args->snapshot_bg_tpool, 1UL, fd_create_snapshot_task, NULL,
@@ -445,7 +445,7 @@ runtime_replay( fd_ledger_args_t * ledger_args ) {
       ledger_args->is_snapshotting = 1;
 
       fd_snapshot_ctx_t snapshot_ctx = {
-        .features                 = &ledger_args->slot_ctx->epoch_ctx->features,
+        .features                 = fd_bank_mgr_features_query( ledger_args->slot_ctx->bank_mgr ),
         .slot                     = ledger_args->slot_ctx->root_slot,
         .out_dir                  = ledger_args->snapshot_dir,
         .is_incremental           = 1,
@@ -1178,16 +1178,6 @@ ingest( fd_ledger_args_t * args ) {
                     blockstore, args->copy_txn_status, args->trash_hash, args->valloc );
   }
 
-  /* Verification */
-  for( fd_feature_id_t const * id = fd_feature_iter_init();
-                                    !fd_feature_iter_done( id );
-                                id = fd_feature_iter_next( id ) ) {
-    ulong activated_at = fd_features_get( &slot_ctx->epoch_ctx->features, id );
-    if( activated_at ) {
-      FD_LOG_DEBUG(( "feature %s activated at slot %lu", FD_BASE58_ENC_32_ALLOCA( id->id.key ), activated_at ));
-    }
-  }
-
 #ifdef FD_FUNK_HANDHOLDING
   if( args->verify_funk ) {
     FD_LOG_NOTICE(( "fd_funk_verify() start" ));
@@ -1288,11 +1278,11 @@ replay( fd_ledger_args_t * args ) {
 
   args->epoch_ctx->runtime_public = runtime_public;
 
-  fd_features_enable_cleaned_up( &args->epoch_ctx->features, cluster_version );
-  fd_features_enable_one_offs( &args->epoch_ctx->features, args->one_off_features, args->one_off_features_cnt, 0UL );
-
   fd_features_t * features = fd_bank_mgr_features_modify( args->slot_ctx->bank_mgr );
-  *features = args->epoch_ctx->features;
+
+  fd_features_enable_cleaned_up( features, cluster_version );
+  fd_features_enable_one_offs( features, args->one_off_features, args->one_off_features_cnt, 0UL );
+
   fd_bank_mgr_features_save( args->slot_ctx->bank_mgr );
 
   ulong * slot_bm = fd_bank_mgr_slot_modify( args->slot_ctx->bank_mgr );
@@ -1300,7 +1290,8 @@ replay( fd_ledger_args_t * args ) {
   fd_bank_mgr_slot_save( args->slot_ctx->bank_mgr );
 
   // activate them
-  fd_memcpy( &args->epoch_ctx->runtime_public->features, &args->epoch_ctx->features, sizeof(fd_features_t) );
+  features = fd_bank_mgr_features_query( args->slot_ctx->bank_mgr );
+  fd_memcpy( &args->epoch_ctx->runtime_public->features, features, sizeof(fd_features_t) );
 
   void * status_cache_mem = fd_spad_alloc_check( spad,
       FD_TXNCACHE_ALIGN,

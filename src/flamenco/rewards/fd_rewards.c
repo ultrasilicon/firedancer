@@ -57,18 +57,18 @@ validator( fd_inflation_t const * inflation, double year) {
     https://github.com/anza-xyz/agave/blob/7117ed9653ce19e8b2dea108eff1f3eb6a3378a7/runtime/src/bank.rs#L2095 */
 static FD_FN_CONST ulong
 get_inflation_start_slot( fd_exec_slot_ctx_t * slot_ctx ) {
-    ulong devnet_and_testnet = FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, devnet_and_testnet ) ? slot_ctx->epoch_ctx->features.devnet_and_testnet : ULONG_MAX;
+    ulong devnet_and_testnet = FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, devnet_and_testnet ) ? fd_bank_mgr_features_query( slot_ctx->bank_mgr )->devnet_and_testnet : ULONG_MAX;
 
     ulong enable = ULONG_MAX;
-    if( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, full_inflation_vote ) &&
-        FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, full_inflation_enable ) ) {
-      enable = slot_ctx->epoch_ctx->features.full_inflation_enable;
+    if( FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, full_inflation_vote ) &&
+        FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, full_inflation_enable ) ) {
+      enable = fd_bank_mgr_features_query( slot_ctx->bank_mgr )->full_inflation_enable;
     }
 
     ulong min_slot = fd_ulong_min( enable, devnet_and_testnet );
     if( min_slot == ULONG_MAX ) {
-      if( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, pico_inflation ) ) {
-        min_slot = slot_ctx->epoch_ctx->features.pico_inflation;
+      if( FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, pico_inflation ) ) {
+        min_slot = fd_bank_mgr_features_query( slot_ctx->bank_mgr )->pico_inflation;
       } else {
         min_slot = 0;
       }
@@ -305,11 +305,11 @@ calculate_previous_epoch_inflation_rewards( fd_exec_slot_ctx_t *                
 /* https://github.com/anza-xyz/agave/blob/cbc8320d35358da14d79ebcada4dfb6756ffac79/programs/stake/src/lib.rs#L29 */
 static ulong
 get_minimum_stake_delegation( fd_exec_slot_ctx_t * slot_ctx ) {
-  if( !FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, stake_minimum_delegation_for_rewards ) ) {
+  if( !FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, stake_minimum_delegation_for_rewards ) ) {
     return 0UL;
   }
 
-  if( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, stake_raise_minimum_delegation_to_1_sol ) ) {
+  if( FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, stake_raise_minimum_delegation_to_1_sol ) ) {
     return LAMPORTS_PER_SOL;
   }
 
@@ -396,7 +396,7 @@ calculate_reward_points_partitioned( fd_exec_slot_ctx_t *       slot_ctx,
                                                    slot_ctx->funk,
                                                    slot_ctx->funk_txn,
                                                    runtime_spad,
-                                                   &slot_ctx->epoch_ctx->features,
+                                                   fd_bank_mgr_features_query( slot_ctx->bank_mgr ),
                                                    new_warmup_cooldown_rate_epoch,
                                                    _err );
   if( FD_UNLIKELY( !is_some ) ) {
@@ -459,7 +459,7 @@ calculate_stake_vote_rewards_account( fd_epoch_info_t const *                   
     fd_pubkey_t const *          stake_acc  = &stake_info->account;
     fd_stake_t const *           stake      = &stake_info->stake;
 
-    if( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, stake_minimum_delegation_for_rewards ) ) {
+    if( FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, stake_minimum_delegation_for_rewards ) ) {
       if( stake->delegation.stake<minimum_stake_delegation ) {
         continue;
       }
@@ -614,7 +614,7 @@ calculate_stake_vote_rewards( fd_exec_slot_ctx_t *                       slot_ct
                                                    slot_ctx->funk,
                                                    slot_ctx->funk_txn,
                                                    runtime_spad,
-                                                   &slot_ctx->epoch_ctx->features,
+                                                   fd_bank_mgr_features_query( slot_ctx->bank_mgr ),
                                                    new_warmup_cooldown_rate_epoch,
                                                    _err );
   if( FD_UNLIKELY( !is_some ) ) {
@@ -1063,8 +1063,8 @@ distribute_epoch_rewards_in_partition( fd_partitioned_stake_rewards_dlist_t * pa
   }
 
   /* Update the epoch rewards sysvar with the amount distributed and burnt */
-  if( FD_LIKELY( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, enable_partitioned_epoch_reward ) ||
-                 FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, partitioned_epoch_rewards_superfeature ) ) ) {
+  if( FD_LIKELY( FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, enable_partitioned_epoch_reward ) ||
+                 FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, partitioned_epoch_rewards_superfeature ) ) ) {
     fd_sysvar_epoch_rewards_distribute( slot_ctx,
                                         lamports_distributed + lamports_burned,
                                         runtime_spad );
@@ -1257,7 +1257,7 @@ fd_rewards_recalculate_partitioned_rewards( fd_exec_slot_ctx_t * slot_ctx,
                                                      slot_ctx->funk,
                                                      slot_ctx->funk_txn,
                                                      runtime_spad,
-                                                     &slot_ctx->epoch_ctx->features,
+                                                     fd_bank_mgr_features_query( slot_ctx->bank_mgr ),
                                                      new_warmup_cooldown_rate_epoch,
                                                      _err );
     if( FD_UNLIKELY( !is_some ) ) {

@@ -2,6 +2,7 @@
 #include "fd_bpf_loader_program.h"
 #include "fd_loader_v4_program.h"
 #include "../fd_acc_mgr.h"
+#include "../fd_bank_mgr.h"
 #include "../context/fd_exec_slot_ctx.h"
 #include "../../vm/syscall/fd_vm_syscall.h"
 
@@ -199,7 +200,7 @@ fd_bpf_create_bpf_program_cache_entry( fd_exec_slot_ctx_t *    slot_ctx,
     fd_bpf_get_sbpf_versions( &min_sbpf_version,
                               &max_sbpf_version,
                               slot_ctx->slot,
-                              &slot_ctx->epoch_ctx->features );
+                              fd_bank_mgr_features_query( slot_ctx->bank_mgr ) );
     if( fd_sbpf_elf_peek( &elf_info, program_data, program_data_len, /* deploy checks */ 0, min_sbpf_version, max_sbpf_version ) == NULL ) {
       FD_LOG_DEBUG(( "fd_sbpf_elf_peek() failed: %s", fd_sbpf_strerror() ));
       return FD_EXECUTOR_INSTR_ERR_INVALID_ACC_DATA;
