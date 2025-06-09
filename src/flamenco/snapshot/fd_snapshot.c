@@ -140,8 +140,8 @@ fd_snapshot_load_init( fd_snapshot_load_ctx_t * ctx ) {
 
   // the hash in the incremental snapshot of an lt_hash contains all the accounts.  This means we don't need a sub-txn for the incremental
   if( ctx->verify_hash &&
-    (FD_FEATURE_ACTIVE( ctx->slot_ctx->slot, ctx->slot_ctx->epoch_ctx->features, incremental_snapshot_only_incremental_hash_calculation )
-      && !FD_FEATURE_ACTIVE( ctx->slot_ctx->slot, ctx->slot_ctx->epoch_ctx->features, snapshots_lt_hash ) )) {
+    (FD_FEATURE_ACTIVE_BM( ctx->slot_ctx->bank_mgr, incremental_snapshot_only_incremental_hash_calculation )
+      && !FD_FEATURE_ACTIVE_BM( ctx->slot_ctx->bank_mgr, snapshots_lt_hash ) )) {
     fd_funk_txn_xid_t xid;
     memset( &xid, 0xc3, sizeof(xid) );
     fd_funk_txn_start_write( ctx->slot_ctx->funk );
@@ -245,9 +245,9 @@ fd_snapshot_load_fini( fd_snapshot_load_ctx_t * ctx ) {
   fd_features_restore( ctx->slot_ctx, ctx->runtime_spad );
   fd_calculate_epoch_accounts_hash_values( ctx->slot_ctx );
 
-  int snapshots_lt_hash = FD_FEATURE_ACTIVE( ctx->slot_ctx->slot, ctx->slot_ctx->epoch_ctx->features, snapshots_lt_hash );
-  int accounts_lt_hash = FD_FEATURE_ACTIVE( ctx->slot_ctx->slot, ctx->slot_ctx->epoch_ctx->features, accounts_lt_hash );
-  int incremental_snapshot_only_incremental_hash_calculation = FD_FEATURE_ACTIVE( ctx->slot_ctx->slot, ctx->slot_ctx->epoch_ctx->features,
+  int snapshots_lt_hash = FD_FEATURE_ACTIVE_BM( ctx->slot_ctx->bank_mgr, snapshots_lt_hash );
+  int accounts_lt_hash = FD_FEATURE_ACTIVE_BM( ctx->slot_ctx->bank_mgr, accounts_lt_hash );
+  int incremental_snapshot_only_incremental_hash_calculation = FD_FEATURE_ACTIVE_BM( ctx->slot_ctx->bank_mgr,
     incremental_snapshot_only_incremental_hash_calculation );
 
 #ifdef FD_LTHASH_SNAPSHOT_HACK
@@ -453,7 +453,7 @@ fd_snapshot_load_prefetch_manifest( fd_snapshot_load_ctx_t * ctx ) {
 
 static int
 fd_should_snapshot_include_epoch_accounts_hash(fd_exec_slot_ctx_t * slot_ctx) {
-  if( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, snapshots_lt_hash ) ) {
+  if( FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, snapshots_lt_hash ) ) {
     return 0;
   }
 

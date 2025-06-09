@@ -814,8 +814,8 @@ funk_publish( fd_replay_tile_ctx_t * ctx,
   }
   fd_funk_txn_end_write( ctx->funk );
 
-  if( FD_LIKELY( FD_FEATURE_ACTIVE( ctx->slot_ctx->slot, ctx->slot_ctx->epoch_ctx->features, epoch_accounts_hash ) &&
-                 !FD_FEATURE_ACTIVE( ctx->slot_ctx->slot, ctx->slot_ctx->epoch_ctx->features, accounts_lt_hash ) ) ) {
+  if( FD_LIKELY( FD_FEATURE_ACTIVE_BM( bank_mgr, epoch_accounts_hash ) &&
+                 !FD_FEATURE_ACTIVE_BM( bank_mgr, accounts_lt_hash ) ) ) {
 
     ulong * eah_start_slot = fd_bank_mgr_eah_start_slot_query( bank_mgr );
     if( wmk>=*eah_start_slot ) {

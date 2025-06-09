@@ -144,12 +144,12 @@ fd_bpf_get_sbpf_versions( uint *                sbpf_min_version,
                           uint *                sbpf_max_version,
                           ulong                 slot,
                           fd_features_t const * features ) {
-  int disable_v0  = FD_FEATURE_ACTIVE( slot, *features, disable_sbpf_v0_execution );
-  int reenable_v0 = FD_FEATURE_ACTIVE( slot, *features, reenable_sbpf_v0_execution );
+  int disable_v0  = FD_FEATURE_ACTIVE_PTR( slot, features, disable_sbpf_v0_execution );
+  int reenable_v0 = FD_FEATURE_ACTIVE_PTR( slot, features, reenable_sbpf_v0_execution );
   int enable_v0   = !disable_v0 || reenable_v0;
-  int enable_v1   = FD_FEATURE_ACTIVE( slot, *features, enable_sbpf_v1_deployment_and_execution );
-  int enable_v2   = FD_FEATURE_ACTIVE( slot, *features, enable_sbpf_v2_deployment_and_execution );
-  int enable_v3   = FD_FEATURE_ACTIVE( slot, *features, enable_sbpf_v3_deployment_and_execution );
+  int enable_v1   = FD_FEATURE_ACTIVE_PTR( slot, features, enable_sbpf_v1_deployment_and_execution );
+  int enable_v2   = FD_FEATURE_ACTIVE_PTR( slot, features, enable_sbpf_v2_deployment_and_execution );
+  int enable_v3   = FD_FEATURE_ACTIVE_PTR( slot, features, enable_sbpf_v3_deployment_and_execution );
 
   *sbpf_min_version = enable_v0 ? FD_SBPF_V0 : FD_SBPF_V3;
   if( enable_v3 ) {

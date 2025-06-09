@@ -1291,6 +1291,14 @@ replay( fd_ledger_args_t * args ) {
   fd_features_enable_cleaned_up( &args->epoch_ctx->features, cluster_version );
   fd_features_enable_one_offs( &args->epoch_ctx->features, args->one_off_features, args->one_off_features_cnt, 0UL );
 
+  fd_features_t * features = fd_bank_mgr_features_modify( args->slot_ctx->bank_mgr );
+  *features = args->epoch_ctx->features;
+  fd_bank_mgr_features_save( args->slot_ctx->bank_mgr );
+
+  ulong * slot_bm = fd_bank_mgr_slot_modify( args->slot_ctx->bank_mgr );
+  *slot_bm = 0UL;
+  fd_bank_mgr_slot_save( args->slot_ctx->bank_mgr );
+
   // activate them
   fd_memcpy( &args->epoch_ctx->runtime_public->features, &args->epoch_ctx->features, sizeof(fd_features_t) );
 

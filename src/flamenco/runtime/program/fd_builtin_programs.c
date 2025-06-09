@@ -227,11 +227,11 @@ void fd_builtin_programs_init( fd_exec_slot_ctx_t * slot_ctx ) {
   }
 
   //TODO: remove when no longer necessary
-  if( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, zk_token_sdk_enabled ) ) {
+  if( FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, zk_token_sdk_enabled ) ) {
     fd_write_builtin_account( slot_ctx, fd_solana_zk_token_proof_program_id, "zk_token_proof_program", 22UL );
   }
 
-  if( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, zk_elgamal_proof_program_enabled ) ) {
+  if( FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, zk_elgamal_proof_program_enabled ) ) {
     fd_write_builtin_account( slot_ctx, fd_solana_zk_elgamal_proof_program_id, "zk_elgamal_proof_program", 24UL );
   }
 
@@ -242,12 +242,12 @@ void fd_builtin_programs_init( fd_exec_slot_ctx_t * slot_ctx ) {
     char data[1] = {1};
     fd_write_builtin_account( slot_ctx, fd_solana_keccak_secp_256k_program_id, data, 1 );
     fd_write_builtin_account( slot_ctx, fd_solana_ed25519_sig_verify_program_id, data, 1 );
-    if( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, enable_secp256r1_precompile ) )
+    if( FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, enable_secp256r1_precompile ) )
       fd_write_builtin_account( slot_ctx, fd_solana_secp256r1_program_id, data, 1 );
   } else {
     fd_write_builtin_account( slot_ctx, fd_solana_keccak_secp_256k_program_id, "", 0 );
     fd_write_builtin_account( slot_ctx, fd_solana_ed25519_sig_verify_program_id, "", 0 );
-    if( FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, enable_secp256r1_precompile ) )
+    if( FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, enable_secp256r1_precompile ) )
       fd_write_builtin_account( slot_ctx, fd_solana_secp256r1_program_id, "", 0 );
   }
 

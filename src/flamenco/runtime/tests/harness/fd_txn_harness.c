@@ -59,6 +59,16 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   *features = epoch_ctx->features;
   fd_bank_mgr_features_save( slot_ctx->bank_mgr );
 
+  /* Default slot */
+  ulong slot = test_ctx->slot_ctx.slot ? test_ctx->slot_ctx.slot : 10; // Arbitrary default > 0
+
+  /* Set slot bank variables (defaults obtained from GenesisConfig::default() in Agave) */
+  slot_ctx->slot = slot;
+
+  ulong * slot_bm = fd_bank_mgr_slot_modify( slot_ctx->bank_mgr );
+  *slot_bm = slot;
+  fd_bank_mgr_slot_save( slot_ctx->bank_mgr );
+
   /* Initialize builtin accounts */
   fd_builtin_programs_init( slot_ctx );
 
@@ -75,11 +85,7 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   /* Add accounts to bpf program cache */
   fd_bpf_scan_and_create_bpf_program_cache_entry( slot_ctx, runner->spad );
 
-  /* Default slot */
-  ulong slot = test_ctx->slot_ctx.slot ? test_ctx->slot_ctx.slot : 10; // Arbitrary default > 0
 
-  /* Set slot bank variables (defaults obtained from GenesisConfig::default() in Agave) */
-  slot_ctx->slot                                                      = slot;
 
   /* Setup Bank manager */
 
@@ -94,10 +100,6 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   ulong * prev_lamports_per_signature = fd_bank_mgr_prev_lamports_per_signature_modify( slot_ctx->bank_mgr );
   *prev_lamports_per_signature = 5000;
   fd_bank_mgr_prev_lamports_per_signature_save( slot_ctx->bank_mgr );
-
-  ulong * slot_bm = fd_bank_mgr_slot_modify( slot_ctx->bank_mgr );
-  *slot_bm = slot_ctx->slot;
-  fd_bank_mgr_slot_save( slot_ctx->bank_mgr );
 
   fd_fee_rate_governor_t * fee_rate_governor = fd_bank_mgr_fee_rate_governor_modify( slot_ctx->bank_mgr );
   fee_rate_governor->burn_percent                  = 50;
@@ -206,8 +208,8 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
      the epoch rewards sysvar, we may need to update this.
   */
   fd_sysvar_epoch_rewards_t * epoch_rewards = fd_sysvar_epoch_rewards_read( funk, funk_txn, runner->spad );
-  if( (FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, enable_partitioned_epoch_reward ) ||
-       FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, partitioned_epoch_rewards_superfeature ))
+  if( (FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, enable_partitioned_epoch_reward ) ||
+       FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, partitioned_epoch_rewards_superfeature ))
       && !epoch_rewards ) {
     fd_point_value_t point_value = {0};
     fd_hash_t const * last_hash = test_ctx->blockhash_queue_count > 0 ? (fd_hash_t const *)test_ctx->blockhash_queue[0]->bytes : (fd_hash_t const *)empty_bytes;

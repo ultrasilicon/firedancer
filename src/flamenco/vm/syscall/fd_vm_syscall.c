@@ -33,17 +33,17 @@ fd_vm_syscall_register_slot( fd_sbpf_syscalls_t *      syscalls,
   int enable_epoch_rewards_syscall         = 0;
 
   if( slot ) {
-    enable_blake3_syscall                = FD_FEATURE_ACTIVE( slot, *features, blake3_syscall_enabled );
-    enable_curve25519_syscall            = FD_FEATURE_ACTIVE( slot, *features, curve25519_syscall_enabled );
-    enable_poseidon_syscall              = FD_FEATURE_ACTIVE( slot, *features, enable_poseidon_syscall );
-    enable_alt_bn128_syscall             = FD_FEATURE_ACTIVE( slot, *features, enable_alt_bn128_syscall );
-    enable_alt_bn128_compression_syscall = FD_FEATURE_ACTIVE( slot, *features, enable_alt_bn128_compression_syscall );
-    enable_last_restart_slot_syscall     = FD_FEATURE_ACTIVE( slot, *features, last_restart_slot_sysvar );
-    enable_get_sysvar_syscall            = FD_FEATURE_ACTIVE( slot, *features, get_sysvar_syscall_enabled );
-    enable_get_epoch_stake_syscall       = FD_FEATURE_ACTIVE( slot, *features, enable_get_epoch_stake_syscall );
+    enable_blake3_syscall                = FD_FEATURE_ACTIVE_PTR( slot, features, blake3_syscall_enabled );
+    enable_curve25519_syscall            = FD_FEATURE_ACTIVE_PTR( slot, features, curve25519_syscall_enabled );
+    enable_poseidon_syscall              = FD_FEATURE_ACTIVE_PTR( slot, features, enable_poseidon_syscall );
+    enable_alt_bn128_syscall             = FD_FEATURE_ACTIVE_PTR( slot, features, enable_alt_bn128_syscall );
+    enable_alt_bn128_compression_syscall = FD_FEATURE_ACTIVE_PTR( slot, features, enable_alt_bn128_compression_syscall );
+    enable_last_restart_slot_syscall     = FD_FEATURE_ACTIVE_PTR( slot, features, last_restart_slot_sysvar );
+    enable_get_sysvar_syscall            = FD_FEATURE_ACTIVE_PTR( slot, features, get_sysvar_syscall_enabled );
+    enable_get_epoch_stake_syscall       = FD_FEATURE_ACTIVE_PTR( slot, features, enable_get_epoch_stake_syscall );
     // https://github.com/anza-xyz/agave/blob/v2.1.7/programs/bpf_loader/src/syscalls/mod.rs#L275-L277
-    enable_epoch_rewards_syscall         = FD_FEATURE_ACTIVE( slot, *features, enable_partitioned_epoch_reward ) ||
-                                           FD_FEATURE_ACTIVE( slot, *features, partitioned_epoch_rewards_superfeature );
+    enable_epoch_rewards_syscall         = FD_FEATURE_ACTIVE_PTR( slot, features, enable_partitioned_epoch_reward ) ||
+                                           FD_FEATURE_ACTIVE_PTR( slot, features, partitioned_epoch_rewards_superfeature );
 
   } else { /* enable ALL */
 
