@@ -90,14 +90,14 @@ extern fd_topo_run_tile_t fd_tile_execor;
 extern fd_topo_run_tile_t fd_tile_writer;
 extern fd_topo_run_tile_t fd_tile_batch;
 extern fd_topo_run_tile_t fd_tile_poh;
-extern fd_topo_run_tile_t fd_tile_sender;
+extern fd_topo_run_tile_t fd_tile_send;
 extern fd_topo_run_tile_t fd_tile_eqvoc;
 extern fd_topo_run_tile_t fd_tile_rpcserv;
+extern fd_topo_run_tile_t fd_tile_backtest;
 extern fd_topo_run_tile_t fd_tile_restart;
 extern fd_topo_run_tile_t fd_tile_archiver_feeder;
 extern fd_topo_run_tile_t fd_tile_archiver_writer;
 extern fd_topo_run_tile_t fd_tile_archiver_playback;
-extern fd_topo_run_tile_t fd_tile_archiver_backtest;
 
 extern fd_topo_run_tile_t fd_tile_bencho;
 extern fd_topo_run_tile_t fd_tile_benchg;
@@ -129,7 +129,7 @@ fd_topo_run_tile_t * TILES[] = {
   &fd_tile_writer,
   &fd_tile_batch,
   &fd_tile_poh,
-  &fd_tile_sender,
+  &fd_tile_send,
   &fd_tile_eqvoc,
   &fd_tile_rpcserv,
   &fd_tile_restart,
@@ -137,7 +137,7 @@ fd_topo_run_tile_t * TILES[] = {
   &fd_tile_archiver_writer,
   &fd_tile_archiver_playback,
 #if FD_HAS_ROCKSDB
-  &fd_tile_archiver_backtest,
+  &fd_tile_backtest,
 #endif
   &fd_tile_bencho,
   &fd_tile_benchg,
