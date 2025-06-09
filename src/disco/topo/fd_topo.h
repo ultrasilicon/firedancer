@@ -288,6 +288,7 @@ typedef struct {
       char  genesis[ PATH_MAX ];
       char  incremental[ PATH_MAX ];
       char  slots_replayed[ PATH_MAX ];
+      char  shred_cap[ PATH_MAX ];
       char  snapshot[ PATH_MAX ];
       char  snapshot_dir[ PATH_MAX ];
       char  status_cache[ PATH_MAX ];
@@ -406,7 +407,7 @@ typedef struct {
 
       uint    ip_addr;
       char  identity_key_path[ PATH_MAX ];
-    } sender;
+    } send;
 
     struct {
       char  identity_key_path[ PATH_MAX ];

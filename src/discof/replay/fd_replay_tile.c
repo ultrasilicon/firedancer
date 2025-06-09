@@ -58,7 +58,6 @@
 #define SHRED_IN_IDX   (3UL)
 
 #define STAKE_OUT_IDX  (0UL)
-#define SENDER_OUT_IDX (1UL)
 #define POH_OUT_IDX    (2UL)
 
 #define EXEC_BOOT_WAIT  (0UL)
@@ -121,8 +120,8 @@ struct fd_replay_tile_ctx {
   // Notification output defs
   fd_replay_out_link_t notif_out[1];
 
-  // Sender output defs
-  fd_replay_out_link_t sender_out[1];
+  // Send tile output defs
+  fd_replay_out_link_t send_out[1];
 
   // Stake weights output link defs
   fd_replay_out_link_t stake_weights_out[1];
@@ -1055,14 +1054,18 @@ send_tower_sync( fd_replay_tile_ctx_t * ctx ) {
   ulong vote_slot = fd_tower_votes_peek_tail_const( ctx->tower )->slot;
   fd_hash_t vote_bank_hash[1]  = { 0 };
   fd_hash_t vote_block_hash[1] = { 0 };
-  int err = fd_blockstore_bank_hash_query( ctx->blockstore, vote_slot, vote_bank_hash );
-  if( err ) FD_LOG_ERR(( "invariant violation: missing bank hash for tower vote" ));
-  err = fd_blockstore_block_hash_query( ctx->blockstore, vote_slot, vote_block_hash );
+
+  /* guaranteed to be on frontier from caller check */
+  fd_fork_t const * fork = fd_forks_query_const( ctx->forks, vote_slot );
+  fd_hash_t * bank_hash = fd_bank_mgr_bank_hash_query( fork->slot_ctx->bank_mgr );
+  fd_memcpy( vote_bank_hash, bank_hash, sizeof(fd_hash_t) );
+
+  int err = fd_blockstore_block_hash_query( ctx->blockstore, vote_slot, vote_block_hash );
   if( err ) FD_LOG_ERR(( "invariant violation: missing block hash for tower vote" ));
 
   /* Build a vote state update based on current tower votes. */
 
-  fd_txn_p_t * txn = (fd_txn_p_t *)fd_chunk_to_laddr( ctx->sender_out->mem, ctx->sender_out->chunk );
+  fd_txn_p_t * txn = (fd_txn_p_t *)fd_chunk_to_laddr( ctx->send_out->mem, ctx->send_out->chunk );
   fd_tower_to_vote_txn( ctx->tower,
                         ctx->root,
                         vote_bank_hash,
@@ -1075,20 +1078,21 @@ send_tower_sync( fd_replay_tile_ctx_t * ctx ) {
 
   /* TODO: Can use a smaller size, adjusted for payload length */
   ulong msg_sz     = sizeof( fd_txn_p_t );
-  fd_mcache_publish( ctx->sender_out->mcache,
-                     ctx->sender_out->depth,
-                     ctx->sender_out->seq,
-                     1UL,
-                     ctx->sender_out->chunk,
+  ulong sig        = vote_slot;
+  fd_mcache_publish( ctx->send_out->mcache,
+                     ctx->send_out->depth,
+                     ctx->send_out->seq,
+                     sig,
+                     ctx->send_out->chunk,
                      msg_sz,
                      0UL,
                      0,
                      0 );
-  ctx->sender_out->seq   = fd_seq_inc( ctx->sender_out->seq, 1UL );
-  ctx->sender_out->chunk = fd_dcache_compact_next( ctx->sender_out->chunk,
+  ctx->send_out->seq   = fd_seq_inc( ctx->send_out->seq, 1UL );
+  ctx->send_out->chunk = fd_dcache_compact_next( ctx->send_out->chunk,
                                                   msg_sz,
-                                                  ctx->sender_out->chunk0,
-                                                  ctx->sender_out->wmark );
+                                                  ctx->send_out->chunk0,
+                                                  ctx->send_out->wmark );
 
   /* Dump the latest sent tower into the tower checkpoint file */
   if( FD_LIKELY( ctx->tower_checkpt_fileno > 0 ) ) fd_restart_tower_checkpt( vote_bank_hash, ctx->tower, ctx->ghost, ctx->root, ctx->tower_checkpt_fileno );
@@ -2292,6 +2296,13 @@ after_credit( fd_replay_tile_ctx_t * ctx,
                                             ctx->runtime_spad,
                                             &exec_para_ctx_block_finalize );
 
+    /* Update blockstore with the freshly computed bank hash */
+    fd_block_map_query_t query[1] = { 0 };
+    fd_block_map_prepare( ctx->blockstore->block_map, &curr_slot, NULL, query, FD_MAP_FLAG_BLOCKING );
+    fd_block_info_t * block_info = fd_block_map_query_ele( query );
+    block_info->bank_hash = *fd_bank_mgr_bank_hash_query( fork->slot_ctx->bank_mgr );
+    fd_block_map_publish( query );
+
     fd_spad_pop( ctx->runtime_spad );
     FD_LOG_NOTICE(( "Spad memory after executing block %lu", ctx->runtime_spad->mem_used ));
 
@@ -3003,16 +3014,19 @@ unprivileged_init( fd_topo_t *      topo,
     ctx->notif_out->mcache = NULL;
   }
 
-  fd_topo_link_t * sender_out = &topo->links[ tile->out_link_id[ SENDER_OUT_IDX ] ];
-  ctx->sender_out->idx        = SENDER_OUT_IDX;
-  ctx->sender_out->mcache     = sender_out->mcache;
-  ctx->sender_out->mem        = topo->workspaces[ topo->objs[ sender_out->dcache_obj_id ].wksp_id ].wksp;
-  ctx->sender_out->sync       = fd_mcache_seq_laddr     ( ctx->sender_out->mcache );
-  ctx->sender_out->depth      = fd_mcache_depth         ( ctx->sender_out->mcache );
-  ctx->sender_out->seq        = fd_mcache_seq_query     ( ctx->sender_out->sync );
-  ctx->sender_out->chunk0     = fd_dcache_compact_chunk0( ctx->sender_out->mem, sender_out->dcache );
-  ctx->sender_out->wmark      = fd_dcache_compact_wmark ( ctx->sender_out->mem, sender_out->dcache, sender_out->mtu );
-  ctx->sender_out->chunk      = ctx->sender_out->chunk0;
+  /* Setup send tile output */
+  ulong send_out_idx = fd_topo_find_tile_out_link( topo, tile, "replay_send", 0 );
+  FD_TEST( send_out_idx!=ULONG_MAX );
+  fd_topo_link_t * send_out = &topo->links[ tile->out_link_id[ send_out_idx ] ];
+  ctx->send_out->idx        = send_out_idx;
+  ctx->send_out->mcache     = send_out->mcache;
+  ctx->send_out->mem        = topo->workspaces[ topo->objs[ send_out->dcache_obj_id ].wksp_id ].wksp;
+  ctx->send_out->sync       = fd_mcache_seq_laddr     ( ctx->send_out->mcache );
+  ctx->send_out->depth      = fd_mcache_depth         ( ctx->send_out->mcache );
+  ctx->send_out->seq        = fd_mcache_seq_query     ( ctx->send_out->sync );
+  ctx->send_out->chunk0     = fd_dcache_compact_chunk0( ctx->send_out->mem, send_out->dcache );
+  ctx->send_out->wmark      = fd_dcache_compact_wmark ( ctx->send_out->mem, send_out->dcache, send_out->mtu );
+  ctx->send_out->chunk      = ctx->send_out->chunk0;
 
   /* Set up stake weights tile output */
   fd_topo_link_t * stake_weights_out = &topo->links[ tile->out_link_id[ STAKE_OUT_IDX] ];
