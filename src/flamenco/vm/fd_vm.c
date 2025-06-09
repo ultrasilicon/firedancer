@@ -425,7 +425,7 @@ fd_vm_validate( fd_vm_t const * vm ) {
       break;
     }
 
-    /* https://github.com/solana-labs/rbpf/blob/4ad935be/src/verifier.rs#L411-L418 */
+    /* https://github.com/anza-xyz/sbpf/blob/v0.11.1/src/verifier.rs#L411-L418 */
     case FD_CHECK_CALL_IMM: {
       ulong target_pc = (ulong)( fd_long_sat_add( (long)i, fd_long_sat_add( (long)(int)instr.imm, 1 ) ) );
       if( FD_UNLIKELY( target_pc>text_cnt || !fd_sbpf_calldests_test( vm->calldests, target_pc ) ) ) {
@@ -434,16 +434,10 @@ fd_vm_validate( fd_vm_t const * vm ) {
       break;
     }
 
-    /* https://github.com/solana-labs/rbpf/blob/4ad935be/src/verifier.rs#L423-L428 */
+    /* https://github.com/anza-xyz/sbpf/blob/v0.11.1/src/verifier.rs#L423-L428 */
     case FD_CHECK_SYSCALL: {
-      uint imm = instr.imm;
-      /* check out of bound */
-      if( FD_UNLIKELY( imm==0 || imm >= FD_VM_SBPF_STATIC_SYSCALLS_LIST_SZ ) ) {
-        return FD_VM_INVALID_SYSCALL;
-      }
-      uint syscall_key = FD_VM_SBPF_STATIC_SYSCALLS_LIST[ imm ];
       /* check active syscall */
-      fd_sbpf_syscalls_t const * syscall = fd_sbpf_syscalls_query_const( vm->syscalls, (ulong)syscall_key, NULL );
+      fd_sbpf_syscalls_t const * syscall = fd_sbpf_syscalls_query_const( vm->syscalls, (ulong)instr.imm, NULL );
       if( FD_UNLIKELY( !syscall ) ) {
         return FD_VM_INVALID_SYSCALL;
       }
@@ -590,7 +584,8 @@ fd_vm_init(
    uint mem_regions_cnt,
    fd_vm_acc_region_meta_t * acc_region_metas,
    uchar is_deprecated,
-   int direct_mapping ) {
+   int direct_mapping,
+   int dump_syscall_to_pb ) {
 
   if ( FD_UNLIKELY( vm == NULL ) ) {
     FD_LOG_WARNING(( "NULL vm" ));
@@ -635,6 +630,7 @@ fd_vm_init(
   vm->direct_mapping = direct_mapping;
   vm->stack_frame_size = FD_VM_STACK_FRAME_SZ + ( direct_mapping ? 0UL : FD_VM_STACK_GUARD_SZ );
   vm->segv_store_vaddr = ULONG_MAX;
+  vm->dump_syscall_to_pb = dump_syscall_to_pb;
 
   /* Unpack the configuration */
   int err = fd_vm_setup_state_for_execution( vm );
