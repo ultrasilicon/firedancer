@@ -9,28 +9,12 @@
 /* fd_exec_epoch_ctx_t is the context that stays constant throughout
    an entire epoch. */
 
-struct fd_exec_epoch_ctx_layout {
-  ulong vote_acc_max;
-  ulong footprint;
-
-  ulong stake_votes_off;
-  ulong stake_delegations_off;
-  ulong next_epoch_stakes_off;
-  ulong leaders_off; /* Current epoch only */
-};
-
-typedef struct fd_exec_epoch_ctx_layout fd_exec_epoch_ctx_layout_t;
-
 typedef struct fd_runtime_public fd_runtime_public_t;
 
-struct __attribute__((aligned(64UL))) fd_exec_epoch_ctx {
+struct fd_exec_epoch_ctx {
   ulong                      magic; /* ==FD_EXEC_EPOCH_CTX_MAGIC */
 
-  fd_exec_epoch_ctx_layout_t layout;
-
   fd_features_t              features;
-
-  fd_bank_hash_cmp_t *       bank_hash_cmp;
   fd_runtime_public_t *      runtime_public;
   int                        constipate_root; /* Used for constipation in offline replay. */
 };

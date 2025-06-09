@@ -12,39 +12,10 @@ fd_exec_epoch_ctx_align( void ) {
   return FD_EXEC_EPOCH_CTX_ALIGN;
 }
 
-static ulong
-fd_exec_epoch_ctx_footprint_ext( fd_exec_epoch_ctx_layout_t * layout,
-                                 ulong                        vote_acc_max ) {
-
-  if( FD_UNLIKELY( !vote_acc_max ) ) return 0UL;
-
-  fd_memset( layout, 0, sizeof(fd_exec_epoch_ctx_layout_t) );
-  layout->vote_acc_max = vote_acc_max;
-
-  ulong stake_votes_sz         = fd_vote_accounts_pair_t_map_footprint( vote_acc_max );           if( !stake_votes_sz         ) return 0UL;
-  ulong stake_delegations_sz   = fd_delegation_pair_t_map_footprint   ( vote_acc_max );           if( !stake_delegations_sz   ) return 0UL;
-  ulong next_epoch_stakes_sz   = fd_vote_accounts_pair_t_map_footprint( vote_acc_max );           if( !next_epoch_stakes_sz   ) return 0UL;
-  ulong leaders_sz             = fd_epoch_leaders_footprint( MAX_PUB_CNT, MAX_SLOTS_CNT );        if( !leaders_sz             ) FD_LOG_CRIT(( "invalid fd_epoch_leaders footprint" ));
-
-  FD_SCRATCH_ALLOC_INIT( l, 0 );
-  FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_exec_epoch_ctx_t), sizeof(fd_exec_epoch_ctx_t) );
-  layout->stake_votes_off         = (ulong)FD_SCRATCH_ALLOC_APPEND( l, fd_vote_accounts_pair_t_map_align(), stake_votes_sz         );
-  layout->stake_delegations_off   = (ulong)FD_SCRATCH_ALLOC_APPEND( l, fd_delegation_pair_t_map_align(),    stake_delegations_sz   );
-  layout->next_epoch_stakes_off   = (ulong)FD_SCRATCH_ALLOC_APPEND( l, fd_vote_accounts_pair_t_map_align(), next_epoch_stakes_sz   );
-  layout->leaders_off             = (ulong)FD_SCRATCH_ALLOC_APPEND( l, fd_epoch_leaders_align(),            leaders_sz             );
-
-  return layout->footprint = (ulong)FD_SCRATCH_ALLOC_FINI( l, fd_exec_epoch_ctx_align() );
-}
-
-ulong
-fd_exec_epoch_ctx_footprint( ulong vote_acc_max ) {
-  fd_exec_epoch_ctx_layout_t layout[1];
-  return fd_exec_epoch_ctx_footprint_ext( layout, vote_acc_max );
-}
-
 void *
 fd_exec_epoch_ctx_new( void * mem,
                        ulong  vote_acc_max ) {
+  (void)vote_acc_max;
   if( FD_UNLIKELY( !mem ) ) {
     FD_LOG_WARNING(( "NULL mem" ));
     return NULL;
@@ -57,17 +28,6 @@ fd_exec_epoch_ctx_new( void * mem,
 
   fd_exec_epoch_ctx_t * self = mem;
   fd_memset( self, 0, sizeof(fd_exec_epoch_ctx_t) );
-
-  if( FD_UNLIKELY( !fd_exec_epoch_ctx_footprint_ext( &self->layout, vote_acc_max ) ) ) {
-    FD_LOG_WARNING(( "invalid vote_acc_max" ));
-    return NULL;
-  }
-
-  // fd_features_disable_all( &self->features );
-  // self->epoch_bank.cluster_version.major = FD_DEFAULT_AGAVE_CLUSTER_VERSION_MAJOR;
-  // self->epoch_bank.cluster_version.minor = FD_DEFAULT_AGAVE_CLUSTER_VERSION_MINOR;
-  // self->epoch_bank.cluster_version.patch = FD_DEFAULT_AGAVE_CLUSTER_VERSION_PATCH;
-  // fd_features_enable_cleaned_up( &self->features, &self->epoch_bank.cluster_version );
 
   FD_COMPILER_MFENCE();
   self->magic = FD_EXEC_EPOCH_CTX_MAGIC;
@@ -93,18 +53,6 @@ fd_exec_epoch_ctx_join( void * mem ) {
   return ctx;
 }
 
-static void
-epoch_ctx_bank_mem_leave( fd_exec_epoch_ctx_t * epoch_ctx ) {
-  void * mem = epoch_ctx;
-  fd_exec_epoch_ctx_layout_t const * layout = &epoch_ctx->layout;
-
-  void * stake_votes_mem         = (void *)( (ulong)mem + layout->stake_votes_off         );
-  void * stake_delegations_mem   = (void *)( (ulong)mem + layout->stake_delegations_off   );
-
-  fd_vote_accounts_pair_t_map_leave  ( stake_votes_mem         );
-  fd_delegation_pair_t_map_leave     ( stake_delegations_mem   );
-}
-
 void *
 fd_exec_epoch_ctx_leave( fd_exec_epoch_ctx_t * ctx ) {
   if( FD_UNLIKELY( !ctx ) ) {
@@ -116,8 +64,6 @@ fd_exec_epoch_ctx_leave( fd_exec_epoch_ctx_t * ctx ) {
     FD_LOG_WARNING(( "bad magic" ));
     return NULL;
   }
-
-  epoch_ctx_bank_mem_leave( ctx );
 
   return (void *) ctx;
 }
@@ -139,15 +85,6 @@ fd_exec_epoch_ctx_delete( void * mem ) {
     FD_LOG_WARNING(( "bad magic" ));
     return NULL;
   }
-  fd_exec_epoch_ctx_layout_t const * layout = &hdr->layout;
-
-  void * next_epoch_stakes_mem   = (void *)( (ulong)mem + layout->next_epoch_stakes_off   );
-  void * leaders_mem             = (void *)( (ulong)mem + layout->leaders_off             );
-
-  fd_vote_accounts_pair_t_map_delete( next_epoch_stakes_mem   );
-  fd_epoch_leaders_delete           ( leaders_mem             );
-
-  // fd_exec_epoch_ctx_epoch_bank_delete( hdr );
 
   FD_COMPILER_MFENCE();
   FD_VOLATILE( hdr->magic ) = 0UL;
@@ -159,13 +96,7 @@ fd_exec_epoch_ctx_delete( void * mem ) {
 void
 fd_exec_epoch_ctx_bank_mem_clear( fd_exec_epoch_ctx_t * epoch_ctx ) {
   (void)epoch_ctx;
-  // fd_epoch_bank_t * const epoch_bank = &epoch_ctx->epoch_bank;
-  // {
-  //   fd_vote_accounts_pair_t_mapnode_t * old_pool = epoch_bank->stakes.vote_accounts.vote_accounts_pool;
-  //   fd_vote_accounts_pair_t_mapnode_t * old_root = epoch_bank->stakes.vote_accounts.vote_accounts_root;
-  //   fd_vote_accounts_pair_t_map_release_tree( old_pool, old_root );
-  //   epoch_bank->stakes.vote_accounts.vote_accounts_root = NULL;
-  // }
+
   // {
   //   fd_delegation_pair_t_mapnode_t * old_pool = epoch_bank->stakes.stake_delegations_pool;
   //   fd_delegation_pair_t_mapnode_t * old_root = epoch_bank->stakes.stake_delegations_root;

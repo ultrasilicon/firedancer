@@ -4,7 +4,6 @@
 #include "../fd_runtime.h"
 #include "../fd_borrowed_account.h"
 #include "../fd_system_ids.h"
-#include "../context/fd_exec_epoch_ctx.h"
 
 static void
 write_epoch_rewards( fd_exec_slot_ctx_t * slot_ctx, fd_sysvar_epoch_rewards_t * epoch_rewards ) {

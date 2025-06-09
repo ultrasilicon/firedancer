@@ -207,10 +207,7 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   fd_funk_txn_end_write( funk );
 
   /* Allocate contexts */
-  ulong                 vote_acct_max = fd_ulong_max( 128UL,
-                                                      test_ctx->acct_states_count );
-  uchar *               epoch_ctx_mem = fd_spad_alloc( runner->spad, 128UL, fd_exec_epoch_ctx_footprint( vote_acct_max ) );
-  fd_exec_epoch_ctx_t * epoch_ctx     = fd_exec_epoch_ctx_join( fd_exec_epoch_ctx_new( epoch_ctx_mem, vote_acct_max ) );
+  ulong vote_acct_max = fd_ulong_max( 128UL, test_ctx->acct_states_count );
 
   /* Restore feature flags */
   fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
@@ -225,7 +222,6 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   slot_ctx->funk_txn                    = funk_txn;
   slot_ctx->funk                        = funk;
   slot_ctx->enable_exec_recording       = 0;
-  slot_ctx->epoch_ctx                   = epoch_ctx;
   slot_ctx->runtime_wksp                = fd_wksp_containing( slot_ctx );
   slot_ctx->slot                        = slot;
 

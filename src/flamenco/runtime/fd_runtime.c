@@ -4193,36 +4193,8 @@ fd_runtime_publish_old_txns( fd_exec_slot_ctx_t * slot_ctx,
     if( ++depth == (FD_RUNTIME_NUM_ROOT_BLOCKS - 1 ) ) {
       FD_LOG_DEBUG(("publishing %s (slot %lu)", FD_BASE58_ENC_32_ALLOCA( &txn->xid ), txn->xid.ul[0]));
 
-      if( slot_ctx->status_cache && !fd_txncache_get_is_constipated( slot_ctx->status_cache ) ) {
-        fd_txncache_register_root_slot( slot_ctx->status_cache, txn->xid.ul[0] );
-      } else if( slot_ctx->status_cache ) {
-        fd_txncache_register_constipated_slot( slot_ctx->status_cache, txn->xid.ul[0] );
-      }
-
-      if( slot_ctx->epoch_ctx->constipate_root ) {
-        fd_funk_txn_t * parent = fd_funk_txn_parent( txn, txnpool );
-        if( parent != NULL ) {
-          slot_ctx->root_slot = txn->xid.ul[0];
-
-          if( FD_UNLIKELY( fd_funk_txn_publish_into_parent( funk, txn, 1) != FD_FUNK_SUCCESS ) ) {
-            FD_LOG_ERR(( "Unable to publish into the parent transaction" ));
-          }
-        }
-      } else {
-        slot_ctx->root_slot = txn->xid.ul[0];
-        /* TODO: The epoch boundary check is not correct due to skipped slots. */
-        if( (!(slot_ctx->root_slot % slot_ctx->snapshot_freq) || (
-             !(slot_ctx->root_slot % slot_ctx->incremental_freq) && slot_ctx->last_snapshot_slot)) &&
-             !fd_runtime_is_epoch_boundary( slot_ctx, slot_ctx->root_slot, slot_ctx->root_slot - 1UL )) {
-
-          slot_ctx->last_snapshot_slot         = slot_ctx->root_slot;
-          slot_ctx->epoch_ctx->constipate_root = 1;
-          fd_txncache_set_is_constipated( slot_ctx->status_cache, 1 );
-        }
-
-        if( FD_UNLIKELY( !fd_funk_txn_publish( funk, txn, 1 ) ) ) {
-          FD_LOG_ERR(( "No transactions were published" ));
-        }
+      if( FD_UNLIKELY( !fd_funk_txn_publish( funk, txn, 1 ) ) ) {
+        FD_LOG_ERR(( "No transactions were published" ));
       }
 
       ulong * eah_start_slot = fd_bank_mgr_eah_start_slot_query( slot_ctx->bank_mgr );

@@ -89,7 +89,6 @@ struct fd_ledger_args {
   /* These values are setup and maintained before replay */
   fd_capture_ctx_t *    capture_ctx;             /* capture_ctx is used in runtime_replay for various debugging tasks */
   fd_exec_slot_ctx_t *  slot_ctx;                /* slot_ctx */
-  fd_exec_epoch_ctx_t * epoch_ctx;               /* epoch_ctx */
   fd_tpool_t *          tpool;                   /* thread pool for execution */
   uchar                 tpool_mem[FD_TPOOL_FOOTPRINT( FD_TILE_MAX )] __attribute__( ( aligned( FD_TPOOL_ALIGN ) ) );
 
@@ -197,8 +196,7 @@ fd_create_snapshot_task( void FD_PARAM_UNUSED *tpool,
 
   FD_LOG_NOTICE(( "Successfully produced a snapshot at directory=%s", ledger_args->snapshot_dir ));
 
-  ledger_args->slot_ctx->epoch_ctx->constipate_root = 0;
-  ledger_args->is_snapshotting                      = 0;
+  ledger_args->is_snapshotting = 0;
 
   err = close( snapshot_ctx->tmp_fd );
   if( FD_UNLIKELY( err ) ) {
@@ -761,7 +759,6 @@ fd_ledger_main_teardown( fd_ledger_args_t * args ) {
     fd_solcap_writer_delete( args->capture_ctx->capture );
   }
 
-  fd_exec_epoch_ctx_delete( fd_exec_epoch_ctx_leave( args->epoch_ctx ) );
   fd_exec_slot_ctx_delete( fd_exec_slot_ctx_leave( args->slot_ctx ) );
 }
 
@@ -1079,7 +1076,7 @@ minify( fd_ledger_args_t * args ) {
 
 void
 ingest( fd_ledger_args_t * args ) {
-  /* Setup funk, blockstore, epoch_ctx, and slot_ctx */
+  /* Setup funk, blockstore, and slot_ctx */
   wksp_restore( args );
   init_funk( args );
   if( !args->funk_only ) {
@@ -1094,13 +1091,9 @@ ingest( fd_ledger_args_t * args ) {
   fd_funk_t * funk = args->funk;
 
   args->valloc = allocator_setup( args->wksp );
-  uchar * epoch_ctx_mem = fd_spad_alloc_check( spad, fd_exec_epoch_ctx_align(), fd_exec_epoch_ctx_footprint( args->vote_acct_max ) );
-  fd_memset( epoch_ctx_mem, 0, fd_exec_epoch_ctx_footprint( args->vote_acct_max ) );
-  fd_exec_epoch_ctx_t * epoch_ctx = fd_exec_epoch_ctx_join( fd_exec_epoch_ctx_new( epoch_ctx_mem, args->vote_acct_max ) );
 
   uchar slot_ctx_mem[FD_EXEC_SLOT_CTX_FOOTPRINT] __attribute__((aligned(FD_EXEC_SLOT_CTX_ALIGN)));
   fd_exec_slot_ctx_t * slot_ctx = fd_exec_slot_ctx_join( fd_exec_slot_ctx_new( slot_ctx_mem ) );
-  slot_ctx->epoch_ctx = epoch_ctx;
   args->slot_ctx = slot_ctx;
 
   slot_ctx->funk       = funk;
@@ -1238,7 +1231,7 @@ replay( fd_ledger_args_t * args ) {
 
   void * runtime_public_mem = fd_wksp_alloc_laddr( args->wksp,
     fd_runtime_public_align(),
-    fd_runtime_public_footprint( args->runtime_mem_bound ), FD_EXEC_EPOCH_CTX_MAGIC );
+    fd_runtime_public_footprint( args->runtime_mem_bound ), 0x3E64F44C9F44366AUL );
   if( FD_UNLIKELY( !runtime_public_mem ) ) {
     FD_LOG_ERR(( "Unable to allocate runtime_public mem" ));
   }
@@ -1256,15 +1249,10 @@ replay( fd_ledger_args_t * args ) {
   /* Setup slot_ctx */
   fd_funk_t * funk = args->funk;
 
-  void * epoch_ctx_mem = fd_spad_alloc_check( spad, FD_EXEC_EPOCH_CTX_ALIGN, fd_exec_epoch_ctx_footprint( args->vote_acct_max ) );
-  fd_memset( epoch_ctx_mem, 0, fd_exec_epoch_ctx_footprint( args->vote_acct_max ) );
-  args->epoch_ctx = fd_exec_epoch_ctx_join( fd_exec_epoch_ctx_new( epoch_ctx_mem, args->vote_acct_max ) );
-
   /* TODO: This is very hacky, needs to be cleaned up */
 
   void * slot_ctx_mem        = fd_spad_alloc_check( spad, FD_EXEC_SLOT_CTX_ALIGN, FD_EXEC_SLOT_CTX_FOOTPRINT );
   args->slot_ctx             = fd_exec_slot_ctx_join( fd_exec_slot_ctx_new( slot_ctx_mem ) );
-  args->slot_ctx->epoch_ctx  = args->epoch_ctx;
   args->slot_ctx->funk       = funk;
   args->slot_ctx->blockstore = args->blockstore;
 
@@ -1278,8 +1266,6 @@ replay( fd_ledger_args_t * args ) {
   cluster_version->patch = args->cluster_version[2];
   fd_bank_mgr_cluster_version_save( args->slot_ctx->bank_mgr );
 
-  args->epoch_ctx->runtime_public = runtime_public;
-
   fd_features_t * features = fd_bank_mgr_features_modify( args->slot_ctx->bank_mgr );
 
   fd_features_enable_cleaned_up( features, cluster_version );
@@ -1290,10 +1276,6 @@ replay( fd_ledger_args_t * args ) {
   ulong * slot_bm = fd_bank_mgr_slot_modify( args->slot_ctx->bank_mgr );
   *slot_bm = 0UL;
   fd_bank_mgr_slot_save( args->slot_ctx->bank_mgr );
-
-  // activate them
-  features = fd_bank_mgr_features_query( args->slot_ctx->bank_mgr );
-  fd_memcpy( &args->epoch_ctx->runtime_public->features, features, sizeof(fd_features_t) );
 
   void * status_cache_mem = fd_spad_alloc_check( spad,
       FD_TXNCACHE_ALIGN,

@@ -4,7 +4,6 @@
 #include "../../vm/fd_vm.h"
 #include "../fd_system_ids.h"
 #include "../fd_bank_mgr.h"
-#include "fd_exec_epoch_ctx.h"
 
 void *
 fd_exec_txn_ctx_new( void * mem ) {

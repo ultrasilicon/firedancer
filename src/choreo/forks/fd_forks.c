@@ -190,7 +190,6 @@ static void
 slot_ctx_restore( ulong                 slot,
                   fd_funk_t *           funk,
                   fd_blockstore_t *     blockstore,
-                  fd_exec_epoch_ctx_t * epoch_ctx,
                   fd_spad_t *           runtime_spad,
                   fd_exec_slot_ctx_t *  slot_ctx_out ) {
   (void)runtime_spad;
@@ -224,7 +223,6 @@ slot_ctx_restore( ulong                 slot,
   slot_ctx_out->funk_txn   = txn;
   slot_ctx_out->funk       = funk;
   slot_ctx_out->blockstore = blockstore;
-  slot_ctx_out->epoch_ctx  = epoch_ctx;
 
   slot_ctx_out->slot = slot;
 
@@ -252,7 +250,6 @@ fd_forks_prepare( fd_forks_t const *    forks,
                   ulong                 parent_slot,
                   fd_funk_t *           funk,
                   fd_blockstore_t *     blockstore,
-                  fd_exec_epoch_ctx_t * epoch_ctx,
                   fd_spad_t *           runtime_spad ) {
 
   /* Check the parent block is present in the blockstore and executed. */
@@ -291,7 +288,7 @@ fd_forks_prepare( fd_forks_t const *    forks,
 
     /* Restore and decode w/ funk */
 
-    slot_ctx_restore( fork->slot, funk, blockstore, epoch_ctx, runtime_spad, slot_ctx );
+    slot_ctx_restore( fork->slot, funk, blockstore, runtime_spad, slot_ctx );
 
 
     /* Add to frontier */

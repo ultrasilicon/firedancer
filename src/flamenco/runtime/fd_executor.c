@@ -1284,7 +1284,7 @@ fd_exec_txn_ctx_from_exec_slot_ctx( fd_exec_slot_ctx_t const * slot_ctx,
 
   ctx->status_cache = slot_ctx->status_cache;
 
-  ctx->bank_hash_cmp = slot_ctx->epoch_ctx->bank_hash_cmp;
+  ctx->bank_hash_cmp = slot_ctx->bank_hash_cmp;
 
   ctx->enable_exec_recording       = slot_ctx->enable_exec_recording;
 

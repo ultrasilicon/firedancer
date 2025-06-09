@@ -9,6 +9,7 @@
 #include "../../types/fd_types.h"
 #include "../fd_txncache.h"
 #include "../fd_acc_mgr.h"
+#include "../fd_bank_hash_cmp.h"
 
 /* fd_exec_slot_ctx_t is the context that stays constant during all
    transactions in a block. */
@@ -19,6 +20,8 @@ struct fd_exec_slot_ctx {
   ulong                       slot;
 
   fd_funk_txn_t *             funk_txn;
+
+  fd_bank_hash_cmp_t *       bank_hash_cmp;
 
   /* FIXME: Kind of a gross hack. */
   uchar                       bank_mgr_mem[48]__attribute__((aligned(8UL)));
@@ -31,7 +34,6 @@ struct fd_exec_slot_ctx {
   fd_block_rewards_t          block_rewards;
   ulong                       txns_meta_gaddr;
   ulong                       txns_meta_sz;
-  fd_exec_epoch_ctx_t *       epoch_ctx;
 
   ulong                       total_compute_units_requested;
   ulong                       slots_per_epoch;
