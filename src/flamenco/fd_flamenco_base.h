@@ -100,6 +100,12 @@ typedef struct fd_bank_mgr fd_bank_mgr_t;
 struct fd_capture_ctx;
 typedef struct fd_capture_ctx fd_capture_ctx_t;
 
+struct fd_borrowed_account;
+typedef struct fd_borrowed_account fd_borrowed_account_t;
+
+struct fd_txn_account;
+typedef struct fd_txn_account fd_txn_account_t;
+
 /* fd_rawtxn_b_t is a convenience type to store a pointer to a
    serialized transaction.  Should probably be removed in the future. */
 

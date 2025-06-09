@@ -12,9 +12,6 @@ $(call add-hdrs,fd_blockstore.h fd_rwseq_lock.h)
 $(call add-objs,fd_blockstore,fd_flamenco)
 $(call make-unit-test,test_blockstore,test_blockstore, fd_flamenco fd_util fd_ballet,$(SECP256K1_LIBS))
 
-$(call add-hdrs,fd_borrowed_account.h)
-$(call add-objs,fd_borrowed_account,fd_flamenco)
-
 $(call add-hdrs,fd_executor.h)
 $(call add-objs,fd_executor,fd_flamenco)
 
@@ -35,6 +32,9 @@ $(call add-objs,fd_runtime_public,fd_flamenco)
 
 $(call add-hdrs,fd_bank_mgr.h)
 $(call add-objs,fd_bank_mgr,fd_flamenco)
+
+$(call add-hdrs,fd_borrowed_account.h)
+$(call add-objs,fd_borrowed_account,fd_flamenco)
 
 $(call add-hdrs, tests/fd_dump_pb.h)
 $(call add-objs, tests/fd_dump_pb,fd_flamenco)

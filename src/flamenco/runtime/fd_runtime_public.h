@@ -202,8 +202,6 @@ fd_writer_fseq_is_not_joined( ulong fseq ) {
    bincode serialized/deserialized. */
 struct fd_runtime_public_epoch_msg {
   fd_features_t       features;
-  fd_epoch_schedule_t epoch_schedule;
-  fd_rent_t           rent;
   ulong               bank_hash_cmp_gaddr;
 };
 typedef struct fd_runtime_public_epoch_msg fd_runtime_public_epoch_msg_t;

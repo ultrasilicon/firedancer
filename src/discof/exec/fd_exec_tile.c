@@ -195,8 +195,6 @@ prepare_new_epoch_execution( fd_exec_tile_ctx_t *            ctx,
   ctx->pending_epoch_pop = 1;
 
   ctx->txn_ctx->features = epoch_msg->features;
-  ctx->txn_ctx->schedule = epoch_msg->epoch_schedule;
-  ctx->txn_ctx->rent     = epoch_msg->rent;
 
   /* TODO: The bank hash cmp obj can likely be shared once at boot and
       there is no need to pass it forward every epoch. The proper
@@ -459,7 +457,7 @@ during_frag( fd_exec_tile_ctx_t * ctx,
       return;
     } else if( sig==EXEC_NEW_EPOCH_SIG ) {
       fd_runtime_public_epoch_msg_t * msg = fd_chunk_to_laddr( ctx->replay_in_mem, chunk );
-      FD_LOG_DEBUG(( "new epoch=%lu msg recvd", msg->epoch_schedule.slots_per_epoch ));
+      FD_LOG_DEBUG(( "new epoch msg recvd" ));
       prepare_new_epoch_execution( ctx, msg );
       return;
     } else if( sig==EXEC_HASH_ACCS_SIG ) {

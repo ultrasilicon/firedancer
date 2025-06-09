@@ -81,9 +81,6 @@ struct fd_exec_txn_ctx {
   fd_wksp_t *                          runtime_pub_wksp;
   ulong                                slot;
 
-  fd_epoch_schedule_t                  schedule;
-  fd_rent_t                            rent;
-
   fd_spad_t *                          spad;                                        /* Sized out to handle the worst case footprint of single transaction execution. */
   fd_wksp_t *                          spad_wksp;                                   /* Workspace for the spad. */
   /* Fields below here are not guaranteed to be local joins in txn execution. */

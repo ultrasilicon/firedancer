@@ -467,8 +467,8 @@ load_transaction_account( fd_exec_txn_ctx_t * txn_ctx,
   if( FD_LIKELY( !unknown_acc ) ) {
     if( is_writable ) {
       txn_ctx->collected_rent += fd_runtime_collect_rent_from_account( txn_ctx->slot,
-                                                                       &txn_ctx->schedule,
-                                                                       &txn_ctx->rent,
+                                                                       fd_bank_mgr_epoch_schedule_query( txn_ctx->bank_mgr ),
+                                                                       fd_bank_mgr_rent_query( txn_ctx->bank_mgr ),
                                                                        *(fd_bank_mgr_slots_per_year_query( txn_ctx->bank_mgr )),
                                                                        &txn_ctx->features,
                                                                        acct,
@@ -844,10 +844,10 @@ fd_executor_validate_transaction_fee_payer( fd_exec_txn_ctx_t * txn_ctx ) {
 
   /* Collect rent from the fee payer
      https://github.com/anza-xyz/agave/blob/v2.2.13/svm/src/transaction_processor.rs#L583-L589 */
-  ulong epoch              = fd_slot_to_epoch( &txn_ctx->schedule, txn_ctx->slot, NULL );
+  ulong epoch              = fd_slot_to_epoch( fd_bank_mgr_epoch_schedule_query( txn_ctx->bank_mgr ), txn_ctx->slot, NULL );
   txn_ctx->collected_rent += fd_runtime_collect_rent_from_account( txn_ctx->slot,
-                                                                  &txn_ctx->schedule,
-                                                                  &txn_ctx->rent,
+                                                                  fd_bank_mgr_epoch_schedule_query( txn_ctx->bank_mgr ),
+                                                                  fd_bank_mgr_rent_query( txn_ctx->bank_mgr ),
                                                                   *(fd_bank_mgr_slots_per_year_query( txn_ctx->bank_mgr )),
                                                                   &txn_ctx->features,
                                                                   fee_payer_rec,
@@ -866,7 +866,7 @@ fd_executor_validate_transaction_fee_payer( fd_exec_txn_ctx_t * txn_ctx ) {
   }
 
   /* https://github.com/anza-xyz/agave/blob/v2.2.13/svm/src/transaction_processor.rs#L609-L616 */
-  err = fd_validate_fee_payer( fee_payer_rec, &txn_ctx->rent, total_fee, txn_ctx->spad );
+  err = fd_validate_fee_payer( fee_payer_rec, fd_bank_mgr_rent_query( txn_ctx->bank_mgr ), total_fee, txn_ctx->spad );
   if( FD_UNLIKELY( err ) ) {
     return err;
   }
@@ -1293,16 +1293,6 @@ fd_exec_txn_ctx_from_exec_slot_ctx( fd_exec_slot_ctx_t const * slot_ctx,
 
   ulong * slot = fd_bank_mgr_slot_query( ctx->bank_mgr );
   ctx->slot = !!slot ? *slot : 0UL;
-
-  fd_epoch_schedule_t   epoch_schedule_default = {0};
-  fd_epoch_schedule_t * epoch_schedule         = fd_bank_mgr_epoch_schedule_query( ctx->bank_mgr );
-
-  fd_rent_t   rent_default = {0};
-  fd_rent_t * rent_bm      = fd_bank_mgr_rent_query( ctx->bank_mgr );
-
-  ctx->schedule                    = !!epoch_schedule ? *epoch_schedule : epoch_schedule_default;
-  ctx->rent                        = !!rent_bm        ? *rent_bm        : rent_default;
-
 }
 
 fd_txn_account_t *
@@ -1494,7 +1484,7 @@ fd_execute_txn( fd_execute_txn_task_info_t * task_info ) {
 
 int
 fd_executor_txn_check( fd_exec_txn_ctx_t * txn_ctx ) {
-  fd_rent_t const * rent = &txn_ctx->rent;
+  fd_rent_t const * rent = fd_bank_mgr_rent_query( txn_ctx->bank_mgr );
 
   ulong starting_lamports_l = 0;
   ulong starting_lamports_h = 0;

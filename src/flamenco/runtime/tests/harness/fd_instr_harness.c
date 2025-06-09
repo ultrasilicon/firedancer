@@ -3,10 +3,13 @@
 #define FD_SPAD_USE_HANDHOLDING 1
 
 #include "fd_instr_harness.h"
+#include "../../fd_system_ids.h"
 #include "../../sysvar/fd_sysvar_clock.h"
 #include "../../sysvar/fd_sysvar_epoch_schedule.h"
 #include "../../sysvar/fd_sysvar_recent_hashes.h"
 #include "../../sysvar/fd_sysvar_last_restart_slot.h"
+#include "../../sysvar/fd_sysvar_rent.h"
+
 int
 fd_runtime_fuzz_instr_ctx_create( fd_runtime_fuzz_runner_t *           runner,
                                   fd_exec_instr_ctx_t *                ctx,

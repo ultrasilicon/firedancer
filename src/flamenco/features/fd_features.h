@@ -16,6 +16,7 @@
 
 /* Convenience macros for checking features */
 
+#define FD_FEATURE_ACTIVE_PTR(_slot, _features, _feature_name)            (_slot >= (_features)-> _feature_name)
 #define FD_FEATURE_ACTIVE_(_slot, _features, _feature_name)               (_slot >= (_features). _feature_name)
 #define FD_FEATURE_JUST_ACTIVATED_(_slot, _features, _feature_name)       (_slot == (_features). _feature_name)
 #define FD_FEATURE_ACTIVE_OFFSET_(_slot, _features, _offset)              (_slot >= (_features).f[_offset>>3])
@@ -26,6 +27,8 @@
 #define FD_FEATURE_JUST_ACTIVATED(_slot_ctx, _feature_name)               FD_FEATURE_JUST_ACTIVATED_( _slot_ctx->slot, _slot_ctx->epoch_ctx->features, _feature_name )
 #define FD_FEATURE_ACTIVE_OFFSET(_slot, _features, _offset)               FD_FEATURE_ACTIVE_OFFSET_( _slot, _features, _offset )
 #define FD_FEATURE_JUST_ACTIVATED_OFFSET(_slot_ctx, _offset)              FD_FEATURE_JUST_ACTIVATED_OFFSET_( _slot_ctx->slot, _slot_ctx->epoch_ctx->features, _offset )
+#define FD_FEATURE_ACTIVE_BM(_bank_mgr, _feature_name)                    FD_FEATURE_ACTIVE_PTR( *fd_bank_mgr_slot_query( _bank_mgr ), *fd_bank_mgr_features_query( _bank_mgr ), _feature_name )
+
 
 /* fd_features_t is the current set of enabled feature flags.
 
