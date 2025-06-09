@@ -55,22 +55,20 @@ geys_filter_acct(geys_filter_t * filter, ulong slot, fd_pubkey_t * key, fd_accou
   for( auto& i : filter->elems_ ) {
     if( i.filter_->filterAccount(key, meta, val, val_sz) ) {
 
-      ::geyser::SubscribeUpdateAccount acct;
-      ::geyser::SubscribeUpdate update;
-      update.set_allocated_account(&acct);
-      acct.set_slot(slot);
-      acct.set_is_startup(false);
-      ::geyser::SubscribeUpdateAccountInfo info;
-      acct.set_allocated_account(&info);
-      info.set_pubkey(key->uc, 32U);
-      info.set_lamports(meta->info.lamports);
-      info.set_owner(meta->info.owner, 32U);
-      info.set_executable(meta->info.executable);
-      info.set_data(val, val_sz);
+      auto* update = new ::geyser::SubscribeUpdate();
+      auto* acct = new ::geyser::SubscribeUpdateAccount();
+      update->set_allocated_account(acct);
+      acct->set_slot(slot);
+      acct->set_is_startup(false);
+      auto* info = new ::geyser::SubscribeUpdateAccountInfo();
+      acct->set_allocated_account(info);
+      info->set_pubkey(key->uc, 32U);
+      info->set_lamports(meta->info.lamports);
+      info->set_owner(meta->info.owner, 32U);
+      info->set_executable(meta->info.executable);
+      info->set_data(val, val_sz);
 
-      i.reactor_->StartWrite( &update );
-
-      std::cout << "sent update\n";
+      i.reactor_->Update( update );
     }
   }
 }

@@ -172,11 +172,15 @@ class GeyserClient {
       // The actual RPC.
       auto rpc(stub_->Subscribe(&context));
       rpc->Write(request);
-      rpc->WritesDone();
 
-      while( rpc->Read(&update) ) {
-        std::cout << "*" << std::endl;
+      for( unsigned cnt = 0; cnt < 10; ) {
+        if( rpc->Read(&update) ) {
+          std::cout << "*" << std::endl;
+          ++cnt;
+        }
       }
+
+      rpc->WritesDone();
       rpc->Finish();
     }
 
