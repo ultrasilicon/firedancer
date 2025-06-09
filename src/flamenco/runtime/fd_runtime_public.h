@@ -201,8 +201,7 @@ fd_writer_fseq_is_not_joined( ulong fseq ) {
    represents runtime state that is fork-aware that doesn't need to be
    bincode serialized/deserialized. */
 struct fd_runtime_public_epoch_msg {
-  fd_features_t       features;
-  ulong               bank_hash_cmp_gaddr;
+  ulong bank_hash_cmp_gaddr;
 };
 typedef struct fd_runtime_public_epoch_msg fd_runtime_public_epoch_msg_t;
 

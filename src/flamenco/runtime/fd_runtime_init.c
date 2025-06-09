@@ -74,4 +74,8 @@ fd_features_restore( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad ) {
                                id = fd_feature_iter_next( id ) ) {
     fd_feature_restore( slot_ctx, id, id->id.key, runtime_spad );
   }
+
+  fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
+  *features = slot_ctx->epoch_ctx->features;
+  fd_bank_mgr_features_save( slot_ctx->bank_mgr );
 }

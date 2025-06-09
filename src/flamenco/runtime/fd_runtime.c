@@ -2886,9 +2886,9 @@ fd_runtime_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
 
   long start = fd_log_wallclock();
 
-  ulong             slot;
+  ulong                 slot;
   fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_query( slot_ctx->bank_mgr );
-  ulong             epoch      = fd_slot_to_epoch( epoch_schedule, slot_ctx->slot, &slot );
+  ulong                 epoch          = fd_slot_to_epoch( epoch_schedule, slot_ctx->slot, &slot );
 
   /* Activate new features
      https://github.com/anza-xyz/agave/blob/v2.1.0/runtime/src/bank.rs#L6587-L6598 */

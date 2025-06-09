@@ -56,7 +56,7 @@ generate_replay_exec_epoch_msg( fd_exec_slot_ctx_t * slot_ctx,
                                 fd_bank_hash_cmp_t * bank_hash_cmp,
                                 fd_runtime_public_epoch_msg_t * epoch_msg_out ) {
 
-    epoch_msg_out->features            = slot_ctx->epoch_ctx->features;
+    (void)slot_ctx;
     epoch_msg_out->bank_hash_cmp_gaddr = fd_wksp_gaddr_fast( runtime_public_wksp,
                                                          fd_bank_hash_cmp_leave( bank_hash_cmp ) );
     if( FD_UNLIKELY( !epoch_msg_out->bank_hash_cmp_gaddr ) ) {

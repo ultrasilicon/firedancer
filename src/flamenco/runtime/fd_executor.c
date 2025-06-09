@@ -1282,7 +1282,6 @@ fd_exec_txn_ctx_from_exec_slot_ctx( fd_exec_slot_ctx_t const * slot_ctx,
     FD_LOG_ERR(( "Could not find valid funk %lu", funk_gaddr ));
   }
 
-  ctx->features     = slot_ctx->epoch_ctx->features;
   ctx->status_cache = slot_ctx->status_cache;
 
   ctx->bank_hash_cmp = slot_ctx->epoch_ctx->bank_hash_cmp;
@@ -1293,6 +1292,10 @@ fd_exec_txn_ctx_from_exec_slot_ctx( fd_exec_slot_ctx_t const * slot_ctx,
 
   ulong * slot = fd_bank_mgr_slot_query( ctx->bank_mgr );
   ctx->slot = !!slot ? *slot : 0UL;
+
+  fd_features_t   features    = {0};
+  fd_features_t * features_bm = fd_bank_mgr_features_query( ctx->bank_mgr );
+  ctx->features = !!features_bm ? *features_bm : features;
 }
 
 fd_txn_account_t *
