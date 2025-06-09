@@ -2760,7 +2760,7 @@ fd_apply_builtin_program_feature_transitions( fd_exec_slot_ctx_t * slot_ctx,
   /* https://github.com/anza-xyz/agave/blob/v2.1.0/runtime/src/bank.rs#L6776-L6793 */
   fd_stateless_builtin_program_t const * stateless_builtins = fd_stateless_builtins();
   for( ulong i=0UL; i<fd_num_stateless_builtins(); i++ ) {
-    if( stateless_builtins[i].core_bpf_migration_config && FD_FEATURE_ACTIVE_OFFSET( slot_ctx->slot, slot_ctx->epoch_ctx->features, stateless_builtins[i].core_bpf_migration_config->enable_feature_offset ) ) {
+    if( stateless_builtins[i].core_bpf_migration_config && FD_FEATURE_ACTIVE_OFFSET( slot_ctx->slot, *fd_bank_mgr_features_query( slot_ctx->bank_mgr ), stateless_builtins[i].core_bpf_migration_config->enable_feature_offset ) ) {
       FD_LOG_NOTICE(( "Migrating stateless builtin program %s to core BPF", FD_BASE58_ENC_32_ALLOCA( stateless_builtins[i].pubkey->key ) ));
       fd_migrate_builtin_to_core_bpf( slot_ctx,
                                       stateless_builtins[i].core_bpf_migration_config->upgrade_authority_address,
@@ -2783,7 +2783,8 @@ fd_apply_builtin_program_feature_transitions( fd_exec_slot_ctx_t * slot_ctx,
 }
 
 static void
-fd_feature_activate( fd_exec_slot_ctx_t *   slot_ctx,
+fd_feature_activate( fd_features_t *         features,
+                     fd_exec_slot_ctx_t *    slot_ctx,
                      fd_feature_id_t const * id,
                      uchar const             acct[ static 32 ],
                      fd_spad_t *             runtime_spad ) {
@@ -2814,7 +2815,7 @@ fd_feature_activate( fd_exec_slot_ctx_t *   slot_ctx,
 
   if( feature->has_activated_at ) {
     FD_LOG_INFO(( "feature already activated - acc: %s, slot: %lu", FD_BASE58_ENC_32_ALLOCA( acct ), feature->activated_at ));
-    fd_features_set(&slot_ctx->epoch_ctx->features, id, feature->activated_at);
+    fd_features_set( features, id, feature->activated_at);
   } else {
     FD_LOG_INFO(( "Feature %s not activated at %lu, activating", FD_BASE58_ENC_32_ALLOCA( acct ), feature->activated_at ));
 
@@ -2843,11 +2844,13 @@ fd_feature_activate( fd_exec_slot_ctx_t *   slot_ctx,
 
 static void
 fd_features_activate( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad ) {
+  fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
   for( fd_feature_id_t const * id = fd_feature_iter_init();
                                    !fd_feature_iter_done( id );
                                id = fd_feature_iter_next( id ) ) {
-    fd_feature_activate( slot_ctx, id, id->id.key, runtime_spad );
+    fd_feature_activate( features, slot_ctx, id, id->id.key, runtime_spad );
   }
+  fd_bank_mgr_features_save( slot_ctx->bank_mgr );
 }
 
 uint
@@ -2932,7 +2935,7 @@ fd_runtime_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
                                                                              slot_ctx->funk,
                                                                              slot_ctx->funk_txn,
                                                                              runtime_spad,
-                                                                             &slot_ctx->epoch_ctx->features,
+                                                                             fd_bank_mgr_features_query( slot_ctx->bank_mgr ),
                                                                              new_rate_activation_epoch,
                                                                              _err );
   if( FD_UNLIKELY( !is_some ) ) {
@@ -3579,9 +3582,11 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
 
   fd_acc_lamports_t capitalization = 0UL;
 
-  FD_FEATURE_SET_ACTIVE(slot_ctx->epoch_ctx->features, disable_partitioned_rent_collection, 0);
-  FD_FEATURE_SET_ACTIVE(slot_ctx->epoch_ctx->features, accounts_lt_hash, 0);
-  FD_FEATURE_SET_ACTIVE(slot_ctx->epoch_ctx->features, remove_accounts_delta_hash, 0);
+  fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
+  FD_FEATURE_SET_ACTIVE(features, disable_partitioned_rent_collection, 0);
+  FD_FEATURE_SET_ACTIVE(features, accounts_lt_hash, 0);
+  FD_FEATURE_SET_ACTIVE(features, remove_accounts_delta_hash, 0);
+  fd_bank_mgr_features_save( slot_ctx->bank_mgr );
 
   for( ulong i=0UL; i<genesis_block->accounts_len; i++ ) {
     fd_pubkey_account_pair_t const * acc = &genesis_block->accounts[i];
@@ -3694,13 +3699,15 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
               &err );
           FD_TEST( err==FD_BINCODE_SUCCESS );
 
+          fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
           if( feature->has_activated_at ) {
             FD_LOG_DEBUG(( "Feature %s activated at %lu (genesis)", FD_BASE58_ENC_32_ALLOCA( acc->key.key ), feature->activated_at ));
-            fd_features_set( &slot_ctx->epoch_ctx->features, found, feature->activated_at );
+            fd_features_set( features, found, feature->activated_at );
           } else {
             FD_LOG_DEBUG(( "Feature %s not activated (genesis)", FD_BASE58_ENC_32_ALLOCA( acc->key.key ) ));
-            fd_features_set( &slot_ctx->epoch_ctx->features, found, ULONG_MAX );
+            fd_features_set( features, found, ULONG_MAX );
           }
+          fd_bank_mgr_features_save( slot_ctx->bank_mgr );
         } FD_SPAD_FRAME_END;
       }
     }
@@ -4247,7 +4254,7 @@ fd_runtime_publish_old_txns( fd_exec_slot_ctx_t * slot_ctx,
                       slot_ctx->slot,
                       epoch_account_hash,
                       runtime_spad,
-                      &slot_ctx->epoch_ctx->features,
+                      fd_bank_mgr_features_query( slot_ctx->bank_mgr ),
                       &exec_para_ctx,
                       NULL );
   }
