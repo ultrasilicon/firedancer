@@ -213,9 +213,11 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   fd_exec_epoch_ctx_t * epoch_ctx     = fd_exec_epoch_ctx_join( fd_exec_epoch_ctx_new( epoch_ctx_mem, vote_acct_max ) );
 
   /* Restore feature flags */
-  if( !fd_runtime_fuzz_restore_features( epoch_ctx, &test_ctx->epoch_ctx.features ) ) {
+  fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
+  if( !fd_runtime_fuzz_restore_features( features, &test_ctx->epoch_ctx.features ) ) {
     return NULL;
   }
+  fd_bank_mgr_features_save( slot_ctx->bank_mgr );
 
   /* Set up slot context */
   ulong slot = test_ctx->slot_ctx.slot;

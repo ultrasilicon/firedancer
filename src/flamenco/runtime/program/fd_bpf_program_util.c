@@ -244,7 +244,7 @@ fd_bpf_create_bpf_program_cache_entry( fd_exec_slot_ctx_t *    slot_ctx,
 
     fd_vm_syscall_register_slot( syscalls,
                                  slot_ctx->slot,
-                                 &slot_ctx->epoch_ctx->features,
+                                 fd_bank_mgr_features_query( slot_ctx->bank_mgr ),
                                  0 );
 
     /* Load program. */
@@ -265,9 +265,19 @@ fd_bpf_create_bpf_program_cache_entry( fd_exec_slot_ctx_t *    slot_ctx,
     }
     fd_exec_instr_ctx_t dummy_instr_ctx = {0};
     fd_exec_txn_ctx_t   dummy_txn_ctx   = {0};
-    dummy_txn_ctx.slot      = slot_ctx->slot;
-    dummy_txn_ctx.features  = slot_ctx->epoch_ctx->features;
-    dummy_instr_ctx.txn_ctx = &dummy_txn_ctx;
+    dummy_txn_ctx.slot = slot_ctx->slot;
+
+    if( FD_UNLIKELY( !slot_ctx->bank_mgr ) ) {
+      /* We only handle this case for some unit tests. */
+      dummy_txn_ctx.features = (fd_features_t){0};
+    } else {
+      fd_features_t * features = fd_bank_mgr_features_query( slot_ctx->bank_mgr );
+      if( FD_UNLIKELY( !features ) ) {
+        FD_LOG_CRIT(( "fd_bank_mgr_features_query() failed" ));
+      }
+      dummy_txn_ctx.features = *features;
+    }
+    dummy_instr_ctx.txn_ctx  = &dummy_txn_ctx;
     vm = fd_vm_init( vm,
                      &dummy_instr_ctx,
                      0UL,
@@ -288,7 +298,7 @@ fd_bpf_create_bpf_program_cache_entry( fd_exec_slot_ctx_t *    slot_ctx,
                      0U,
                      NULL,
                      0,
-                     FD_FEATURE_ACTIVE( slot_ctx->slot, slot_ctx->epoch_ctx->features, bpf_account_data_direct_mapping ),
+                     FD_FEATURE_ACTIVE_PTR( slot_ctx->slot, &dummy_txn_ctx.features, bpf_account_data_direct_mapping ),
                      0 );
 
     if( FD_UNLIKELY( !vm ) ) {

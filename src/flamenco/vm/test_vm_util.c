@@ -32,12 +32,14 @@ test_vm_minimal_exec_instr_ctx( fd_valloc_t valloc,
   slot_ctx->epoch_ctx = epoch_ctx;
   slot_ctx->slot = 1UL;
 
-  /* Setup feature flags */
-  fd_features_disable_all( &epoch_ctx->features );
-  fd_features_set( &epoch_ctx->features, fd_feature_id_query(TEST_VM_REJECT_CALLX_R10_FEATURE_PREFIX), 0UL );
+  fd_features_t * features = fd_valloc_malloc( valloc, alignof(fd_features_t), sizeof(fd_features_t) );
 
-  txn_ctx->slot             = slot_ctx->slot;
-  txn_ctx->features         = epoch_ctx->features;
+  /* Setup feature flags */
+  fd_features_disable_all( features );
+  fd_features_set( features, fd_feature_id_query(TEST_VM_REJECT_CALLX_R10_FEATURE_PREFIX), 0UL );
+
+  txn_ctx->slot     = slot_ctx->slot;
+  txn_ctx->features = *features;
 
   return ctx;
 }

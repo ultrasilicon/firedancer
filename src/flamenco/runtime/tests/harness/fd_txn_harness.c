@@ -51,12 +51,10 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   /* Restore feature flags */
 
   fd_exec_test_feature_set_t const * feature_set = &test_ctx->epoch_ctx.features;
-  if( !fd_runtime_fuzz_restore_features( epoch_ctx, feature_set ) ) {
+  fd_features_t * features_bm = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
+  if( !fd_runtime_fuzz_restore_features( features_bm, feature_set ) ) {
     return NULL;
   }
-
-  fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
-  *features = epoch_ctx->features;
   fd_bank_mgr_features_save( slot_ctx->bank_mgr );
 
   /* Default slot */

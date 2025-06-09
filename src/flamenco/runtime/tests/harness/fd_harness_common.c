@@ -108,9 +108,9 @@ fd_runtime_fuzz_load_account( fd_txn_account_t *                acc,
 }
 
 int
-fd_runtime_fuzz_restore_features( fd_exec_epoch_ctx_t *              epoch_ctx,
+fd_runtime_fuzz_restore_features( fd_features_t * features,
                                   fd_exec_test_feature_set_t const * feature_set ) {
-  fd_features_disable_all( &epoch_ctx->features );
+  fd_features_disable_all( features );
   for( ulong j=0UL; j < feature_set->features_count; j++ ) {
     ulong                   prefix = feature_set->features[j];
     fd_feature_id_t const * id     = fd_feature_id_query( prefix );
@@ -119,7 +119,7 @@ fd_runtime_fuzz_restore_features( fd_exec_epoch_ctx_t *              epoch_ctx,
       return 0;
     }
     /* Enabled since genesis */
-    fd_features_set( &epoch_ctx->features, id, 0UL );
+    fd_features_set( features, id, 0UL );
   }
   return 1;
 }

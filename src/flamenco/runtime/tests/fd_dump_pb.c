@@ -387,7 +387,6 @@ static void
 create_block_context_protobuf_from_block( fd_exec_test_block_context_t * block_context,
                                           fd_exec_slot_ctx_t const *     slot_ctx,
                                           fd_spad_t *                    spad ) {
-  fd_exec_epoch_ctx_t const * epoch_ctx = slot_ctx->epoch_ctx;
 
   /* BlockContext -> acct_states */
   // Dump sysvars + builtins
@@ -503,7 +502,7 @@ create_block_context_protobuf_from_block( fd_exec_test_block_context_t * block_c
   /* BlockContext -> EpochContext */
   block_context->has_epoch_ctx                        = true;
   block_context->epoch_ctx.has_features               = true;
-  dump_sorted_features( &epoch_ctx->features, &block_context->epoch_ctx.features, spad );
+  dump_sorted_features( fd_bank_mgr_features_query( bank_mgr ), &block_context->epoch_ctx.features, spad );
   block_context->epoch_ctx.hashes_per_tick            = *(fd_bank_mgr_hashes_per_tick_query( bank_mgr ));
   block_context->epoch_ctx.ticks_per_slot             = *(fd_bank_mgr_ticks_per_slot_query( bank_mgr ));
   block_context->epoch_ctx.slots_per_year             = *(fd_bank_mgr_slots_per_year_query( bank_mgr ));
