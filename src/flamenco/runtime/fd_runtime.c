@@ -206,14 +206,15 @@ fd_runtime_update_leaders( fd_exec_slot_ctx_t * slot_ctx,
       FD_LOG_ERR(( "Slot count exceeeded max" ));
     }
 
-    void *               epoch_leaders_mem = fd_exec_epoch_ctx_leaders( slot_ctx->epoch_ctx );
+    void * epoch_leaders_mem = fd_bank_mgr_epoch_leaders_modify( slot_ctx->bank_mgr );
     fd_epoch_leaders_t * leaders           = fd_epoch_leaders_join( fd_epoch_leaders_new( epoch_leaders_mem,
-                                                                                          epoch,
-                                                                                          slot0,
-                                                                                          slot_cnt,
-                                                                                          stake_weight_cnt,
-                                                                                          epoch_weights,
-                                                                                          0UL ) );
+                                                                                                     epoch,
+                                                                                                     slot0,
+                                                                                                     slot_cnt,
+                                                                                                     stake_weight_cnt,
+                                                                                                     epoch_weights,
+                                                                                                     0UL ) );
+    fd_bank_mgr_epoch_leaders_save( slot_ctx->bank_mgr );
     if( FD_UNLIKELY( !leaders ) ) {
       FD_LOG_ERR(( "Unable to init and join fd_epoch_leaders" ));
     }
@@ -496,9 +497,21 @@ fd_runtime_freeze( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad ) {
     do {
       /* do_create=1 because we might wanna pay fees to a leader
          account that we've purged due to 0 balance. */
-      fd_pubkey_t const * leader = fd_epoch_leaders_get( fd_exec_epoch_ctx_leaders( slot_ctx->epoch_ctx ), slot_ctx->slot );
+
+      fd_epoch_leaders_t * leaders = fd_bank_mgr_epoch_leaders_query( slot_ctx->bank_mgr );
+      if( FD_UNLIKELY( !leaders ) ) {
+        FD_LOG_WARNING(( "fd_runtime_freeze: leaders not found" ));
+        break;
+      }
+
+      fd_pubkey_t const * leader = fd_epoch_leaders_get( leaders, slot_ctx->slot );
+      if( FD_UNLIKELY( !leader ) ) {
+        FD_LOG_WARNING(( "fd_runtime_freeze: leader not found" ));
+        break;
+      }
+
       int err = fd_txn_account_init_from_funk_mutable( rec, leader, slot_ctx->funk, slot_ctx->funk_txn, 1, 0UL );
-      if( FD_UNLIKELY(err) ) {
+      if( FD_UNLIKELY( err ) ) {
         FD_LOG_WARNING(("fd_runtime_freeze: fd_txn_account_init_from_funk_mutable for leader (%s) failed (%d)", FD_BASE58_ENC_32_ALLOCA( leader ), err));
         burn = fd_ulong_sat_add( burn, fees );
         break;
@@ -2271,54 +2284,14 @@ fd_update_epoch_stakes( fd_exec_slot_ctx_t * slot_ctx ) {
 
   /* Copy epoch_bank->next_epoch_stakes into slot_ctx->slot_bank.epoch_stakes */
 
+  ulong total_sz = sizeof(fd_vote_accounts_global_t) +
+                   fd_vote_accounts_pair_global_t_map_footprint( 50000UL ) +
+                   4000 * 50000UL;
+
   fd_vote_accounts_global_t * next_epoch_stakes = fd_bank_mgr_next_epoch_stakes_query( slot_ctx->bank_mgr );
-  fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_pool = fd_vote_accounts_vote_accounts_pool_join( next_epoch_stakes );
-  fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_root = fd_vote_accounts_vote_accounts_root_join( next_epoch_stakes );
 
   fd_vote_accounts_global_t * epoch_stakes = fd_bank_mgr_epoch_stakes_modify( slot_ctx->bank_mgr );
-
-  uchar * epoch_stakes_pool_mem = (uchar *)fd_ulong_align_up( (ulong)epoch_stakes + sizeof(fd_vote_accounts_global_t), fd_vote_accounts_pair_global_t_map_align() );
-  fd_vote_accounts_pair_global_t_mapnode_t * epoch_stakes_pool      = fd_vote_accounts_pair_global_t_map_join( fd_vote_accounts_pair_global_t_map_new( epoch_stakes_pool_mem, 100000UL ) );
-  fd_vote_accounts_pair_global_t_mapnode_t * epoch_stakes_root = NULL;
-
-  uchar * acc_region_start = (uchar *)fd_ulong_align_up( (ulong)epoch_stakes_pool + fd_vote_accounts_pair_global_t_map_footprint( 100000UL ), 8UL );
-  ulong   curr_offset      = (ulong)acc_region_start - (ulong)epoch_stakes_pool;
-
-  for( fd_vote_accounts_pair_global_t_mapnode_t * n = fd_vote_accounts_pair_global_t_map_minimum(
-        next_epoch_stakes_pool,
-        next_epoch_stakes_root );
-        n;
-        n = fd_vote_accounts_pair_global_t_map_successor( next_epoch_stakes_pool, n ) ) {
-
-    const fd_pubkey_t null_pubkey = {{ 0 }};
-    if( memcmp( &n->elem.key, &null_pubkey, FD_PUBKEY_FOOTPRINT ) == 0 ) {
-      continue;
-    }
-
-    fd_vote_accounts_pair_global_t_mapnode_t * elem = fd_vote_accounts_pair_global_t_map_acquire( epoch_stakes_pool );
-    if( FD_UNLIKELY( fd_vote_accounts_pair_global_t_map_free( epoch_stakes_pool ) == 0 ) ) {
-      FD_LOG_ERR(( "epoch_stakes_pool full" ));
-    }
-
-    elem->elem.stake = n->elem.stake;
-    elem->elem.key   = n->elem.key;
-
-    elem->elem.value.lamports    = n->elem.value.lamports;
-    elem->elem.value.owner       = n->elem.value.owner;
-    elem->elem.value.executable  = n->elem.value.executable;
-    elem->elem.value.rent_epoch  = n->elem.value.rent_epoch;
-
-    elem->elem.value.data_offset = curr_offset;
-    elem->elem.value.data_len    = n->elem.value.data_len;
-    memcpy( (uchar *)epoch_stakes_pool + curr_offset, (uchar *)next_epoch_stakes_pool + n->elem.value.data_offset, n->elem.value.data_len );
-
-    curr_offset += n->elem.value.data_len;
-
-    fd_vote_accounts_pair_global_t_map_insert( epoch_stakes_pool, &epoch_stakes_root, elem );
-  }
-
-  fd_vote_accounts_vote_accounts_pool_update( epoch_stakes, epoch_stakes_pool );
-  fd_vote_accounts_vote_accounts_root_update( epoch_stakes, epoch_stakes_root );
+  fd_memcpy( epoch_stakes, next_epoch_stakes, total_sz );
   fd_bank_mgr_epoch_stakes_save( slot_ctx->bank_mgr );
 
 }
@@ -2327,54 +2300,26 @@ fd_update_epoch_stakes( fd_exec_slot_ctx_t * slot_ctx ) {
 static void
 fd_update_next_epoch_stakes( fd_exec_slot_ctx_t * slot_ctx ) {
 
+  /* FIXME: This is technically not correct, since the vote accounts
+     could be laid out after the stake delegations from fd_stakes.
+     The correct solution is to split out the stake delgations from the
+     vote accounts in fd_stakes. */
+
   /* Copy epoch_ctx->epoch_bank->stakes.vote_accounts into epoch_bank->next_epoch_stakes */
 
+  ulong total_sz = sizeof(fd_vote_accounts_global_t) +
+                   fd_vote_accounts_pair_global_t_map_footprint( 50000UL ) +
+                   4000 * 50000UL;
+
+
   fd_stakes_global_t * stakes = fd_bank_mgr_stakes_query( slot_ctx->bank_mgr );
-  fd_vote_accounts_pair_global_t_mapnode_t * vote_accounts_pool = fd_vote_accounts_vote_accounts_pool_join( &stakes->vote_accounts );
-  fd_vote_accounts_pair_global_t_mapnode_t * vote_accounts_root = fd_vote_accounts_vote_accounts_root_join( &stakes->vote_accounts );
+  fd_vote_accounts_global_t * vote_stakes = &stakes->vote_accounts;
+
 
   fd_vote_accounts_global_t * next_epoch_stakes = fd_bank_mgr_next_epoch_stakes_modify( slot_ctx->bank_mgr );
-
-  uchar * next_epoch_stakes_pool_mem = (uchar *)fd_ulong_align_up( (ulong)next_epoch_stakes + sizeof(fd_vote_accounts_global_t), fd_vote_accounts_pair_global_t_map_align() );
-  fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_pool = fd_vote_accounts_pair_global_t_map_join( fd_vote_accounts_pair_global_t_map_new( next_epoch_stakes_pool_mem, 100000UL ) );
-  fd_vote_accounts_pair_global_t_mapnode_t * next_epoch_stakes_root = NULL;
-
-  uchar * acc_region_start = (uchar *)fd_ulong_align_up( (ulong)next_epoch_stakes_pool + fd_vote_accounts_pair_global_t_map_footprint( 100000UL ), 8UL );
-  ulong   curr_offset      = (ulong)acc_region_start - (ulong)next_epoch_stakes_pool;
-
-  fd_vote_accounts_pair_global_t_map_release_tree(
-    next_epoch_stakes_pool,
-    next_epoch_stakes_root );
-
-  for( fd_vote_accounts_pair_global_t_mapnode_t * n = fd_vote_accounts_pair_global_t_map_minimum(
-        vote_accounts_pool,
-        vote_accounts_root );
-        n;
-        n = fd_vote_accounts_pair_global_t_map_successor( vote_accounts_pool, n ) ) {
-    fd_vote_accounts_pair_global_t_mapnode_t * elem = fd_vote_accounts_pair_global_t_map_acquire( next_epoch_stakes_pool );
-
-    elem->elem.stake = n->elem.stake;
-    elem->elem.key   = n->elem.key;
-    elem->elem.value.lamports    = n->elem.value.lamports;
-    elem->elem.value.data_len    = 0UL;
-    elem->elem.value.data_offset = 0UL;
-    elem->elem.value.owner       = n->elem.value.owner;
-    elem->elem.value.executable  = n->elem.value.executable;
-    elem->elem.value.rent_epoch  = n->elem.value.rent_epoch;
-
-    uchar * data = (uchar *)&n->elem.value + n->elem.value.data_offset;
-
-    elem->elem.value.data_offset = curr_offset;
-    memcpy( acc_region_start + curr_offset, data, n->elem.value.data_len );
-    curr_offset += n->elem.value.data_len;
-    elem->elem.value.data_len = n->elem.value.data_len;
-
-    fd_vote_accounts_pair_global_t_map_insert( next_epoch_stakes_pool, &next_epoch_stakes_root, elem );
-  }
-
-  fd_vote_accounts_vote_accounts_pool_update( next_epoch_stakes, next_epoch_stakes_pool );
-  fd_vote_accounts_vote_accounts_root_update( next_epoch_stakes, next_epoch_stakes_root );
+  fd_memcpy( next_epoch_stakes, vote_stakes, total_sz );
   fd_bank_mgr_next_epoch_stakes_save( slot_ctx->bank_mgr );
+
 }
 
 /* Mimics `bank.new_target_program_account()`. Assumes `out_rec` is a modifiable record.
@@ -3484,9 +3429,8 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
   memset( bank_hash->hash, 0, FD_SHA256_HASH_SZ );
   fd_bank_mgr_bank_hash_save( slot_ctx->bank_mgr );
 
-  fd_poh_config_t const * poh        = &genesis_block->poh_config;
-  fd_exec_epoch_ctx_t *   epoch_ctx  = slot_ctx->epoch_ctx;
-  uint128 target_tick_duration      = ((uint128)poh->target_tick_duration.seconds * 1000000000UL + (uint128)poh->target_tick_duration.nanoseconds);
+  fd_poh_config_t const * poh  = &genesis_block->poh_config;
+  uint128 target_tick_duration = ((uint128)poh->target_tick_duration.seconds * 1000000000UL + (uint128)poh->target_tick_duration.nanoseconds);
 
   fd_epoch_schedule_t * epoch_schedule = fd_bank_mgr_epoch_schedule_modify( slot_ctx->bank_mgr );
   *epoch_schedule = genesis_block->epoch_schedule;
@@ -3567,11 +3511,11 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
 
   /* Derive epoch stakes */
 
-  fd_vote_accounts_pair_t_mapnode_t * vacc_pool = fd_exec_epoch_ctx_stake_votes_join( epoch_ctx );
+  fd_vote_accounts_pair_t_mapnode_t * vacc_pool = NULL;
   fd_vote_accounts_pair_t_mapnode_t * vacc_root = NULL;
   FD_TEST( vacc_pool );
 
-  fd_delegation_pair_t_mapnode_t * sacc_pool = fd_exec_epoch_ctx_stake_delegations_join( epoch_ctx );
+  fd_delegation_pair_t_mapnode_t * sacc_pool = NULL;
   fd_delegation_pair_t_mapnode_t * sacc_root = NULL;
 
   fd_acc_lamports_t capitalization = 0UL;
@@ -4499,13 +4443,15 @@ fd_runtime_block_eval_tpool( fd_exec_slot_ctx_t * slot_ctx,
   block_eval_time          += fd_log_wallclock();
   double block_eval_time_ms = (double)block_eval_time * 1e-6;
   double tps                = (double) block_info.txn_cnt / ((double)block_eval_time * 1e-9);
+  fd_epoch_leaders_t * leaders = fd_bank_mgr_epoch_leaders_query( slot_ctx->bank_mgr );
+  fd_pubkey_t const *  leader  = fd_epoch_leaders_get( leaders, slot );
   FD_LOG_INFO(( "evaluated block successfully - slot: %lu, elapsed: %6.6f ms, signatures: %lu, txns: %lu, tps: %6.6f, leader: %s",
                 slot,
                 block_eval_time_ms,
                 block_info.signature_cnt,
                 block_info.txn_cnt,
                 tps,
-                FD_BASE58_ENC_32_ALLOCA( fd_epoch_leaders_get( fd_exec_epoch_ctx_leaders( slot_ctx->epoch_ctx ), slot ) ) ));
+                FD_BASE58_ENC_32_ALLOCA( leader ) ));
 
   ulong * transaction_count = fd_bank_mgr_transaction_count_modify( slot_ctx->bank_mgr );
   *transaction_count += block_info.txn_cnt;
