@@ -487,16 +487,6 @@ rx_push( fd_gossip_t *                 gossip,
 //   return FD_GOSSIP_RX_OK;
 // }
 
-struct __attribute__((__packed__)) fd_gossip_pong_tx {
-  uchar tag; /* FD_GOSSIP_MESSAGE_PING */
-  uchar _pad[ 3UL ];
-
-  uchar pubkey[ 32UL ];
-  uchar ping_hash[ 32UL ];
-  uchar signature[ 64UL ];
-};
-
-typedef struct fd_gossip_pong_tx fd_gossip_pong_tx_t;
 
 static int
 rx_ping( fd_gossip_t *           gossip,
@@ -504,13 +494,15 @@ rx_ping( fd_gossip_t *           gossip,
          fd_ip4_port_t *         peer_address,
          long                    now,
          uchar const *           in_payload ) {
-  /* Construct and send the pong response */
-  fd_gossip_pong_tx_t out_payload[1];
-  out_payload->tag = FD_GOSSIP_MESSAGE_PONG;
+  /* TODO: have this point to dcache buffer directly instead */
+  uchar out_payload[ sizeof(fd_gossip_pong_tx_t) ];
 
-  fd_memcpy( out_payload->pubkey, gossip->identity_pubkey, 32UL );
-  fd_ping_tracker_hash_ping_token( in_payload+ping->token_off, out_payload->ping_hash );
-  gossip->sign_fn( gossip->sign_ctx, out_payload->ping_hash, 32UL, FD_KEYGUARD_SIGN_TYPE_SHA256_ED25519, out_payload->signature );
+  fd_gossip_pong_tx_t * out_pong = (fd_gossip_pong_tx_t *)out_payload;
+  out_pong->tag = FD_GOSSIP_MESSAGE_PONG;
+
+  fd_memcpy( out_pong->pubkey, gossip->identity_pubkey, 32UL );
+  fd_ping_tracker_hash_ping_token( in_payload+ping->token_off, out_pong->ping_hash );
+  gossip->sign_fn( gossip->sign_ctx, out_pong->ping_hash, 32UL, FD_KEYGUARD_SIGN_TYPE_SHA256_ED25519, out_pong->signature );
 
   gossip->send_fn( gossip->send_ctx, (uchar *)out_payload, sizeof(fd_gossip_pong_tx_t), peer_address, (ulong)now );
   return FD_GOSSIP_RX_OK;
@@ -626,20 +618,16 @@ fd_gossip_rx( fd_gossip_t * gossip,
   return error;
 }
 
-struct __attribute__((__packed__)) fd_gossip_ping_tx {
-  uchar tag; /* FD_GOSSIP_MESSAGE_PING */
-  uchar _pad[ 3UL ];
-
-  uchar pubkey[ 32UL ];
-  uchar ping_token[ 32UL ];
-  uchar signature[ 64UL ];
-};
-
-typedef struct fd_gossip_ping_tx fd_gossip_ping_tx_t;
-
 static void
 tx_ping( fd_gossip_t * gossip,
          long          now ) {
+
+  /* TODO: have this point to dcache buffer directly instead. */
+  uchar out_payload[ sizeof(fd_gossip_ping_tx_t) ];
+
+  fd_gossip_ping_tx_t * out_ping = (fd_gossip_ping_tx_t *)out_payload;
+  out_ping->tag = FD_GOSSIP_MESSAGE_PING;
+
   uchar const *         peer_pubkey;
   uchar const *         ping_token;
   fd_ip4_port_t const * peer_address;
@@ -649,15 +637,11 @@ tx_ping( fd_gossip_t * gossip,
                                       &peer_address,
                                       &ping_token ) ) {
 
-    /* Construct and send ping message */
-    fd_gossip_ping_tx_t payload[ 1 ];
-    payload->tag = FD_GOSSIP_MESSAGE_PING;
 
-    fd_memcpy( payload->pubkey, gossip->identity_pubkey, 32UL );
-    fd_memcpy( payload->ping_token, ping_token, 32UL );
-    gossip->sign_fn( gossip->sign_ctx, payload->ping_token, 32UL, FD_KEYGUARD_SIGN_TYPE_SHA256_ED25519, payload->signature );
+    fd_memcpy( out_ping->ping_token, ping_token, 32UL );
+    gossip->sign_fn( gossip->sign_ctx, out_ping->ping_token, 32UL, FD_KEYGUARD_SIGN_TYPE_SHA256_ED25519, out_ping->signature );
 
-    gossip->send_fn( gossip->send_ctx, (uchar *)payload, sizeof(fd_gossip_ping_tx_t), peer_address, (ulong)now );
+    gossip->send_fn( gossip->send_ctx, (uchar *)out_ping, sizeof(fd_gossip_ping_tx_t), peer_address, (ulong)now );
   }
 }
 
@@ -737,34 +721,6 @@ tx_ping( fd_gossip_t * gossip,
   // gossip->crds_cursor = fd_crds_cursor( gossip->crds );
 // }
 
-struct __attribute__((__packed__)) fd_gossip_pull_request_tx_1 {
-  uchar tag; /* FD_GOSSIP_MESSAGE_PULL_REQUEST */
-  uchar _pad[ 3UL ];
-
-  ulong bloom_keys_len;
-  ulong bloom_keys[ ];
-};
-
-struct __attribute__((__packed__)) fd_gossip_pull_request_tx_2 {
-  uchar has_bits;
-  ulong bloom_bits_len;
-  ulong bloom_bits[ ];
-};
-
-struct __attribute__((__packed__)) fd_gossip_pull_request_tx_3 {
-  ulong bloom_len;
-  ulong bloom_num_bits_set;
-  ulong mask;
-  ulong mask_bits;
-
-  uchar contact_info[ ];
-};
-
-typedef struct fd_gossip_pull_request_tx_1 fd_gossip_pull_request_tx_1_t;
-typedef struct fd_gossip_pull_request_tx_2 fd_gossip_pull_request_tx_2_t;
-typedef struct fd_gossip_pull_request_tx_3 fd_gossip_pull_request_tx_3_t;
-
-
 
 static void
 tx_pull_request( fd_gossip_t * gossip,
@@ -815,31 +771,22 @@ tx_pull_request( fd_gossip_t * gossip,
   /* TODO: Send the pull request to the peer */
   uchar payload[ 1232UL ];
 
-  fd_gossip_pull_request_tx_1_t * prq1 = (fd_gossip_pull_request_tx_1_t *)payload;
-  prq1->tag                            = FD_GOSSIP_MESSAGE_PULL_REQUEST;
-  prq1->bloom_keys_len                 = filter->keys_len;
-  fd_memcpy( prq1->bloom_keys, filter->keys, filter->keys_len * sizeof(ulong) );
-  ulong prq1_sz = sizeof(fd_gossip_pull_request_tx_1_t) + prq1->bloom_keys_len * sizeof(ulong);
+  fd_gossip_pull_request_encode_ctx_t ctx[ 1 ];
+  fd_gossip_pull_request_encode_ctx_init( payload,
+                                          1232UL,
+                                          filter->keys_len,
+                                          (filter->bits_len+7UL)/8UL,
+                                          ctx);
 
-  fd_gossip_pull_request_tx_2_t * prq2 = (fd_gossip_pull_request_tx_2_t *)(payload + prq1_sz);
+  fd_gossip_pull_request_encode_bloom_keys( ctx, filter->keys, filter->keys_len );
 
-  prq2->has_bits       = 1;
-  prq2->bloom_bits_len = (filter->bits_len+7UL)/8UL;
-  fd_memcpy( prq2->bloom_bits, filter->bits, prq2->bloom_bits_len*8UL );
-  ulong prq2_sz = sizeof(fd_gossip_pull_request_tx_2_t) + prq2->bloom_bits_len * 8UL;
+  fd_gossip_pull_request_encode_bloom_bits( ctx, filter->bits, filter->bits_len );
 
-  fd_gossip_pull_request_tx_3_t * prq3 = (fd_gossip_pull_request_tx_3_t *)(payload + prq1_sz + prq2_sz);
-  prq3->bloom_len = filter->bits_len;
-  for( ulong i=0UL; i<prq2->bloom_bits_len; i++ ) {
-    prq3->bloom_num_bits_set += (uint)fd_ulong_popcnt( filter->bits[i] );
-  }
-  prq3->mask      = mask;
-  prq3->mask_bits = mask_bits;
-
-  ulong payload_sz = prq1_sz + prq2_sz + sizeof(fd_gossip_pull_request_tx_3_t);
-  ulong rem_sz = 1232UL - payload_sz;
+  *ctx->mask      = mask;
+  *ctx->mask_bits = mask_bits;
 
   /* TODO: contactinfo */
+  long rem_sz = 1232L - (ctx->contact_info - payload);
 
 }
 

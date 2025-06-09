@@ -194,8 +194,49 @@ struct fd_gossip_view {
 
 typedef struct fd_gossip_view fd_gossip_view_t;
 
-void
-fd_gossip_msg_init( fd_gossip_view_t * msg );
+/* Begin Encoding related structs */
+
+struct __attribute__((__packed__)) fd_gossip_ping_tx {
+  uchar tag; /* FD_GOSSIP_MESSAGE_PING */
+  uchar _pad[ 3UL ];
+
+  uchar pubkey[ 32UL ];
+  uchar ping_token[ 32UL ];
+  uchar signature[ 64UL ];
+};
+
+typedef struct fd_gossip_ping_tx fd_gossip_ping_tx_t;
+
+struct __attribute__((__packed__)) fd_gossip_pong_tx {
+  uchar tag; /* FD_GOSSIP_MESSAGE_PING */
+  uchar _pad[ 3UL ];
+
+  uchar pubkey[ 32UL ];
+  uchar ping_hash[ 32UL ];
+  uchar signature[ 64UL ];
+};
+
+typedef struct fd_gossip_pong_tx fd_gossip_pong_tx_t;
+
+/* TODO: These end up looking very similar to views. Can we merge them? */
+struct fd_gossip_pull_request_encode_ctx {
+  uchar * tag;
+  ulong * bloom_keys_len;
+  ulong * bloom_keys; /* Offset to start of bloom keys in payload */
+
+  uchar * has_bits;
+  ulong * bloom_vec_len;   /* Length of bloom bits vector */
+  ulong * bloom_bits;       /* Offset to start of bloom bits in payload */
+  ulong * bloom_bits_count; /* Number of bloom filter bits */
+  ulong * bloom_num_bits_set; /* Number of bits set in the bloom filter */
+
+  ulong * mask;      /* Mask used to filter the CRDS values */
+  ulong * mask_bits; /* Number of bits in the mask */
+
+  uchar * contact_info; /* Offset to the start of contact info in payload */
+};
+
+typedef struct fd_gossip_pull_request_encode_ctx fd_gossip_pull_request_encode_ctx_t;
 
 ulong
 fd_gossip_view_pubkey_offset( fd_gossip_view_t const * view );
@@ -204,6 +245,23 @@ ulong
 fd_gossip_msg_parse( fd_gossip_view_t *   view,
                      uchar const *        payload,
                      ulong                payload_sz );
+
+int
+fd_gossip_pull_request_encode_ctx_init( uchar *                               payload,
+                                        ulong                                 payload_sz,
+                                        ulong                                 num_keys,
+                                        ulong                                 bloom_bits_len,
+                                        fd_gossip_pull_request_encode_ctx_t * out_ctx );
+
+int
+fd_gossip_pull_request_encode_bloom_keys( fd_gossip_pull_request_encode_ctx_t * ctx,
+                                          ulong const *                         bloom_keys,
+                                          ulong                                 bloom_keys_len );
+
+int
+fd_gossip_pull_request_encode_bloom_bits( fd_gossip_pull_request_encode_ctx_t * ctx,
+                                           ulong const *                        bloom_bits,
+                                           ulong                                bloom_bits_len );
 
 /* Initializes a payload buffer for a gossip message with tag encoded.
    Returns offset into the buffer after tag, where the inner message
