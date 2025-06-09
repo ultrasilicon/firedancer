@@ -5,7 +5,6 @@
 #include "fd_system_ids.h"
 #include "fd_runtime.h"
 #include "fd_bank_mgr.h"
-#include "context/fd_exec_epoch_ctx.h"
 #include "context/fd_exec_txn_ctx.h"
 #include "sysvar/fd_sysvar_rent.h"
 

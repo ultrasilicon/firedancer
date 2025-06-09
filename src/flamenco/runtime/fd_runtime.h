@@ -13,7 +13,6 @@
 #include "fd_rent_lists.h"
 #include "../../ballet/poh/fd_poh.h"
 #include "../leaders/fd_leaders.h"
-#include "context/fd_exec_epoch_ctx.h"
 #include "context/fd_exec_slot_ctx.h"
 #include "context/fd_capture_ctx.h"
 #include "context/fd_exec_txn_ctx.h"

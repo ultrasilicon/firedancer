@@ -9,7 +9,6 @@
 #include "../../util/pod/fd_pod_format.h"
 #include "../../flamenco/runtime/fd_txncache.h"
 #include "../../flamenco/runtime/context/fd_capture_ctx.h"
-#include "../../flamenco/runtime/context/fd_exec_epoch_ctx.h"
 #include "../../flamenco/runtime/context/fd_exec_slot_ctx.h"
 #include "../../flamenco/runtime/program/fd_bpf_program_util.h"
 #include "../../flamenco/runtime/sysvar/fd_sysvar_slot_history.h"
@@ -143,7 +142,6 @@ struct fd_replay_tile_ctx {
   /* Do not modify order! This is join-order in unprivileged_init. */
 
   fd_funk_t             funk[1];
-  fd_exec_epoch_ctx_t * epoch_ctx;
   fd_epoch_t          * epoch;
   fd_forks_t          * forks;
   fd_ghost_t          * ghost;

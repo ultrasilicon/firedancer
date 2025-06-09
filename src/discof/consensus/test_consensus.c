@@ -512,7 +512,6 @@ main( void ) {
 //                                                fd_exec_epoch_ctx_align(),
 //                                                fd_exec_epoch_ctx_footprint( vote_acc_max ),
 //                                                TEST_CONSENSUS_MAGIC );
-//   fd_exec_epoch_ctx_t * epoch_ctx =
 //       fd_exec_epoch_ctx_join( fd_exec_epoch_ctx_new( epoch_ctx_mem, vote_acc_max ) );
 //   FD_TEST( epoch_ctx );
 

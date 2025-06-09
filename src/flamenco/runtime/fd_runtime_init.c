@@ -2,7 +2,6 @@
 #include "fd_runtime_err.h"
 #include <stdio.h>
 #include "../types/fd_types.h"
-#include "context/fd_exec_epoch_ctx.h"
 #include "context/fd_exec_slot_ctx.h"
 #include "../../ballet/lthash/fd_lthash.h"
 #include "fd_bank_mgr.h"
