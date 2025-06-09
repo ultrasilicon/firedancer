@@ -55,6 +55,10 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
     return NULL;
   }
 
+  fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
+  *features = epoch_ctx->features;
+  fd_bank_mgr_features_save( slot_ctx->bank_mgr );
+
   /* Initialize builtin accounts */
   fd_builtin_programs_init( slot_ctx );
 

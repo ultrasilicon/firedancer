@@ -65,6 +65,10 @@ fd_runtime_fuzz_instr_ctx_create( fd_runtime_fuzz_runner_t *           runner,
 
   slot_ctx->bank_mgr = fd_bank_mgr_join( fd_bank_mgr_new( slot_ctx->bank_mgr_mem ), slot_ctx->funk, funk_txn );
 
+  fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
+  *features = epoch_ctx->features;
+  fd_bank_mgr_features_save( slot_ctx->bank_mgr );
+
   /* Set up epoch context. Defaults obtained from GenesisConfig::Default() */
 
   fd_rent_t * rent_bm = fd_bank_mgr_rent_modify( slot_ctx->bank_mgr );
