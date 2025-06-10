@@ -97,7 +97,7 @@ fd_runtime_fuzz_block_register_vote_account( fd_exec_slot_ctx_t *               
       __builtin_unreachable();
   }
 
-  fd_vote_record_timestamp_vote_with_slot( slot_ctx, pubkey, ts->timestamp, ts->slot, slot_ctx->bank_mgr );
+  fd_vote_record_timestamp_vote_with_slot( pubkey, ts->timestamp, ts->slot, slot_ctx->bank_mgr );
 }
 
 /* Stores an entry in the stake delegations cache for the given vote account. Deserializes and uses the present

@@ -69,8 +69,7 @@ fd_vote_convert_to_current( fd_vote_state_versioned_t * self,
                             fd_spad_t *                 spad );
 
 void
-fd_vote_record_timestamp_vote_with_slot( fd_exec_slot_ctx_t * slot_ctx,
-                                         fd_pubkey_t const *  vote_acc,
+fd_vote_record_timestamp_vote_with_slot( fd_pubkey_t const *  vote_acc,
                                          long                 timestamp,
                                          ulong                slot,
                                          fd_bank_mgr_t *      bank_mgr );
@@ -88,8 +87,7 @@ fd_vote_commission_split( fd_vote_state_versioned_t * vote_state_versioned,
                           fd_commission_split_t *     result );
 
 void
-fd_vote_store_account( fd_exec_slot_ctx_t * slot_ctx,
-                       fd_txn_account_t *   vote_account,
+fd_vote_store_account( fd_txn_account_t *   vote_account,
                        fd_bank_mgr_t *      bank_mgr );
 
 FD_PROTOTYPES_END

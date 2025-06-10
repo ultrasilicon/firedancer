@@ -257,9 +257,6 @@ fd_hash_bank( fd_exec_slot_ctx_t *    slot_ctx,
   *prev_lamports_per_signature = *lamports_per_signature;
   fd_bank_mgr_prev_lamports_per_signature_save( slot_ctx->bank_mgr );
 
-  ulong * transaction_count = fd_bank_mgr_transaction_count_query( slot_ctx->bank_mgr );
-  slot_ctx->parent_transaction_count = *transaction_count;
-
   fd_hash_t * epoch_account_hash = fd_bank_mgr_epoch_account_hash_query( slot_ctx->bank_mgr );
 
   fd_hash_t account_delta_hash;

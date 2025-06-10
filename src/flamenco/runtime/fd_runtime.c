@@ -2003,7 +2003,7 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
       fd_txn_account_t * acc_rec = &txn_ctx->accounts[i];
 
       if( dirty_vote_acc && 0==memcmp( acc_rec->vt->get_owner( acc_rec ), &fd_solana_vote_program_id, sizeof(fd_pubkey_t) ) ) {
-        fd_vote_store_account( slot_ctx, acc_rec, bank_mgr );
+        fd_vote_store_account( acc_rec, bank_mgr );
         FD_SPAD_FRAME_BEGIN( finalize_spad ) {
           int err;
           fd_vote_state_versioned_t * vsv = fd_bincode_decode_spad(
@@ -2031,8 +2031,7 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
             __builtin_unreachable();
           }
 
-          fd_vote_record_timestamp_vote_with_slot( slot_ctx,
-                                                   acc_rec->pubkey,
+          fd_vote_record_timestamp_vote_with_slot( acc_rec->pubkey,
                                                    ts->timestamp,
                                                    ts->slot,
                                                    bank_mgr );
@@ -2041,7 +2040,7 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
 
       if( dirty_stake_acc && 0==memcmp( acc_rec->vt->get_owner( acc_rec ), &fd_solana_stake_program_id, sizeof(fd_pubkey_t) ) ) {
         // TODO: does this correctly handle stake account close?
-        fd_store_stake_delegation( slot_ctx, acc_rec, bank_mgr );
+        fd_store_stake_delegation( acc_rec, bank_mgr );
       }
 
       fd_txn_account_save( &txn_ctx->accounts[i], slot_ctx->funk, slot_ctx->funk_txn, txn_ctx->spad_wksp );

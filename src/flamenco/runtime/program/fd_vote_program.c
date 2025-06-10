@@ -2167,8 +2167,7 @@ fd_vote_decode_compact_update( fd_compact_vote_state_update_t * compact_update,
 }
 
 void
-fd_vote_record_timestamp_vote_with_slot( fd_exec_slot_ctx_t * slot_ctx,
-                                         fd_pubkey_t const *  vote_acc,
+fd_vote_record_timestamp_vote_with_slot( fd_pubkey_t const *  vote_acc,
                                          long                 timestamp,
                                          ulong                slot,
                                          fd_bank_mgr_t *      bank_mgr ) {
@@ -2177,7 +2176,6 @@ fd_vote_record_timestamp_vote_with_slot( fd_exec_slot_ctx_t * slot_ctx,
   fd_clock_timestamp_vote_t_mapnode_t * pool = fd_clock_timestamp_votes_votes_pool_join( clock_timestamp_votes );
   fd_clock_timestamp_vote_t_mapnode_t * root = fd_clock_timestamp_votes_votes_root_join( clock_timestamp_votes );
 
-  fd_rwlock_write( slot_ctx->vote_stake_lock );
   if( FD_UNLIKELY( !pool ) ) {
     FD_LOG_ERR(( "Timestamp vote account pool not allocated" ));
   }
@@ -2202,8 +2200,6 @@ fd_vote_record_timestamp_vote_with_slot( fd_exec_slot_ctx_t * slot_ctx,
   fd_clock_timestamp_votes_votes_pool_update( clock_timestamp_votes, pool );
   fd_clock_timestamp_votes_votes_root_update( clock_timestamp_votes, root );
   fd_bank_mgr_clock_timestamp_votes_save( bank_mgr );
-
-  fd_rwlock_unwrite( slot_ctx->vote_stake_lock );
 }
 
 // https://github.com/anza-xyz/agave/blob/v2.0.1/sdk/program/src/vote/state/mod.rs#L751
@@ -3033,19 +3029,16 @@ upsert_vote_account( fd_txn_account_t *   vote_account,
 }
 
 void
-fd_vote_store_account( fd_exec_slot_ctx_t * slot_ctx,
-                       fd_txn_account_t *   vote_account,
+fd_vote_store_account( fd_txn_account_t *   vote_account,
                        fd_bank_mgr_t *      bank_mgr ) {
   fd_pubkey_t const * owner = vote_account->vt->get_owner( vote_account );
 
   if (memcmp(owner->uc, fd_solana_vote_program_id.key, sizeof(fd_pubkey_t)) != 0) {
       return;
   }
-  fd_rwlock_write( slot_ctx->vote_stake_lock );
-  if (vote_account->vt->get_lamports( vote_account ) == 0) {
+  if( vote_account->vt->get_lamports( vote_account ) == 0 ) {
     remove_vote_account( vote_account, bank_mgr );
   } else {
     upsert_vote_account( vote_account, bank_mgr );
   }
-  fd_rwlock_unwrite( slot_ctx->vote_stake_lock );
 }

@@ -3365,8 +3365,7 @@ fd_stakes_upsert_stake_delegation( fd_txn_account_t *   stake_account,
 }
 
 void
-fd_store_stake_delegation( fd_exec_slot_ctx_t * slot_ctx,
-                           fd_txn_account_t *   stake_account,
+fd_store_stake_delegation( fd_txn_account_t *   stake_account,
                            fd_bank_mgr_t *      bank_mgr ) {
   fd_pubkey_t const * owner = stake_account->vt->get_owner( stake_account );
 
@@ -3381,11 +3380,9 @@ fd_store_stake_delegation( fd_exec_slot_ctx_t * slot_ctx,
     is_uninit = ( prefix==fd_stake_state_v2_enum_uninitialized );
   }
 
-  fd_rwlock_write( slot_ctx->vote_stake_lock );
   if( is_empty || is_uninit ) {
     fd_stakes_remove_stake_delegation( stake_account, bank_mgr );
   } else {
     fd_stakes_upsert_stake_delegation( stake_account, bank_mgr );
   }
-  fd_rwlock_unwrite( slot_ctx->vote_stake_lock );
 }

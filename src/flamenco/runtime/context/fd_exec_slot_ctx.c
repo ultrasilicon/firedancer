@@ -149,7 +149,7 @@ recover_clock( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad ) {
 
     /* Record timestamp */
     if( slot != 0 || n->elem.stake != 0 ) {
-      fd_vote_record_timestamp_vote_with_slot( slot_ctx, &n->elem.key, timestamp, slot, slot_ctx->bank_mgr );
+      fd_vote_record_timestamp_vote_with_slot( &n->elem.key, timestamp, slot, slot_ctx->bank_mgr );
     }
     } FD_SPAD_FRAME_END;
   }

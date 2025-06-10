@@ -39,9 +39,6 @@ struct fd_exec_slot_ctx {
   ulong                       slots_per_epoch;
   ulong                       part_width;
 
-  /* TODO remove this stuff */
-  ulong                       parent_transaction_count;
-
   fd_txncache_t *             status_cache;
 
   int                         enable_exec_recording; /* Enable/disable execution metadata
