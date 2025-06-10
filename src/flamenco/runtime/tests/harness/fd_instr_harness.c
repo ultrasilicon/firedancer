@@ -15,6 +15,7 @@ fd_runtime_fuzz_instr_ctx_create( fd_runtime_fuzz_runner_t *           runner,
                                   fd_exec_instr_ctx_t *                ctx,
                                   fd_exec_test_instr_context_t const * test_ctx,
                                   bool                                 is_syscall ) {
+
   memset( ctx, 0, sizeof(fd_exec_instr_ctx_t) );
 
   fd_funk_t * funk = runner->funk;
@@ -410,8 +411,6 @@ fd_runtime_fuzz_instr_run( fd_runtime_fuzz_runner_t * runner,
   fd_exec_test_instr_context_t const * input  = fd_type_pun_const( input_ );
   fd_exec_test_instr_effects_t **      output = fd_type_pun( output_ );
 
-  FD_SPAD_FRAME_BEGIN( runner->spad ) {
-
   /* Convert the Protobuf inputs to a fd_exec context */
   fd_exec_instr_ctx_t ctx[1];
   if( !fd_runtime_fuzz_instr_ctx_create( runner, ctx, input, false ) ) {
@@ -515,5 +514,4 @@ fd_runtime_fuzz_instr_run( fd_runtime_fuzz_runner_t * runner,
   *output = effects;
   return actual_end - (ulong)output_buf;
 
-  } FD_SPAD_FRAME_END;
 }

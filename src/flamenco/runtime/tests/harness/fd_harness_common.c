@@ -26,7 +26,7 @@ fd_runtime_fuzz_runner_new( void * mem,
 
   FD_SCRATCH_ALLOC_INIT( l, mem );
   void * runner_mem = FD_SCRATCH_ALLOC_APPEND( l, fd_runtime_fuzz_runner_align(), sizeof(fd_runtime_fuzz_runner_t) );
-  void * funk_mem   = FD_SCRATCH_ALLOC_APPEND( l, fd_funk_align(),                   fd_funk_footprint( txn_max, rec_max) );
+  void * funk_mem   = FD_SCRATCH_ALLOC_APPEND( l, fd_funk_align(),                fd_funk_footprint( txn_max, rec_max) );
   FD_SCRATCH_ALLOC_FINI( l, fd_runtime_fuzz_runner_align() );
 
   fd_runtime_fuzz_runner_t * runner = runner_mem;

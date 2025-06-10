@@ -24,7 +24,7 @@ struct fd_exec_slot_ctx {
   fd_bank_hash_cmp_t *        bank_hash_cmp;
 
   /* FIXME: Kind of a gross hack. */
-  uchar                       bank_mgr_mem[48]__attribute__((aligned(8UL)));
+  ulong                       bank_mgr_mem[6];
   fd_bank_mgr_t *             bank_mgr;
 
   /* External joins, pointers to be set by caller */
