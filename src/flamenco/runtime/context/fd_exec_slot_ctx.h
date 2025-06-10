@@ -21,7 +21,7 @@ struct fd_exec_slot_ctx {
 
   fd_funk_txn_t *             funk_txn;
 
-  fd_bank_hash_cmp_t *       bank_hash_cmp;
+  fd_bank_hash_cmp_t *        bank_hash_cmp;
 
   /* FIXME: Kind of a gross hack. */
   uchar                       bank_mgr_mem[48]__attribute__((aligned(8UL)));
@@ -40,7 +40,6 @@ struct fd_exec_slot_ctx {
   ulong                       part_width;
 
   /* TODO remove this stuff */
-  fd_hash_t                   account_delta_hash;
   ulong                       parent_transaction_count;
   ulong                       txn_count;
   ulong                       nonvote_txn_count;
@@ -49,26 +48,19 @@ struct fd_exec_slot_ctx {
   ulong                       total_compute_units_used;
 
   fd_txncache_t *             status_cache;
-  fd_slot_history_global_t *  slot_history;
 
   int                         enable_exec_recording; /* Enable/disable execution metadata
                                                         recording, e.g. txn logs.  Analogue
                                                         of Agave's ExecutionRecordingConfig. */
 
-  ulong                       root_slot;
-  ulong                       snapshot_freq;
-  ulong                       incremental_freq;
-  ulong                       last_snapshot_slot;
-
   fd_wksp_t *                 runtime_wksp; /* TODO: this should hold wksp for runtime_spad. */
-  fd_wksp_t *                 funk_wksp; /* TODO: this should hold wksp for funk. */
 
   /* This serializes updates to the vote account and stake account
      related data structures in the slot bank and the epoch bank.
    */
   fd_rwlock_t                 vote_stake_lock[ 1 ];
 
-  ulong shred_cnt;
+  ulong                       shred_cnt;
 };
 
 #define FD_EXEC_SLOT_CTX_ALIGN     (alignof(fd_exec_slot_ctx_t))

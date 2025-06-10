@@ -262,17 +262,19 @@ fd_hash_bank( fd_exec_slot_ctx_t *    slot_ctx,
 
   fd_hash_t * epoch_account_hash = fd_bank_mgr_epoch_account_hash_query( slot_ctx->bank_mgr );
 
+  fd_hash_t account_delta_hash;
+
   if( !FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, remove_accounts_delta_hash) ) {
     sort_pubkey_hash_pair_inplace( dirty_keys, dirty_key_cnt );
     fd_pubkey_hash_pair_list_t list1 = { .pairs = dirty_keys, .pairs_len = dirty_key_cnt };
-    fd_hash_account_deltas(&list1, 1, &slot_ctx->account_delta_hash );
+    fd_hash_account_deltas(&list1, 1, &account_delta_hash );
   }
 
   fd_sha256_t sha;
   fd_sha256_init( &sha );
   fd_sha256_append( &sha, (uchar const *)bank_hash, sizeof( fd_hash_t ) );
   if( !FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, remove_accounts_delta_hash) )
-    fd_sha256_append( &sha, (uchar const *) &slot_ctx->account_delta_hash, sizeof( fd_hash_t  ) );
+    fd_sha256_append( &sha, (uchar const *) &account_delta_hash, sizeof( fd_hash_t  ) );
   fd_sha256_append( &sha, (uchar const *) &signature_cnt, sizeof( ulong ) );
 
   fd_hash_t * poh = fd_bank_mgr_poh_query( slot_ctx->bank_mgr );
@@ -309,7 +311,7 @@ fd_hash_bank( fd_exec_slot_ctx_t *    slot_ctx,
         capture_ctx->capture,
         hash->hash,
         prev_bank_hash,
-        FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, remove_accounts_delta_hash) ? NULL : slot_ctx->account_delta_hash.hash,
+        FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, remove_accounts_delta_hash) ? NULL : account_delta_hash.hash,
         lthash,
         poh,
         signature_cnt );
@@ -341,7 +343,7 @@ fd_hash_bank( fd_exec_slot_ctx_t *    slot_ctx,
                     slot_ctx->slot,
                     FD_BASE58_ENC_32_ALLOCA( hash->hash ),
                     FD_BASE58_ENC_32_ALLOCA( prev_bank_hash ),
-                    FD_BASE58_ENC_32_ALLOCA( slot_ctx->account_delta_hash.hash ),
+                    FD_BASE58_ENC_32_ALLOCA( account_delta_hash.hash ),
                     FD_LTHASH_ENC_32_ALLOCA( (fd_lthash_value_t *) fd_bank_mgr_lthash_query( slot_ctx->bank_mgr )->lthash ),
                     signature_cnt,
                     FD_BASE58_ENC_32_ALLOCA( poh->hash ) ));
