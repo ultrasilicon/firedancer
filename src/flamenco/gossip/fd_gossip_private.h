@@ -41,36 +41,59 @@
 #define FD_NANOSEC_TO_MILLI(_ts_) ((long)(_ts_/1000000))
 #define FD_MILLI_TO_NANOSEC(_ts_) ((long)(_ts_*1000000))
 
+typedef ushort offset_t;
+
+/* For primitive types, we store both the actual value and
+   its offset in the payload. */
+typedef struct { uchar  val; offset_t off; } uchar_view_t;
+typedef struct { ushort val; offset_t off; } ushort_view_t;
+typedef struct { uint   val; offset_t off; } uint_view_t;
+typedef struct { ulong  val; offset_t off; } ulong_view_t;
+
+/* All timestamp fields (wallclock, instance creation, etc.,)
+   will be converted to nanos. We also save the offset. */
+typedef struct { long ts_nanos; offset_t off; } timestamp_view_t;
+
+/* Varint field. TODO: store some metadata like encoded sz? */
+typedef struct { ulong val;     offset_t off; } varint_view_t;
+
 struct fd_gossip_view_ipaddr {
   uchar   is_ip6;
   union {
-    uint   ip4_addr;
-    ushort ip6_addr_off; /* Offset to 16-byte value */
+    uint_view_t ip4_addr;
+    offset_t    ip6_addr_off; /* Offset to 16-byte value */
   };
 };
 
 typedef struct fd_gossip_view_ipaddr fd_gossip_view_ipaddr_t;
 
 struct fd_gossip_view_socket {
-  uchar   key;
-  uchar   index;
-  ushort  offset; /* NOTE: this is a varint in encoded form */
+  uchar_view_t  key; /* Socket tag */
+
+  uchar_view_t  index;
+
+  /* NOTE: offset is a varint in encoded form */
+  ushort_view_t offset;
 };
 
 typedef struct fd_gossip_view_socket fd_gossip_view_socket_t;
 
 struct fd_gossip_view_contact_info {
-  long                    instance_creation_wallclock_nanos;
-  ushort                  shred_version;
+  timestamp_view_t        instance_creation_wallclock;
+  ushort_view_t           shred_version;
 
-  ushort                  addrs_len;
-  fd_gossip_view_ipaddr_t addrs[ 16UL ];    /* TODO: calculate length bounds */
+  /* NOTE: Contact Info wallclock is encoded as a compact-u64 */
+  timestamp_view_t        wallclock;
 
-  ushort                  sockets_len;
-  fd_gossip_view_socket_t sockets[ 16UL ];  /* TODO: calculate length bounds */
+  /* Note: All contact info arrays below are short_vec, which means length is in varint */
+  varint_view_t           addrs_len;
+  fd_gossip_view_ipaddr_t addr_views[ 16UL ];    /* TODO: calculate length bounds */
 
-  ushort                  ext_len;
-  ushort                  ext_off;
+  varint_view_t           sockets_len;
+  fd_gossip_view_socket_t socket_views[ 16UL ];  /* TODO: calculate length bounds */
+
+  varint_view_t           ext_len;
+  offset_t                ext_off;
 };
 
 typedef struct fd_gossip_view_contact_info fd_gossip_view_contact_info_t;
@@ -82,21 +105,21 @@ struct fd_gossip_view_node_instance {
 typedef struct fd_gossip_view_node_instance fd_gossip_view_node_instance_t;
 
 struct fd_gossip_view_vote {
-  uchar  index;
-  ulong  transaction_sz;
-  ushort transaction_off;
+  uchar_view_t  index;
+  ulong_view_t  transaction_sz;
+  ushort        transaction_off;
 };
 
 typedef struct fd_gossip_view_vote fd_gossip_view_vote_t;
 
 struct fd_gossip_view_epoch_slots {
-  uchar  index;
+  uchar_view_t  index;
 };
 
 typedef struct fd_gossip_view_epoch_slots fd_gossip_view_epoch_slots_t;
 
 struct fd_gossip_view_duplicate_shred {
-  ushort index;
+  uchar_view_t index;
 };
 
 typedef struct fd_gossip_view_duplicate_shred fd_gossip_view_duplicate_shred_t;
@@ -105,15 +128,15 @@ typedef struct fd_gossip_view_duplicate_shred fd_gossip_view_duplicate_shred_t;
     CRDS value lies. */
 struct fd_gossip_view_crds_value {
   union{
-    ushort value_off; /* Start of CRDS value data in payload */
-    ushort signature_off;
+    offset_t value_off; /* Start of CRDS value data in payload */
+    offset_t signature_off;
   };
-  ushort pubkey_off;
-  long   wallclock_nanos;
+  offset_t         pubkey_off;
+  timestamp_view_t wallclock;
 
-  ushort length; /* Length of the value in bytes (incl. signature) */
+  ushort           length; /* Length of the value in bytes (incl. signature) */
 
-  uchar tag; /* Discriminant */
+  uchar_view_t     tag; /* Discriminant */
   union{
     fd_gossip_view_contact_info_t    contact_info[ 1 ];
     fd_gossip_view_node_instance_t   node_instance[ 1 ];
@@ -126,8 +149,8 @@ struct fd_gossip_view_crds_value {
 typedef struct fd_gossip_view_crds_value fd_gossip_view_crds_value_t;
 
 struct fd_gossip_view_crds_composite {
-  ushort from_off; /* Offset to the sender's pubkey */
-  ushort crds_values_len; /* Number of CRDS values in the response */
+  offset_t                    from_off;        /* Offset to the sender's pubkey */
+  ulong_view_t                crds_values_len; /* Number of CRDS values in the response */
 
   fd_gossip_view_crds_value_t crds_values[ FD_GOSSIP_MSG_MAX_CRDS ]; /* CRDS values */
 };
@@ -135,16 +158,16 @@ struct fd_gossip_view_crds_composite {
 typedef struct fd_gossip_view_crds_composite fd_gossip_view_pull_response_t;
 typedef struct fd_gossip_view_crds_composite fd_gossip_view_push_t;
 struct fd_gossip_view_pull_request {
-  ulong bloom_keys_len;     /* number of keys in the bloom filter */
-  ulong bloom_keys_offset;  /* offset to start of bloom keys in payload */
+  ulong_view_t bloom_keys_len;     /* number of keys in the bloom filter */
+  offset_t     bloom_keys_offset;  /* offset to start of bloom keys in payload */
 
-  ulong bloom_bits_len;     /* length of bloom bits vector (ulong *) */
-  ulong bloom_bits_offset;  /* offset to start of bloom bits in payload */
-  ulong bloom_len;
+  ulong_view_t bloom_bits_len;     /* length of bloom bits vector (ulong *) */
+  offset_t     bloom_bits_offset;  /* offset to start of bloom bits in payload */
+  ulong_view_t bloom_len;
 
-  ulong bloom_num_bits_set; /* number of bits set in the bloom filter */
-  ulong mask;               /* mask used to filter the CRDS values */
-  uint  mask_bits;          /* number of bits in the mask */
+  ulong_view_t bloom_num_bits_set; /* number of bits set in the bloom filter */
+  ulong_view_t mask;               /* mask used to filter the CRDS values */
+  uint_view_t  mask_bits;          /* number of bits in the mask */
 
   fd_gossip_view_crds_value_t contact_info[ 1 ]; /* Pull Req holds contact info */
 };
@@ -152,36 +175,34 @@ struct fd_gossip_view_pull_request {
 typedef struct fd_gossip_view_pull_request fd_gossip_view_pull_request_t;
 
 struct fd_gossip_view_prune {
-  ushort origin_off;      /* Offset to the origin pubkey */
-  ushort prunes_len;      /* Number of prunes in the message */
-  ushort prunes_off;      /* Offset to the start of pubkeys to prune */
-  ushort destination_off; /* Offset to the destination pubkey */
-  ulong  wallclock;       /* Wallclock encoded by sender (for sigverify) */
-  ushort signature_off;   /* Offset to the signature */
-
-  long   wallclock_nanos;
+  offset_t         origin_off;      /* Offset to the origin pubkey */
+  offset_t         prunes_len;      /* Number of prunes in the message */
+  offset_t         prunes_off;      /* Offset to the start of pubkeys to prune */
+  offset_t         destination_off; /* Offset to the destination pubkey */
+  ushort           signature_off;   /* Offset to the signature */
+  timestamp_view_t wallclock;
 };
 
 typedef struct fd_gossip_view_prune fd_gossip_view_prune_t;
 
 struct fd_gossip_view_ping {
-  ushort from_off;
-  ushort token_off;
-  ushort signature_off;
+  offset_t from_off;
+  offset_t token_off;
+  offset_t signature_off;
 };
 
 typedef struct fd_gossip_view_ping fd_gossip_view_ping_t;
 
 struct fd_gossip_view_pong {
-  ushort from_off;
-  ushort hash_off;
-  ushort signature_off;
+  offset_t from_off;
+  offset_t hash_off;
+  offset_t signature_off;
 };
 
 typedef struct fd_gossip_view_pong fd_gossip_view_pong_t;
 
 struct fd_gossip_view {
-  uchar tag; // uint in rust bincode
+  uchar_view_t tag;
   union {
     fd_gossip_view_pull_request_t  pull_request[ 1 ];
     fd_gossip_view_pull_response_t pull_response[ 1 ];

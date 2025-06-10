@@ -38,15 +38,13 @@ typedef fd_gossip_contact_info_v1_t fd_gossip_legacy_contact_info_t;
    is in-line with Agave's behavior when populating its
    contact_info_v2.
 
-   https://github.com/anza-xyz/agave/blob/b11ca828cfc658b93cb86a6c5c70561875abe237/gossip/src/contact_info.rs#L342
-
-   The struct is optimized for fast deserialization and slow
-   serialization. */
-typedef struct {
+   https://github.com/anza-xyz/agave/blob/b11ca828cfc658b93cb86a6c5c70561875abe237/gossip/src/contact_info.rs#L342 */
+struct fd_contact_info_t {
   uchar         pubkey[ 32UL ];
   ushort        shred_version; /* Shred version for this contact info */
 
-  long          node_outset_wallclock_nanos; /* Wallclock when node was initialized */
+  long          wallclock_nanos; /* Wallclock when contact info was sent out */
+  long          instance_creation_wallclock_nanos; /* Wallclock when node was initialized */
   fd_ip4_port_t sockets[ FD_GOSSIP_SOCKET_TAG_MAX ];
 
   struct {
@@ -60,7 +58,7 @@ typedef struct {
     uint  commit;      /* Commit hash */
     uint  feature_set; /* Feature set for this contact info */
   } version;
-} fd_contact_info_t;
+};
 
 #define FD_CONTACT_INFO_SOCKET_TAG_NULL (0) /* Denotes a invalid/empty socket entry  */
 

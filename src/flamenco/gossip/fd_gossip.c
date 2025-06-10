@@ -200,7 +200,7 @@ verify_prune( fd_gossip_view_prune_t const * view,
   fd_memcpy( sign_data+sizeof(prune_sign_data_pre_t), payload+view->prunes_off, prunes_arr_sz );
 
   prune_sign_data_post_t * post = (prune_sign_data_post_t *)( sign_data + sizeof(prune_sign_data_pre_t) + prunes_arr_sz );
-  post->wallclock               = view->wallclock;
+  post->wallclock               = FD_LOAD( ulong, payload+view->wallclock.off );
   fd_memcpy( post->destination, payload+view->destination_off, 32UL );
 
   ulong signable_data_len = sizeof(prune_sign_data_pre_t) + prunes_arr_sz + sizeof(prune_sign_data_post_t);
@@ -245,18 +245,18 @@ verify_ping_pong( fd_gossip_view_t const * view,
   /* Ping/Pong messages */
   ulong signature_off, pubkey_off, signable_data_off, signable_data_len;
 
-  if( view->tag==FD_GOSSIP_MESSAGE_PING ) {
+  if( view->tag.val==FD_GOSSIP_MESSAGE_PING ) {
     signature_off     = view->ping->signature_off;
     pubkey_off        = view->ping->from_off;
     signable_data_off = view->ping->token_off;
     signable_data_len = 32UL;
-  } else if( view->tag==FD_GOSSIP_MESSAGE_PONG ) {
+  } else if( view->tag.val==FD_GOSSIP_MESSAGE_PONG ) {
     signature_off     = view->pong->signature_off;
     pubkey_off        = view->pong->from_off;
     signable_data_off = view->pong->hash_off;
     signable_data_len = 32UL;
   } else {
-    FD_LOG_ERR(( "Invalid type %u, should not reach", view->tag ));
+    FD_LOG_ERR(( "Invalid type %u, should not reach", view->tag.val ));
   }
 
   return fd_ed25519_verify( payload+signable_data_off,
@@ -270,13 +270,13 @@ static int
 verify_signatures( fd_gossip_view_t const * view,
                    uchar const *            payload,
                    fd_sha512_t *            sha ) {
-  switch( view->tag ) {
+  switch( view->tag.val ) {
     case FD_GOSSIP_MESSAGE_PULL_REQUEST:
       return verify_crds_values( view->pull_request->contact_info, 1UL, payload, sha );
     case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
-      return verify_crds_values( view->pull_response->crds_values, view->pull_response->crds_values_len, payload, sha );
+      return verify_crds_values( view->pull_response->crds_values, view->pull_response->crds_values_len.val, payload, sha );
     case FD_GOSSIP_MESSAGE_PUSH:
-      return verify_crds_values( view->push->crds_values, view->push->crds_values_len, payload, sha );
+      return verify_crds_values( view->push->crds_values, view->push->crds_values_len.val, payload, sha );
     case FD_GOSSIP_MESSAGE_PRUNE:
       return verify_prune( view->prune, payload, sha );
     case FD_GOSSIP_MESSAGE_PING:
@@ -372,7 +372,7 @@ rx_pull_response( fd_gossip_t *                          gossip,
                   long                                   now ) {
   /* TODO: use epoch_duration and make timeouts ... ? */
 
-  for( ulong i=0UL; i<pull_response->crds_values_len; i++ ) {
+  for( ulong i=0UL; i<pull_response->crds_values_len.val; i++ ) {
     fd_crds_entry_t * candidate =  fd_crds_acquire( gossip->crds );
 
     /* Fill up with information needed for upsert */
@@ -399,7 +399,7 @@ rx_pull_response( fd_gossip_t *                          gossip,
     }
     int error = 0;
 
-    if( FD_LIKELY( accept_after_nanos<=pull_response->crds_values[ i ].wallclock_nanos ) ||
+    if( FD_LIKELY( accept_after_nanos<=pull_response->crds_values[ i ].wallclock.ts_nanos ) ||
                    fd_crds_has_contact_info( gossip->crds,
                                              payload+pull_response->crds_values[i].pubkey_off ) ) {
       fd_crds_populate_full( gossip->crds,
@@ -427,10 +427,10 @@ rx_push( fd_gossip_t *                 gossip,
          long                     now ) {
   uchar const * relayer_pubkey = payload+push->from_off;
 
-  for( ulong i=0UL; i<push->crds_values_len; i++ ) {
+  for( ulong i=0UL; i<push->crds_values_len.val; i++ ) {
     fd_gossip_view_crds_value_t const * value = &push->crds_values[ i ];
     /* TODO: pretty sure this is 15s now. */
-    if( FD_UNLIKELY( value->wallclock_nanos<now-30L*1000L*1000L*1000L || value->wallclock_nanos>now+30L*1000L*1000L*1000L ) ) continue;
+    if( FD_UNLIKELY( value->wallclock.ts_nanos<now-30L*1000L*1000L*1000L || value->wallclock.ts_nanos>now+30L*1000L*1000L*1000L ) ) continue;
 
     fd_crds_entry_t * candidate = fd_crds_acquire( gossip->crds );
     /* Separate upsert check prior to insertion to save us a memcpy if not upserting.
@@ -591,16 +591,17 @@ fd_gossip_rx( fd_gossip_t * gossip,
 
   /* TODO: Implement traffic shaper / bandwidth limiter */
 
-  switch( view->tag ) {
+  switch( view->tag.val ) {
     case FD_GOSSIP_MESSAGE_PULL_REQUEST:
       // error = rx_pull_request( gossip, message->pull_request );
       break;
     case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
-      // error = rx_pull_response( gossip, message->pull_response );
+      error = rx_pull_response( gossip, view->pull_response, data, now );
       break;
     case FD_GOSSIP_MESSAGE_PUSH:
-      // error = rx_push( gossip, message->push );
+      error = rx_push( gossip, view->push, data, now );
       break;
+    break;
     case FD_GOSSIP_MESSAGE_PRUNE:
       // error = rx_prune( gossip, message->prune, now );
       break;
@@ -611,7 +612,7 @@ fd_gossip_rx( fd_gossip_t * gossip,
       error = rx_pong( gossip, view->pong, peer_address, now, data );
       break;
     default:
-      FD_LOG_CRIT(( "Unknown gossip message type %d", view->tag ));
+      FD_LOG_CRIT(( "Unknown gossip message type %d", view->tag.val ));
       break;
   }
 
