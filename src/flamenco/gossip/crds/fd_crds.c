@@ -89,8 +89,8 @@ struct fd_crds_entry_private {
     them into nanos internally. */
   long    wallclock_nanos;
 
-  uchar   data[ 1232UL ];
-  ushort  data_sz;
+  uchar   value_bytes[ 1232UL ];
+  ushort  value_sz;
 
   uchar   value_hash[ 32UL ]; /* The hash of the encoded value, used for pull requests */
   ulong   num_duplicates;
@@ -565,8 +565,8 @@ fd_crds_populate_full( fd_crds_t *                         crds,
   out_value->num_duplicates         = 0UL;
   out_value->expire.wallclock_nanos = now;
 
-  out_value->data_sz                = view->length;
-  fd_memcpy( out_value->data, view_payload+view->value_off, view->length );
+  out_value->value_sz                = view->length;
+  fd_memcpy( out_value->value_bytes, view_payload+view->value_off, view->length );
 
   if( FD_UNLIKELY( is_contact_info( out_value->key ) ) ) {
     if( FD_UNLIKELY( !crds_contact_info_pool_free( crds->contact_info.pool ) ) ) {
