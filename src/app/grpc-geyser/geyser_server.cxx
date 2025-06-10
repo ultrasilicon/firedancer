@@ -19,10 +19,6 @@ ABSL_FLAG(uint16_t, port, 8754, "Server port for the service");
 ABSL_FLAG(std::string, funk_file, "/data/asiegel/ledger/funk_db", "Funk database file");
 ABSL_FLAG(std::string, blockstore_wksp, "fd1_blockstore.wksp", "Blockstore workspace");
 ABSL_FLAG(std::string, notify_wksp, "fd1_replay_notif.wksp", "Notification link workspace");
-ABSL_FLAG(int, max_block_idx, 65536, "Max number of blocks which can be indexed");
-ABSL_FLAG(int, max_txn_idx, 1048576, "Max number of transactions which can be indexed");
-ABSL_FLAG(int, max_acct_idx, 1048576, "Max number of accounts which can be indexed");
-ABSL_FLAG(std::string, history_file, "geyser_history", "Storage for geyser history");
 
 void
 RunServer(uint16_t port, geys_fd_ctx_t * loop_ctx) {
@@ -59,10 +55,6 @@ int main(int argc, char** argv) {
   absl::InitializeLog();
 
   geys_fd_loop_args_t loop_args;
-  loop_args.history.block_index_max = absl::GetFlag(FLAGS_max_block_idx);
-  loop_args.history.txn_index_max = absl::GetFlag(FLAGS_max_txn_idx);
-  loop_args.history.acct_index_max = absl::GetFlag(FLAGS_max_acct_idx);
-  strncpy(loop_args.history.history_file, absl::GetFlag(FLAGS_history_file).c_str(), PATH_MAX-1);
   strncpy(loop_args.funk_file, absl::GetFlag(FLAGS_funk_file).c_str(), PATH_MAX-1);
   strncpy(loop_args.blockstore_wksp, absl::GetFlag(FLAGS_blockstore_wksp).c_str(), 32-1);
   strncpy(loop_args.notify_wksp, absl::GetFlag(FLAGS_notify_wksp).c_str(), 32-1);

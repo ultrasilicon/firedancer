@@ -5,16 +5,19 @@
 #include "../../flamenco/types/fd_types.h"
 
 typedef struct GeyserSubscribeReactor GeyserSubscribeReactor_t;
+typedef struct fd_blockstore fd_blockstore_t;
 
 struct geys_filter;
 typedef struct geys_filter geys_filter_t;
 
-geys_filter_t * geys_filter_create(void);
+geys_filter_t * geys_filter_create(fd_spad_t * spad, fd_funk_t * funk);
+
+void geys_filter_set_service(geys_filter_t * filter, /* GeyserServiceImpl */ void * serv);
 
 void geys_filter_add_sub(geys_filter_t * filter, /* SubscribeRequest*/ void * request, GeyserSubscribeReactor_t * reactor);
 
 void geys_filter_un_sub(geys_filter_t * filter, GeyserSubscribeReactor_t * reactor);
 
-void geys_filter_acct(geys_filter_t * filter, ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz);
+void geys_filter_notify(geys_filter_t * filter, fd_replay_notif_msg_t * msg, uchar * blk_data, ulong blk_sz);
 
 #endif /* HEADER_fd_src_app_geys_filter_h */

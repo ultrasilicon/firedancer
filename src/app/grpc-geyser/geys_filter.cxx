@@ -1,12 +1,17 @@
-extern "C" {
-#include "geys_filter.h"
-}
+#include <mutex>
+#include <vector>
 
 #include "geyser.grpc.pb.h"
 #include "geys_methods.hxx"
 #include "geys_filter_2.hxx"
 
-#include <vector>
+extern "C" {
+#include "geys_filter.h"
+#include "../../ballet/txn/fd_txn.h"
+#include "../../discof/replay/fd_replay_notif.h"
+#include "../../flamenco/runtime/fd_acc_mgr.h"
+#include "../../ballet/block/fd_microblock.h"
+}
 
 class CompiledFilter {
   public:
@@ -25,11 +30,22 @@ struct geys_filter {
         GeyserSubscribeReactor * reactor_;
     };
     std::vector<Elem> elems_;
+    fd_spad_t * spad_;
+    fd_funk_t * funk_;
+    GeyserServiceImpl * serv_;
+
+    geys_filter(fd_spad_t * spad, fd_funk_t * funk) : spad_(spad), funk_(funk) { }
+    void filter_acct(ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz);
 };
 
 geys_filter_t *
-geys_filter_create() {
-  return new geys_filter();
+geys_filter_create(fd_spad_t * spad, fd_funk_t * funk) {
+  return new geys_filter(spad, funk);
+}
+
+void
+geys_filter_set_service(geys_filter_t * filter, /* GeyserServiceImpl */ void *  serv) {
+  filter->serv_ = (GeyserServiceImpl *)serv;
 }
 
 void
@@ -51,8 +67,8 @@ geys_filter_un_sub(geys_filter_t * filter, GeyserSubscribeReactor_t * reactor) {
 }
 
 void
-geys_filter_acct(geys_filter_t * filter, ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz) {
-  for( auto& i : filter->elems_ ) {
+geys_filter::filter_acct(ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz) {
+  for( auto& i : elems_ ) {
     if( i.filter_->filterAccount(key, meta, val, val_sz) ) {
 
       auto* update = new ::geyser::SubscribeUpdate();
@@ -71,4 +87,73 @@ geys_filter_acct(geys_filter_t * filter, ulong slot, fd_pubkey_t * key, fd_accou
       i.reactor_->Update( update );
     }
   }
+}
+
+void
+geys_filter_notify(geys_filter_t * filter, fd_replay_notif_msg_t * msg, uchar * blk_data, ulong blk_sz) {
+  filter->serv_->notify(msg);
+
+  fd_funk_txn_map_t * txn_map = fd_funk_txn_map( filter->funk_ );
+  fd_funk_txn_xid_t xid;
+  xid.ul[0] = xid.ul[1] = msg->slot_exec.slot;
+  fd_funk_txn_t * funk_txn = fd_funk_txn_query( &xid, txn_map );
+
+  ulong blockoff = 0;
+  while (blockoff < blk_sz) {
+    if ( blockoff + sizeof(ulong) > blk_sz )
+      return;
+    ulong mcount = *(const ulong *)(blk_data + blockoff);
+    blockoff += sizeof(ulong);
+
+    /* Loop across microblocks */
+    for (ulong mblk = 0; mblk < mcount; ++mblk) {
+      if ( blockoff + sizeof(fd_microblock_hdr_t) > blk_sz )
+        FD_LOG_ERR(("premature end of block"));
+      fd_microblock_hdr_t * hdr = (fd_microblock_hdr_t *)((const uchar *)blk_data + blockoff);
+      blockoff += sizeof(fd_microblock_hdr_t);
+
+      /* Loop across transactions */
+      for ( ulong txn_idx = 0; txn_idx < hdr->txn_cnt; txn_idx++ ) {
+        uchar txn_out[FD_TXN_MAX_SZ];
+        ulong pay_sz = 0;
+        const uchar* raw = (const uchar *)blk_data + blockoff;
+        ulong txn_sz = fd_txn_parse_core(raw, fd_ulong_min(blk_sz - blockoff, FD_TXN_MTU), txn_out, NULL, &pay_sz);
+        if ( txn_sz == 0 || txn_sz > FD_TXN_MAX_SZ ) {
+          FD_LOG_ERR( ( "failed to parse transaction %lu in microblock %lu", txn_idx, mblk ) );
+        }
+        fd_txn_t * txn = (fd_txn_t *)txn_out;
+
+        // geys_fd_txn_callback( fd, txn );
+
+        /* Loop across signatures */
+        // fd_ed25519_sig_t const * sigs = (fd_ed25519_sig_t const *)(raw + txn->signature_off);
+        // for ( uchar j = 0; j < txn->signature_cnt; j++ ) {
+          // geys_fd_txn_sig_callback( fd, txn, (const uchar*)&sigs[j] );
+        // }
+
+        /* Loop across accoounts */
+        fd_pubkey_t * accs = (fd_pubkey_t *)((uchar *)raw + txn->acct_addr_off);
+        for( int i = 0UL; i < txn->acct_addr_cnt; i++ ) {
+          bool writable = ((i < txn->signature_cnt - txn->readonly_signed_cnt) ||
+                           ((i >= txn->signature_cnt) && (i < txn->acct_addr_cnt - txn->readonly_unsigned_cnt)));
+          if( !writable ) continue;
+
+          fd_spad_push(filter->spad_);
+
+          fd_funk_rec_key_t recid = fd_funk_acc_key(&accs[i]);
+          ulong val_sz;
+          const uchar * val = (const uchar *) fd_funk_rec_query_copy( filter->funk_, funk_txn, &recid, fd_spad_virtual(filter->spad_), &val_sz );
+          if( val ) {
+            filter->filter_acct(msg->slot_exec.slot, &accs[i], (fd_account_meta_t *)val, val + sizeof(fd_account_meta_t), val_sz - sizeof(fd_account_meta_t));
+          }
+
+          fd_spad_pop(filter->spad_);
+        }
+
+        blockoff += pay_sz;
+      }
+    }
+  }
+  if ( blockoff != blk_sz )
+    FD_LOG_ERR(("garbage at end of block"));
 }

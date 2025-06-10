@@ -20,15 +20,10 @@ struct geys_fd_ctx {
   fd_funk_t * funk;
   fd_blockstore_t blockstore_ljoin;
   fd_blockstore_t * blockstore;
-  geys_history_t * hist;
   replay_sham_link_t * rep_notify;
+  geys_filter_t * filter;
 };
 typedef struct geys_fd_ctx geys_fd_ctx_t;
-
-geys_history_t *
-geys_fd_get_history( geys_fd_ctx_t * ctx ) {
-  return ctx->hist;
-}
 
 geys_fd_ctx_t *
 geys_fd_init( geys_fd_loop_args_t * args ) {
@@ -40,7 +35,6 @@ geys_fd_init( geys_fd_loop_args_t * args ) {
   if( !ctx->funk ) {
     FD_LOG_ERR(( "failed to join funk" ));
   }
-  args->history.funk = ctx->funk;
 
   FD_LOG_NOTICE(( "attaching to workspace \"%s\"", args->blockstore_wksp ));
   fd_wksp_t * wksp = fd_wksp_attach( args->blockstore_wksp );
@@ -61,14 +55,19 @@ geys_fd_init( geys_fd_loop_args_t * args ) {
 
 #define SMAX 1LU<<30
   uchar * smem = aligned_alloc( FD_SPAD_ALIGN, SMAX );
-  ctx->spad = args->history.spad = fd_spad_join( fd_spad_new( smem, SMAX ) );
-  fd_spad_push( args->history.spad );
+  ctx->spad = fd_spad_join( fd_spad_new( smem, SMAX ) );
+  fd_spad_push( ctx->spad );
 
-  ctx->hist = geys_history_create( &args->history );
+  ctx->filter = geys_filter_create(ctx->spad, ctx->funk);
 
   ctx->rep_notify = replay_sham_link_new( aligned_alloc( replay_sham_link_align(), replay_sham_link_footprint() ), args->notify_wksp );
 
   return ctx;
+}
+
+geys_filter_t *
+geys_get_filter( geys_fd_ctx_t * ctx ) {
+  return ctx->filter;
 }
 
 void
@@ -93,7 +92,19 @@ replay_sham_link_after_frag(geys_fd_ctx_t * ctx, fd_replay_notif_msg_t * msg) {
   do {
     if( msg->type == FD_REPLAY_SLOT_TYPE ) {
       if( msg->slot_exec.shred_cnt == 0 ) break;
-      geys_history_save( ctx, ctx->hist, ctx->blockstore, msg );
+
+      FD_SPAD_FRAME_BEGIN( ctx->spad ) {
+        ulong blk_max = msg->slot_exec.shred_cnt * FD_SHRED_MAX_SZ;
+        uchar * blk_data = fd_spad_alloc( ctx->spad, 1, blk_max );
+        ulong blk_sz;
+        if( fd_blockstore_slice_query( ctx->blockstore, msg->slot_exec.slot, 0, (uint)(msg->slot_exec.shred_cnt-1), blk_max, blk_data, &blk_sz) ) {
+          FD_LOG_WARNING(( "unable to read slot %lu from blockstore", msg->slot_exec.slot ));
+          break;
+        }
+
+        FD_LOG_NOTICE(( "received slot %lu", msg->slot_exec.slot ));
+        geys_filter_notify( ctx->filter, msg, blk_data, blk_sz );
+      } FD_SPAD_FRAME_END;
     }
   } while(0);
   fd_spad_pop( ctx->spad );

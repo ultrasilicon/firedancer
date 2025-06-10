@@ -5,15 +5,23 @@ extern "C" {
 #include "geys_filter.h"
 }
 
+#include <mutex>
+
 #include "geys_methods.hxx"
 #include "geys_filter_2.hxx"
 
 GeyserServiceImpl::GeyserServiceImpl(geys_fd_ctx_t * loop_ctx)
-  : _loop_ctx(loop_ctx), _hist_ctx(geys_fd_get_history(loop_ctx)) {
-  geys_history_set_filter(_hist_ctx, filt_ = geys_filter_create());
+  : _loop_ctx(loop_ctx), filt_(geys_get_filter(loop_ctx))
+{
+  geys_filter_set_service(filt_, this);
 }
 
 GeyserServiceImpl::~GeyserServiceImpl() {
+}
+
+void
+GeyserServiceImpl::notify(fd_replay_notif_msg_t * msg) {
+  lastinfo_ = *msg;
 }
 
 ::grpc::ServerBidiReactor<::geyser::SubscribeRequest, ::geyser::SubscribeUpdate>*
@@ -55,12 +63,10 @@ GeyserServiceImpl::GetLatestBlockhash(::grpc::CallbackServerContext* context, co
   class Reactor : public grpc::ServerUnaryReactor {
     public:
       Reactor(GeyserServiceImpl * serv, const ::geyser::GetLatestBlockhashRequest* request, ::geyser::GetLatestBlockhashResponse* response) {
-        fd_replay_notif_msg_t * info = geys_history_get_block_info( serv->_hist_ctx, geys_history_latest_slot( serv->_hist_ctx ) );
-        if( info == NULL ) { Finish(::grpc::Status(::grpc::StatusCode::INTERNAL, "missing block info")); return; }
-        response->set_slot( info->slot_exec.slot );
-        FD_BASE58_ENCODE_32_BYTES( info->slot_exec.block_hash.uc, hash_str );
+        response->set_slot( serv->lastinfo_.slot_exec.slot );
+        FD_BASE58_ENCODE_32_BYTES( serv->lastinfo_.slot_exec.block_hash.uc, hash_str );
         response->set_blockhash( std::string(hash_str, hash_str_len) );
-        response->set_last_valid_block_height( info->slot_exec.height );
+        response->set_last_valid_block_height( serv->lastinfo_.slot_exec.height );
         Finish(grpc::Status::OK);
       }
       void OnDone() override {
@@ -75,9 +81,7 @@ GeyserServiceImpl::GetBlockHeight(::grpc::CallbackServerContext* context, const 
   class Reactor : public grpc::ServerUnaryReactor {
     public:
       Reactor(GeyserServiceImpl * serv, const ::geyser::GetBlockHeightRequest* request, ::geyser::GetBlockHeightResponse* response) {
-        fd_replay_notif_msg_t * info = geys_history_get_block_info( serv->_hist_ctx, geys_history_latest_slot( serv->_hist_ctx ) );
-        if( info == NULL ) { Finish(::grpc::Status(::grpc::StatusCode::INTERNAL, "missing block info")); return; }
-        response->set_block_height( info->slot_exec.height );
+        response->set_block_height( serv->lastinfo_.slot_exec.height );
         Finish(grpc::Status::OK);
       }
       void OnDone() override {
@@ -92,7 +96,7 @@ GeyserServiceImpl::GetSlot(::grpc::CallbackServerContext* context, const ::geyse
   class Reactor : public grpc::ServerUnaryReactor {
     public:
       Reactor(GeyserServiceImpl * serv, const ::geyser::GetSlotRequest* request, ::geyser::GetSlotResponse* response) {
-        response->set_slot( geys_history_latest_slot( serv->_hist_ctx ) );
+        response->set_slot( serv->lastinfo_.slot_exec.slot );
         Finish(grpc::Status::OK);
       }
       void OnDone() override {
@@ -112,13 +116,8 @@ GeyserServiceImpl::IsBlockhashValid(::grpc::CallbackServerContext* context, cons
           Finish(grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "failed to decode hash"));
           return;
         }
-        fd_replay_notif_msg_t * info = geys_history_get_block_info_by_hash( serv->_hist_ctx, &hash );
-        if( info == NULL ) {
-          response->set_valid(false);
-        } else {
-          response->set_slot(info->slot_exec.slot);
-          response->set_valid(true);
-        }
+        response->set_slot(serv->lastinfo_.slot_exec.slot);
+        response->set_valid(true);
         Finish(grpc::Status::OK);
       }
       void OnDone() override {
