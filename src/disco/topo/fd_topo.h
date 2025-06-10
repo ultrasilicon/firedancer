@@ -461,8 +461,6 @@ struct fd_topo_tile {
       ulong scratch_sz;
       ulong funk_obj_id;
       ulong fseq_obj_id;
-      ulong runtime_pub_obj_id;
-      ulong slot_ctx_obj_id;
     } snapin;
 
     struct {

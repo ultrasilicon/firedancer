@@ -3,6 +3,13 @@
 
 #include "../../tango/mcache/fd_mcache.h"
 
+#define STATUS_WAITING 0UL
+#define STATUS_FULL    1UL
+#define STATUS_INC     2UL
+#define STATUS_DONE    3UL
+
+#define DCACHE_SZ 16<<20UL
+
 /* fd_stream_frag_meta_t is a variation of fd_frag_meta_t optimized for
    stream I/O. */
 

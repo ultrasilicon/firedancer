@@ -47,10 +47,17 @@ typedef struct fd_snapshot_accv_map fd_snapshot_accv_map_t;
 #define SNAP_FLAG_BLOCKED 2
 #define SNAP_FLAG_DONE    4
 
+/* TODO: bound out to real required maximum */
 #define SCRATCH_SZ 3*1024*1024*1024UL
 
 struct fd_snapshot_parser;
 typedef struct fd_snapshot_parser fd_snapshot_parser_t;
+
+typedef ulong
+(* fd_snapshot_parser_process_manifest_stream_fn_t)( fd_snapshot_parser_t * parser,
+                                                     void *                 _ctx,
+                                                     uchar const *          buf,
+                                                     ulong                  chunksz );
 
 typedef void
 (* fd_snapshot_process_acc_hdr_fn_t)( fd_snapshot_parser_t *          parser,
@@ -106,20 +113,14 @@ struct fd_snapshot_parser {
   ulong acc_pad;  /* padding size at end of account */
 
   /* Account processing callbacks */
-
-  fd_snapshot_process_acc_hdr_fn_t acc_hdr_cb;
-  fd_snapshot_process_acc_data_fn_t acc_data_cb;
-  fd_snapshot_process_acc_done_fn_t acc_done_cb;
+  fd_snapshot_parser_process_manifest_stream_fn_t manifest_cb;
+  fd_snapshot_process_acc_hdr_fn_t                acc_hdr_cb;
+  fd_snapshot_process_acc_data_fn_t               acc_data_cb;
+  fd_snapshot_process_acc_done_fn_t               acc_done_cb;
   void * cb_arg;
 
   /* metrics */
   fd_snapshot_parser_metrics_t metrics;
-
-  /* runtime shared objects */
-  fd_exec_slot_ctx_t * slot_ctx;
-  fd_spad_t *          runtime_spad;
-
-  fd_pubkey_t curr_key;
 };
 typedef struct fd_snapshot_parser fd_snapshot_parser_t;
 
@@ -169,12 +170,11 @@ fd_snapshot_parser_reset( fd_snapshot_parser_t * self ) {
 
 static inline fd_snapshot_parser_t *
 fd_snapshot_parser_new( void * mem,
-                        fd_snapshot_process_acc_hdr_fn_t acc_hdr_cb,
-                        fd_snapshot_process_acc_data_fn_t acc_data_cb,
-                        fd_snapshot_process_acc_done_fn_t acc_done_cb,
-                        void *                            cb_arg,
-                        fd_exec_slot_ctx_t *              slot_ctx,
-                        fd_spad_t *                       runtime_spad ) {
+                        fd_snapshot_parser_process_manifest_stream_fn_t manifest_cb,
+                        fd_snapshot_process_acc_hdr_fn_t                acc_hdr_cb,
+                        fd_snapshot_process_acc_data_fn_t               acc_data_cb,
+                        fd_snapshot_process_acc_done_fn_t               acc_done_cb,
+                        void *                                          cb_arg ) {
   if( FD_UNLIKELY( !mem ) ) {
     FD_LOG_WARNING(( "NULL mem" ));
     return NULL;
@@ -204,6 +204,7 @@ fd_snapshot_parser_new( void * mem,
 
   self->buf = buf_mem;
 
+  self->manifest_cb = manifest_cb;
   self->acc_hdr_cb  = acc_hdr_cb;
   self->acc_data_cb = acc_data_cb;
   self->acc_done_cb = acc_done_cb;
@@ -213,9 +214,6 @@ fd_snapshot_parser_new( void * mem,
   self->metrics.accounts_files_total     = 0UL;
   self->metrics.accounts_processed       = 0UL;
   self->processing_accv          = 0;
-
-  self->slot_ctx = slot_ctx;
-  self->runtime_spad = runtime_spad;
 
   return self;
 }

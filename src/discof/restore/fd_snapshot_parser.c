@@ -109,28 +109,28 @@ fd_snapshot_parser_accv_prepare( fd_snapshot_parser_t * const self,
 /* fd_snapshot_restore_manifest_prepare prepares for consumption of the
    snapshot manifest. */
 
-static int
-fd_snapshot_parser_manifest_prepare( fd_snapshot_parser_t * self,
-                                      ulong                  sz ) {
-  /* Only read once */
-  if( self->manifest_done ) {
-    FD_LOG_WARNING(( "Snapshot file contains multiple manifests" ));
-    self->state = SNAP_STATE_IGNORE;
-    return 0;
-  }
+// static int
+// fd_snapshot_parser_manifest_prepare( fd_snapshot_parser_t * self,
+//                                       ulong                  sz ) {
+//   /* Only read once */
+//   if( self->manifest_done ) {
+//     FD_LOG_WARNING(( "Snapshot file contains multiple manifests" ));
+//     self->state = SNAP_STATE_IGNORE;
+//     return 0;
+//   }
 
-  /* We don't support streaming manifest deserialization yet.  Thus,
-     buffer the whole manifest in one place. */
-  if( FD_UNLIKELY( !fd_snapshot_parser_prepare_buf( self, sz ) ) ) {
-    self->flags |= SNAP_FLAG_FAILED;
-    return ENOMEM;
-  }
+//   /* We don't support streaming manifest deserialization yet.  Thus,
+//      buffer the whole manifest in one place. */
+//   if( FD_UNLIKELY( !fd_snapshot_parser_prepare_buf( self, sz ) ) ) {
+//     self->flags |= SNAP_FLAG_FAILED;
+//     return ENOMEM;
+//   }
 
-  self->state  = SNAP_STATE_MANIFEST;
-  self->buf_sz = sz;
+//   self->state  = SNAP_STATE_MANIFEST;
+//   self->buf_sz = sz;
 
-  return 0;
-}
+//   return 0;
+// }
 
 static void
 fd_snapshot_parser_restore_file( void *                self_,
@@ -156,7 +156,10 @@ fd_snapshot_parser_restore_file( void *                self_,
   } else if( fd_memeq( meta->name, "snapshots/status_cache", sizeof("snapshots/status_cache") ) ) {
     /* TODO */
   } else if(0==strncmp( meta->name, "snapshots/", sizeof("snapshots/")-1 ) ) {
-    fd_snapshot_parser_manifest_prepare( self, sz );
+    // fd_snapshot_parser_manifest_prepare( self, sz );
+    self->state  = SNAP_STATE_MANIFEST;
+    self->buf_sz = sz;
+    /* TODO */
   }
 
 }
@@ -289,6 +292,7 @@ fd_snapshot_parser_restore_manifest( fd_snapshot_parser_t * self ) {
   .data    = self->buf,
   .dataend = self->buf + self->buf_sz
   };
+  FD_LOG_WARNING(("pre-decoded size is %lu", self->buf_sz));
 
   ulong total_sz = 0UL;
   int err = fd_solana_manifest_decode_footprint( &decode, &total_sz );
@@ -298,6 +302,7 @@ fd_snapshot_parser_restore_manifest( fd_snapshot_parser_t * self ) {
 
   uchar * scratch    = (uchar *)fd_ulong_align_up( (ulong)decode.dataend, fd_solana_manifest_align() );
   ulong   scratch_sz = (ulong)( self->buf + self->buf_max - scratch );
+  FD_LOG_WARNING(("total_sz for manifest is %lu", total_sz));
   if( FD_UNLIKELY( total_sz > scratch_sz ) ) {
   FD_LOG_ERR(( "Cannot decode snapshot. Insufficient scratch buffer size (need %lu, have %lu bytes)",
               (ulong)scratch + total_sz - (ulong)self->buf, self->buf_max ));
@@ -378,11 +383,19 @@ fd_snapshot_parser_read_manifest_chunk( fd_snapshot_parser_t * self,
                                         uchar const *          buf,
                                         ulong                  bufsz ) {
   uchar const * end = fd_snapshot_parser_read_buffered( self, buf, bufsz );
+  ulong chunksz     = (ulong)(end - buf);
+  ulong consumed_sz = chunksz;
+
+  if( self->manifest_cb ) {
+    consumed_sz = self->manifest_cb( self, self->cb_arg, buf, chunksz );
+  }
+
   if( fd_snapshot_parser_hdr_read_is_complete( self ) ) {
     fd_snapshot_parser_restore_manifest( self );
     self->state = SNAP_STATE_IGNORE;
   }
-  return end;
+
+  return buf+consumed_sz;
 }
 
 static int
@@ -405,7 +418,6 @@ fd_snapshot_parser_restore_account_hdr( fd_snapshot_parser_t * self ) {
     self->acc_hdr_cb( self, hdr, self->cb_arg );
     self->metrics.accounts_processed++;
   }
-  memcpy( &self->curr_key, &hdr->meta.pubkey, sizeof(fd_pubkey_t));
 
   /* Next step */
   if( data_sz == 0UL ) {

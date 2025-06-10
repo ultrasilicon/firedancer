@@ -77,13 +77,10 @@ backtest_topo( config_t * config ) {
   /* specified by [tiles.replay] */
 
   fd_topob_wksp( topo, "funk" );
-  fd_topob_wksp( topo, "slot_ctx" );
   fd_topo_obj_t * funk_obj = setup_topo_funk( topo, "funk",
       config->firedancer.funk.max_account_records,
       config->firedancer.funk.max_database_transactions,
       config->firedancer.funk.heap_size_gib );
-  
-  fd_topo_obj_t * slot_ctx_obj = setup_topo_slot_ctx( topo, "slot_ctx" );
 
   fd_topob_tile_uses( topo, replay_tile, funk_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
 
@@ -312,8 +309,6 @@ backtest_topo( config_t * config ) {
   fd_topob_tile_uses( topo, snapin_tile, snapshot_fseq_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
   fd_topob_tile_uses( topo, replay_tile, snapshot_fseq_obj, FD_SHMEM_JOIN_MODE_READ_ONLY );
   fd_topob_tile_uses( topo, snapin_tile, runtime_pub_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
-  fd_topob_tile_uses( topo, snapin_tile, slot_ctx_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
-  fd_topob_tile_uses( topo, replay_tile, slot_ctx_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
 
   for( ulong i=0UL; i<topo->tile_cnt; i++ ) {
     fd_topo_tile_t * tile = &topo->tiles[ i ];

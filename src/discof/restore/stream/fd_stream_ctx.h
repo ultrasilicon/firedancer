@@ -248,7 +248,7 @@ fd_stream_ctx_poll( fd_stream_ctx_t * ctx,
   }
   else {
     FD_COMPILER_MFENCE();
-    ulong sz = 0U;
+    ulong sz = 0UL;
     fd_stream_frag_meta_t const * frag = fd_type_pun_const( consume_ctx.mline  );
     int consumed_frag = ctx->tile_on_stream_frag( tile_ctx, this_in, frag, &sz );
 

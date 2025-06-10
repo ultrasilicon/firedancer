@@ -11,11 +11,6 @@
 #define NAME "SnapRd"
 #define FILE_READ_MAX 8UL<<20
 
-#define SNAP_RD_STATUS_WAITING 0UL
-#define SNAP_RD_STATUS_FULL    1UL
-#define SNAP_RD_STATUS_INC     2UL
-#define SNAP_RD_STATUS_DONE    3UL
-
 struct fd_snaprd_tile {
   fd_stream_writer_t * writer;
   int                  full_fd;
@@ -86,16 +81,16 @@ fd_snaprd_shutdown( fd_snaprd_tile_t * ctx ) {
 
 static void
 fd_snaprd_on_file_complete( fd_snaprd_tile_t * ctx ) {
-  if( ctx->metrics.status == SNAP_RD_STATUS_FULL && ctx->has_incremental ) {
+  if( ctx->metrics.status == STATUS_FULL && ctx->has_incremental ) {
     ctx->curr_fd = ctx->inc_fd;
 
     FD_LOG_INFO(("snaprd: done reading full snapshot, now reading incremental snapshot, seq is %lu", ctx->writer->seq ));
-    fd_snaprd_set_status( ctx, SNAP_RD_STATUS_INC );
+    fd_snaprd_set_status( ctx, STATUS_INC );
     fd_stream_writer_notify( ctx->writer, 
                              fd_frag_meta_ctl( 1UL, 0, 1, 0 ) );
     fd_stream_writer_reset_stream( ctx->writer );
 
-  } else if( ctx->metrics.status == SNAP_RD_STATUS_INC || !ctx->has_incremental ) {
+  } else if( ctx->metrics.status == STATUS_INC || !ctx->has_incremental ) {
 
     if( ctx->has_incremental ) {
       FD_LOG_INFO(( "snaprd: done reading incremental snapshot!" ));
@@ -103,7 +98,7 @@ fd_snaprd_on_file_complete( fd_snaprd_tile_t * ctx ) {
       FD_LOG_INFO(( "snaprd: done reading full snapshot with size %lu", ctx->metrics.full.bytes_total ));
     }
 
-    fd_snaprd_set_status( ctx, SNAP_RD_STATUS_DONE );
+    fd_snaprd_set_status( ctx, STATUS_DONE );
     fd_stream_writer_notify( ctx->writer,
                              fd_frag_meta_ctl( 0UL, 0, 1, 0 ) );
     fd_snaprd_shutdown( ctx );
@@ -115,9 +110,9 @@ fd_snaprd_on_file_complete( fd_snaprd_tile_t * ctx ) {
 static void
 fd_snaprd_accumulate_metrics( fd_snaprd_tile_t * ctx,
                               ulong              bytes ) {
-  if( ctx->metrics.status == SNAP_RD_STATUS_FULL ) {
+  if( ctx->metrics.status == STATUS_FULL ) {
     ctx->metrics.full.bytes_read += bytes;
-  } else if( ctx->metrics.status == SNAP_RD_STATUS_INC ) {
+  } else if( ctx->metrics.status == STATUS_INC ) {
     ctx->metrics.incremental.bytes_read += bytes;
   } else {
     FD_LOG_ERR(("snaprd: unexpected status"));
@@ -176,7 +171,7 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->metrics.full.bytes_read         = 0UL;
   ctx->metrics.incremental.bytes_read  = 0UL;
 
-  fd_snaprd_set_status( ctx, SNAP_RD_STATUS_FULL );
+  fd_snaprd_set_status( ctx, STATUS_FULL );
 
   ctx->replay_snap_fseq = fd_fseq_join( fd_topo_obj_laddr( topo, tile->snapin.fseq_obj_id ) );
   if( FD_UNLIKELY( !ctx->replay_snap_fseq ) ) {

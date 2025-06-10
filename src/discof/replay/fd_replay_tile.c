@@ -25,6 +25,7 @@
 #include "../../choreo/fd_choreo.h"
 #include "../../flamenco/snapshot/fd_snapshot_create.h"
 #include "../../disco/plugin/fd_plugin.h"
+#include "../../discof/restore/stream/fd_stream_reader.h"
 #include "fd_exec.h"
 
 #include <arpa/inet.h>
@@ -53,7 +54,8 @@
 #define REPAIR_IN_IDX  (0UL)
 #define PACK_IN_IDX    (1UL)
 #define BATCH_IN_IDX   (2UL)
-#define SHRED_IN_IDX   (3UL)
+#define SNAP_IN_IDX    (3UL)
+#define SHRED_IN_IDX   (4UL)
 
 #define STAKE_OUT_IDX  (0UL)
 #define SENDER_OUT_IDX (1UL)
@@ -268,6 +270,9 @@ struct fd_replay_tile_ctx {
   fd_replay_tile_metrics_t metrics;
 
   ulong * exec_slice_deque; /* Deque to buffer exec slices - lives in spad */
+
+  /* manifest reader */
+  fd_stream_reader_t * manifest_reader;
 };
 typedef struct fd_replay_tile_ctx fd_replay_tile_ctx_t;
 
@@ -297,6 +302,7 @@ scratch_footprint( fd_topo_tile_t const * tile FD_PARAM_UNUSED ) {
     l = FD_LAYOUT_APPEND( l, FD_BMTREE_COMMIT_ALIGN, FD_BMTREE_COMMIT_FOOTPRINT(0) );
   }
   l = FD_LAYOUT_APPEND( l, 128UL, FD_SLICE_MAX );
+  l = FD_LAYOUT_APPEND( l, fd_stream_reader_align(), fd_stream_reader_footprint() );
   l = FD_LAYOUT_FINI  ( l, scratch_align() );
   return l;
 }
@@ -1872,6 +1878,15 @@ static void
 replay_init( fd_replay_tile_ctx_t * ctx,
              fd_stem_context_t *    stem,
              uchar is_snapshot ) {
+  uchar * slot_ctx_mem        = fd_spad_alloc_check( ctx->runtime_spad, FD_EXEC_SLOT_CTX_ALIGN, FD_EXEC_SLOT_CTX_FOOTPRINT );
+  ctx->slot_ctx               = fd_exec_slot_ctx_join( fd_exec_slot_ctx_new( slot_ctx_mem ) );
+  ctx->slot_ctx->funk         = ctx->funk;
+  ctx->slot_ctx->blockstore   = ctx->blockstore;
+  ctx->slot_ctx->epoch_ctx    = ctx->epoch_ctx;
+  ctx->slot_ctx->status_cache = ctx->status_cache;
+  fd_runtime_update_slots_per_epoch( ctx->slot_ctx, FD_DEFAULT_SLOTS_PER_EPOCH );
+
+  /* ??? TODO:*/
   fd_features_restore( ctx->slot_ctx, ctx->runtime_spad );
   fd_calculate_epoch_accounts_hash_values( ctx->slot_ctx );
   fd_hashes_load( ctx->slot_ctx, ctx->runtime_spad );
@@ -2144,6 +2159,37 @@ handle_writer_state_updates( fd_replay_tile_ctx_t * ctx ) {
     }
   }
 
+}
+
+static int
+process_manifest_chunk( fd_replay_tile_ctx_t * ctx,
+                        fd_stream_frag_meta_t const * frag ) {
+  /* check som bit which indicates a message containing the size of the manifest */
+
+  /* copy into a buffer to hold the manifest */
+}
+
+static void
+poll_manifest_reader( fd_replay_tile_ctx_t * ctx ) {
+  fd_frag_reader_consume_ctx_t consume_ctx;
+  long diff = fd_stream_reader_poll_frag( ctx->manifest_reader, 
+                                          SNAP_IN_IDX,
+                                          &consume_ctx );
+  if( FD_UNLIKELY( diff <0L ) ) {
+    fd_stream_reader_process_overrun( ctx->manifest_reader,
+                                      &consume_ctx,
+                                      diff );
+  } else if( FD_UNLIKELY( diff ) ) {
+    /* nothing new to poll */
+    return;
+  } else {
+    fd_stream_frag_meta_t const * frag = fd_type_pun_const( consume_ctx.mline );
+    int consumed_frag = process_manifest_chunk( ctx, frag );
+    
+    if( FD_LIKELY( consumed_frag ) ) {
+      fd_stream_reader_consume_frag( ctx->manifest_reader, &consume_ctx );
+    }
+  }
 }
 
 static void
@@ -2464,10 +2510,11 @@ unprivileged_init( fd_topo_t *      topo,
   FD_LOG_NOTICE(("Starting unprivileged init"));
   void * scratch = fd_topo_obj_laddr( topo, tile->tile_obj_id );
 
-  if( FD_UNLIKELY( tile->in_cnt < 3 ||
+  if( FD_UNLIKELY( tile->in_cnt < 4 ||
                    strcmp( topo->links[ tile->in_link_id[ PACK_IN_IDX ] ].name, "pack_replay")   ||
                    strcmp( topo->links[ tile->in_link_id[ BATCH_IN_IDX  ] ].name, "batch_replay" ) ||
-                   strcmp( topo->links[ tile->in_link_id[ REPAIR_IN_IDX  ] ].name, "repair_repla" ) ) ) {
+                   strcmp( topo->links[ tile->in_link_id[ REPAIR_IN_IDX  ] ].name, "repair_repla" ) ) ||
+                   strcmp( topo->links[ tile->in_link_id[ SNAP_IN_IDX  ] ].name, "snap_replay" ) ) {
     FD_LOG_ERR(( "replay tile has none or unexpected input links %lu %s %s",
                  tile->in_cnt, topo->links[ tile->in_link_id[ 0 ] ].name, topo->links[ tile->in_link_id[ 1 ] ].name ));
   }
@@ -2489,6 +2536,7 @@ unprivileged_init( fd_topo_t *      topo,
     ctx->bmtree[i]           = FD_SCRATCH_ALLOC_APPEND( l, FD_BMTREE_COMMIT_ALIGN, FD_BMTREE_COMMIT_FOOTPRINT(0) );
   }
   void * mbatch_mem          = FD_SCRATCH_ALLOC_APPEND( l, 128UL, FD_SLICE_MAX );
+  void * manifest_reader_mem = FD_SCRATCH_ALLOC_APPEND( l, fd_stream_reader_align(), fd_stream_reader_footprint() );
   ulong  scratch_alloc_mem   = FD_SCRATCH_ALLOC_FINI  ( l, scratch_align() );
 
   if( FD_UNLIKELY( scratch_alloc_mem != ( (ulong)scratch + scratch_footprint( tile ) ) ) ) {
@@ -2939,15 +2987,11 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->snap_fseq = fd_fseq_join( fd_topo_obj_laddr( topo, tile->replay.snap_fseq_obj_id ) );
   FD_TEST( ctx->snap_fseq );
 
-  ctx->slot_ctx = fd_exec_slot_ctx_join( fd_topo_obj_laddr( topo, tile->replay.slot_ctx_obj_id ) );
-
-  /* Init slot_ctx */
-
-  ctx->slot_ctx->funk         = ctx->funk;
-  ctx->slot_ctx->blockstore   = ctx->blockstore;
-  ctx->slot_ctx->epoch_ctx    = ctx->epoch_ctx;
-  ctx->slot_ctx->status_cache = ctx->status_cache;
-  fd_runtime_update_slots_per_epoch( ctx->slot_ctx, FD_DEFAULT_SLOTS_PER_EPOCH );
+  /* set up manifest reader */
+  ctx->manifest_reader = manifest_reader_mem;
+  fd_frag_meta_t * mcache = topo->links[ tile->in_link_id[ SNAP_IN_IDX ] ].mcache;
+  ulong *          fseq   = tile->in_link_fseq[ SNAP_IN_IDX ];
+  fd_stream_reader_init( ctx->manifest_reader, mcache, fseq, SNAP_IN_IDX );
 
   FD_LOG_NOTICE(("Finished unprivileged init"));
 }

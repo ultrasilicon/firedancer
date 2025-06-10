@@ -73,12 +73,6 @@ snapshot_load_topo( config_t *     config,
   fd_topob_wksp( topo, "snap_fseq" );
   fd_topo_obj_t * snapshot_fseq_obj = fd_topob_obj( topo, "fseq", "snap_fseq" );
 
-  fd_topob_wksp( topo, "slot_ctx" );
-  fd_topo_obj_t * slot_ctx_obj = setup_topo_slot_ctx( topo, "slot_ctx" );
-
-  fd_topob_wksp( topo, "runtime_pub" );
-  fd_topo_obj_t * runtime_pub_obj = setup_topo_runtime_pub( topo, "runtime_pub", config->firedancer.runtime.heap_size_gib<<30 );
-
   /* Uncompressed data stream */
   fd_topob_wksp( topo, "snap_stream" );
   fd_topo_link_t * snapin_link   = fd_topob_link( topo, "snap_stream", "snap_stream", 512UL, 0UL, 0UL );
@@ -181,14 +175,6 @@ snapshot_load_topo( config_t *     config,
   fd_topob_tile_uses( topo, snapin_tile, snapshot_fseq_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
   snapin_tile->snapin.fseq_obj_id = snapshot_fseq_obj->id;
   fd_pod_insertf_ulong( topo->props, snapshot_fseq_obj->id, "snap_fseq" );
-
-  fd_topob_tile_uses( topo, snapin_tile, slot_ctx_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
-  fd_pod_insertf_ulong( topo->props, slot_ctx_obj->id, "slot_ctx" );
-  snapin_tile->snapin.slot_ctx_obj_id = slot_ctx_obj->id;
-
-  fd_topob_tile_uses( topo, snapin_tile, runtime_pub_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
-  fd_pod_insertf_ulong( topo->props, runtime_pub_obj->id, "runtime_pub" );
-  
 
   for( ulong i=0UL; i<topo->tile_cnt; i++ ) {
     fd_topo_tile_t * tile = &topo->tiles[ i ];

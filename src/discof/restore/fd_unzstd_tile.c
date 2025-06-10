@@ -11,11 +11,6 @@
 #define ZSTD_FRAME_SZ 8*1024*1024UL
 #define LINK_IN_MAX 1
 
-#define SNAP_DC_STATUS_WAITING 0UL
-#define SNAP_DC_STATUS_FULL    1UL
-#define SNAP_DC_STATUS_INC     2UL
-#define SNAP_DC_STATUS_DONE    3UL
-
 struct fd_snapdc_tile {
   fd_stream_frag_meta_ctx_t in_state; /* input mcache context */
   fd_zstd_dstream_t *       dstream;  /* zstd decompress reader */
@@ -66,10 +61,10 @@ static void
 fd_snapdc_accumulate_metrics( fd_snapdc_tile_t * ctx,
                               ulong              compressed_bytes_read,
                               ulong              decompressed_bytes_read ) {
-  if( ctx->metrics.status == SNAP_DC_STATUS_FULL ) {
+  if( ctx->metrics.status == STATUS_FULL ) {
     ctx->metrics.full.compressed_bytes_read   += compressed_bytes_read;
     ctx->metrics.full.decompressed_bytes_read += decompressed_bytes_read;
-  } else if( ctx->metrics.status == SNAP_DC_STATUS_INC ) {
+  } else if( ctx->metrics.status == STATUS_INC ) {
     ctx->metrics.incremental.compressed_bytes_read   += compressed_bytes_read;
     ctx->metrics.incremental.decompressed_bytes_read += decompressed_bytes_read;
   } else {
@@ -109,7 +104,7 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->dstream         = fd_zstd_dstream_new( zstd_mem, ZSTD_WINDOW_SZ );
 
   fd_zstd_dstream_reset( ctx->dstream );
-  fd_snapdc_set_status( ctx, SNAP_DC_STATUS_FULL );
+  fd_snapdc_set_status( ctx, STATUS_FULL );
 }
 
 static void
@@ -138,10 +133,10 @@ static void
 fd_snapdc_on_file_complete( fd_snapdc_tile_t *   ctx,
                             fd_stream_reader_t * reader,
                             fd_stream_frag_meta_t const * frag ) {
-  if( ctx->metrics.status == SNAP_DC_STATUS_FULL && 
+  if( ctx->metrics.status == STATUS_FULL && 
       fd_frag_meta_ctl_orig( frag->ctl ) == 1UL ) {
     FD_LOG_INFO(("snapdc: done decompressing full snapshot, now decompressing incremental snapshot"));
-    fd_snapdc_set_status( ctx, SNAP_DC_STATUS_INC );
+    fd_snapdc_set_status( ctx, STATUS_INC );
 
     /* notify downstream consumer */
     fd_stream_writer_notify( ctx->writer,
@@ -152,9 +147,9 @@ fd_snapdc_on_file_complete( fd_snapdc_tile_t *   ctx,
     fd_stream_writer_reset_stream( ctx->writer );
     fd_stream_reader_reset_stream( reader );
 
-  } else if( ctx->metrics.status == SNAP_DC_STATUS_INC ||
+  } else if( ctx->metrics.status == STATUS_INC ||
              !fd_frag_meta_ctl_orig( frag->ctl ) ) {
-    fd_snapdc_set_status( ctx, SNAP_DC_STATUS_DONE );
+    fd_snapdc_set_status( ctx, STATUS_DONE );
     fd_stream_writer_notify( ctx->writer,
                              fd_frag_meta_ctl( 0UL, 0, 1, 0 ) );
     fd_snapdc_shutdown();
