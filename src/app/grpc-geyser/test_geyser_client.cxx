@@ -9,11 +9,33 @@
 
 #include "geyser.grpc.pb.h"
 
+extern "C" {
+#include "../../ballet/base58/fd_base58.h"
+}
+
 ABSL_FLAG(std::string, target, "localhost:8754", "Server address");
 
 using grpc::Channel;
 using grpc::ClientContext;
 using grpc::Status;
+
+void
+printUpdate(::geyser::SubscribeUpdate const * update) {
+  if( update->update_oneof_case() == ::geyser::SubscribeUpdate::kAccount ) {
+    auto& acct = update->account();
+    auto& info = acct.account();
+    FD_BASE58_ENCODE_32_BYTES((uchar const *)info.pubkey().c_str(), pubkey);
+    FD_BASE58_ENCODE_32_BYTES((uchar const *)info.owner().c_str(), owner);
+    std::cout <<
+      "account\n" <<
+      "  slot=" << acct.slot() << "\n" <<
+      "  is_startup=" << acct.is_startup() << "\n" <<
+      "  pubkey=" << std::string(pubkey, pubkey_len) << "\n" <<
+      "  lamports=" << info.lamports() << "\n" <<
+      "  owner=" << std::string(owner, owner_len) << "\n" <<
+      "  executable=" << info.executable() << "\n";
+  }
+}
 
 class GeyserClient {
   public:
@@ -175,7 +197,7 @@ class GeyserClient {
 
       for( unsigned cnt = 0; cnt < 10; ) {
         if( rpc->Read(&update) ) {
-          std::cout << "*" << std::endl;
+          printUpdate(&update);
           ++cnt;
         }
       }
