@@ -1590,11 +1590,25 @@ fd_runtime_block_execute_prepare( fd_exec_slot_ctx_t * slot_ctx,
   *signature_cnt = 0UL;
   fd_bank_mgr_signature_cnt_save( slot_ctx->bank_mgr );
 
-  slot_ctx->txn_count                          = 0UL;
-  slot_ctx->nonvote_txn_count                  = 0UL;
-  slot_ctx->failed_txn_count                   = 0UL;
-  slot_ctx->nonvote_failed_txn_count           = 0UL;
-  slot_ctx->total_compute_units_used           = 0UL;
+  ulong * txn_count = fd_bank_mgr_txn_count_modify( slot_ctx->bank_mgr );
+  *txn_count = 0UL;
+  fd_bank_mgr_txn_count_save( slot_ctx->bank_mgr );
+
+  ulong * nonvote_txn_count = fd_bank_mgr_nonvote_txn_count_modify( slot_ctx->bank_mgr );
+  *nonvote_txn_count = 0UL;
+  fd_bank_mgr_nonvote_txn_count_save( slot_ctx->bank_mgr );
+
+  ulong * failed_txn_count = fd_bank_mgr_failed_txn_count_modify( slot_ctx->bank_mgr );
+  *failed_txn_count = 0UL;
+  fd_bank_mgr_failed_txn_count_save( slot_ctx->bank_mgr );
+
+  ulong * nonvote_failed_txn_count = fd_bank_mgr_nonvote_failed_txn_count_modify( slot_ctx->bank_mgr );
+  *nonvote_failed_txn_count = 0UL;
+  fd_bank_mgr_nonvote_failed_txn_count_save( slot_ctx->bank_mgr );
+
+  ulong * total_compute_units_used = fd_bank_mgr_total_compute_units_used_modify( slot_ctx->bank_mgr );
+  *total_compute_units_used = 0UL;
+  fd_bank_mgr_total_compute_units_used_save( slot_ctx->bank_mgr );
 
   int result = fd_runtime_block_sysvar_update_pre_execute( slot_ctx, runtime_spad );
   if( FD_UNLIKELY( result != 0 ) ) {
@@ -1989,7 +2003,7 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
       fd_txn_account_t * acc_rec = &txn_ctx->accounts[i];
 
       if( dirty_vote_acc && 0==memcmp( acc_rec->vt->get_owner( acc_rec ), &fd_solana_vote_program_id, sizeof(fd_pubkey_t) ) ) {
-        fd_vote_store_account( slot_ctx, acc_rec );
+        fd_vote_store_account( slot_ctx, acc_rec, bank_mgr );
         FD_SPAD_FRAME_BEGIN( finalize_spad ) {
           int err;
           fd_vote_state_versioned_t * vsv = fd_bincode_decode_spad(
@@ -2027,7 +2041,7 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
 
       if( dirty_stake_acc && 0==memcmp( acc_rec->vt->get_owner( acc_rec ), &fd_solana_stake_program_id, sizeof(fd_pubkey_t) ) ) {
         // TODO: does this correctly handle stake account close?
-        fd_store_stake_delegation( slot_ctx, acc_rec );
+        fd_store_stake_delegation( slot_ctx, acc_rec, bank_mgr );
       }
 
       fd_txn_account_save( &txn_ctx->accounts[i], slot_ctx->funk, slot_ctx->funk_txn, txn_ctx->spad_wksp );
@@ -2043,16 +2057,25 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
 
   int is_vote = fd_txn_is_simple_vote_transaction( txn_ctx->txn_descriptor, txn_ctx->_txn_raw->raw );
   if( !is_vote ){
-    FD_ATOMIC_FETCH_AND_ADD( &slot_ctx->nonvote_txn_count, 1 );
+    ulong * nonvote_txn_count = fd_bank_mgr_nonvote_txn_count_modify( bank_mgr );
+    *nonvote_txn_count += 1;
+    fd_bank_mgr_nonvote_txn_count_save( bank_mgr );
     if( FD_UNLIKELY( exec_txn_err ) ){
-      FD_ATOMIC_FETCH_AND_ADD( &slot_ctx->nonvote_failed_txn_count, 1 );
+      ulong * nonvote_failed_txn_count = fd_bank_mgr_nonvote_failed_txn_count_modify( bank_mgr );
+      *nonvote_failed_txn_count += 1;
+      fd_bank_mgr_nonvote_failed_txn_count_save( bank_mgr );
     }
   } else {
     if( FD_UNLIKELY( exec_txn_err ) ){
-      FD_ATOMIC_FETCH_AND_ADD( &slot_ctx->failed_txn_count, 1 );
+      ulong * failed_txn_count = fd_bank_mgr_failed_txn_count_modify( bank_mgr );
+      *failed_txn_count += 1;
+      fd_bank_mgr_failed_txn_count_save( bank_mgr );
     }
   }
-  FD_ATOMIC_FETCH_AND_ADD( &slot_ctx->total_compute_units_used, txn_ctx->compute_unit_limit - txn_ctx->compute_meter );
+
+  ulong * total_compute_units_used = fd_bank_mgr_total_compute_units_used_modify( bank_mgr );
+  *total_compute_units_used += txn_ctx->compute_unit_limit - txn_ctx->compute_meter;
+  fd_bank_mgr_total_compute_units_used_save( bank_mgr );
 
 }
 
@@ -3788,10 +3811,21 @@ fd_runtime_process_genesis_block( fd_exec_slot_ctx_t * slot_ctx,
   *signature_cnt = 0UL;
   fd_bank_mgr_signature_cnt_save( slot_ctx->bank_mgr );
 
-  slot_ctx->txn_count                          = 0UL;
-  slot_ctx->failed_txn_count                   = 0UL;
-  slot_ctx->nonvote_failed_txn_count           = 0UL;
-  slot_ctx->total_compute_units_used           = 0UL;
+  ulong * txn_count = fd_bank_mgr_txn_count_modify( slot_ctx->bank_mgr );
+  *txn_count = 0UL;
+  fd_bank_mgr_txn_count_save( slot_ctx->bank_mgr );
+
+  ulong * failed_txn_count = fd_bank_mgr_failed_txn_count_modify( slot_ctx->bank_mgr );
+  *failed_txn_count = 0UL;
+  fd_bank_mgr_failed_txn_count_save( slot_ctx->bank_mgr );
+
+  ulong * nonvote_failed_txn_count = fd_bank_mgr_nonvote_failed_txn_count_modify( slot_ctx->bank_mgr );
+  *nonvote_failed_txn_count = 0UL;
+  fd_bank_mgr_nonvote_failed_txn_count_save( slot_ctx->bank_mgr );
+
+  ulong * total_compute_units_used = fd_bank_mgr_total_compute_units_used_modify( slot_ctx->bank_mgr );
+  *total_compute_units_used = 0UL;
+  fd_bank_mgr_total_compute_units_used_save( slot_ctx->bank_mgr );
 
   fd_sysvar_slot_history_update( slot_ctx, runtime_spad );
 

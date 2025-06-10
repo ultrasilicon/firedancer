@@ -41,11 +41,6 @@ struct fd_exec_slot_ctx {
 
   /* TODO remove this stuff */
   ulong                       parent_transaction_count;
-  ulong                       txn_count;
-  ulong                       nonvote_txn_count;
-  ulong                       failed_txn_count;
-  ulong                       nonvote_failed_txn_count;
-  ulong                       total_compute_units_used;
 
   fd_txncache_t *             status_cache;
 

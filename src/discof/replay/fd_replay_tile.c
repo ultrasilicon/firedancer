@@ -1025,18 +1025,15 @@ publish_slot_notifications( fd_replay_tile_ctx_t * ctx,
     };
     */
 
-    ulong * execution_fees = fd_bank_mgr_execution_fees_query( fork->slot_ctx->bank_mgr );
-    ulong * priority_fees  = fd_bank_mgr_priority_fees_query( fork->slot_ctx->bank_mgr );
-
     ulong msg[11];
     msg[ 0 ] = ctx->curr_slot;
-    msg[ 1 ] = fork->slot_ctx->txn_count;
-    msg[ 2 ] = fork->slot_ctx->nonvote_txn_count;
-    msg[ 3 ] = fork->slot_ctx->failed_txn_count;
-    msg[ 4 ] = fork->slot_ctx->nonvote_failed_txn_count;
-    msg[ 5 ] = fork->slot_ctx->total_compute_units_used;
-    msg[ 6 ] = *execution_fees;
-    msg[ 7 ] = *priority_fees;
+    msg[ 1 ] = *fd_bank_mgr_txn_count_query( fork->slot_ctx->bank_mgr );
+    msg[ 2 ] = *fd_bank_mgr_nonvote_txn_count_query( fork->slot_ctx->bank_mgr );
+    msg[ 3 ] = *fd_bank_mgr_failed_txn_count_query( fork->slot_ctx->bank_mgr );
+    msg[ 4 ] = *fd_bank_mgr_nonvote_failed_txn_count_query( fork->slot_ctx->bank_mgr );
+    msg[ 5 ] = *fd_bank_mgr_total_compute_units_used_query( fork->slot_ctx->bank_mgr );
+    msg[ 6 ] = *fd_bank_mgr_execution_fees_query( fork->slot_ctx->bank_mgr );
+    msg[ 7 ] = *fd_bank_mgr_priority_fees_query( fork->slot_ctx->bank_mgr );
     msg[ 8 ] = 0UL; /* todo ... track tips */
     msg[ 9 ] = ctx->parent_slot;
     msg[ 10 ] = 0UL;  /* todo ... max compute units */
@@ -1437,7 +1434,9 @@ exec_slice( fd_replay_tile_ctx_t * ctx,
 
       if( FD_UNLIKELY( !fork ) ) FD_LOG_ERR(( "Unable to select a fork" ));
 
-      fork->slot_ctx->txn_count++;
+      ulong * txn_count = fd_bank_mgr_txn_count_modify( fork->slot_ctx->bank_mgr );
+      *txn_count = *txn_count + 1;
+      fd_bank_mgr_txn_count_save( fork->slot_ctx->bank_mgr );
 
       /* dispatch dcache */
       fd_runtime_public_txn_msg_t * exec_msg = (fd_runtime_public_txn_msg_t *)fd_chunk_to_laddr( exec_out->mem, exec_out->chunk );
@@ -2215,10 +2214,7 @@ after_credit( fd_replay_tile_ctx_t * ctx,
   if( FD_UNLIKELY( flags & EXEC_FLAG_FINISHED_SLOT ) ){
     fd_fork_t * fork = fd_fork_frontier_ele_query( ctx->forks->frontier, &ctx->curr_slot, NULL, ctx->forks->pool );
 
-    FD_LOG_NOTICE(( "finished block - slot: %lu, parent_slot: %lu, txn_cnt: %lu",
-                    curr_slot,
-                    ctx->parent_slot,
-                    fork->slot_ctx->txn_count ));
+    FD_LOG_NOTICE(( "finished block - slot: %lu, parent_slot: %lu", curr_slot, ctx->parent_slot ));
 
     /**************************************************************************************************/
     /* Call fd_runtime_block_execute_finalize_tpool which updates sysvar and cleanup some other stuff */

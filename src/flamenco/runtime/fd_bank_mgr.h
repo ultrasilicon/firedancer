@@ -166,7 +166,12 @@ if( FD_UNLIKELY( !bank_mgr ) ) {                                                
   X(fd_epoch_reward_status_global_t,   epoch_reward_status,         42UL, 160000000UL, 128UL ) \
   X(fd_stakes_global_t,                stakes,                      43UL, 800000000UL, 256UL ) \
   X(fd_epoch_leaders_t,                epoch_leaders,               44UL, 1000000UL,   128UL ) \
-  X(fd_features_t,                     features,                    45UL, 2000UL,      8UL)
+  X(fd_features_t,                     features,                    45UL, 2000UL,      8UL   ) \
+  X(ulong,                             txn_count,                   46UL, 8UL,         8UL   ) \
+  X(ulong,                             nonvote_txn_count,           47UL, 8UL,         8UL   ) \
+  X(ulong,                             failed_txn_count,            48UL, 8UL,         8UL   ) \
+  X(ulong,                             nonvote_failed_txn_count,    49UL, 8UL,         8UL   ) \
+  X(ulong,                             total_compute_units_used,    50UL, 8UL,         8UL   )
 FD_BANK_MGR_ITER(BANK_MGR_FUNCTIONS)
 
 FD_PROTOTYPES_END
