@@ -171,7 +171,9 @@ if( FD_UNLIKELY( !bank_mgr ) ) {                                                
   X(ulong,                             nonvote_txn_count,           47UL, 8UL,         8UL   ) \
   X(ulong,                             failed_txn_count,            48UL, 8UL,         8UL   ) \
   X(ulong,                             nonvote_failed_txn_count,    49UL, 8UL,         8UL   ) \
-  X(ulong,                             total_compute_units_used,    50UL, 8UL,         8UL   )
+  X(ulong,                             total_compute_units_used,    50UL, 8UL,         8UL   ) \
+  X(ulong,                             part_width,                  51UL, 8UL,         8UL   ) \
+  X(ulong,                             slots_per_epoch,             52UL, 8UL,         8UL   )
 FD_BANK_MGR_ITER(BANK_MGR_FUNCTIONS)
 
 FD_PROTOTYPES_END

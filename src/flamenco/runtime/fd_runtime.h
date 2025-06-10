@@ -332,8 +332,8 @@ fd_runtime_update_slots_per_epoch( fd_exec_slot_ctx_t * slot_ctx,
                                    ulong                slots_per_epoch );
 
 void
-fd_runtime_register_new_fresh_account( fd_exec_slot_ctx_t * slot_ctx,
-                                       fd_pubkey_t const  * pubkey );
+fd_runtime_register_new_fresh_account( fd_pubkey_t const  * pubkey,
+                                       fd_bank_mgr_t *      bank_mgr );
 
 /* Block Level Execution Prep/Finalize ****************************************/
 

@@ -36,8 +36,6 @@ struct fd_exec_slot_ctx {
   ulong                       txns_meta_sz;
 
   ulong                       total_compute_units_requested;
-  ulong                       slots_per_epoch;
-  ulong                       part_width;
 
   fd_txncache_t *             status_cache;
 
@@ -46,11 +44,6 @@ struct fd_exec_slot_ctx {
                                                         of Agave's ExecutionRecordingConfig. */
 
   fd_wksp_t *                 runtime_wksp; /* TODO: this should hold wksp for runtime_spad. */
-
-  /* This serializes updates to the vote account and stake account
-     related data structures in the slot bank and the epoch bank.
-   */
-  fd_rwlock_t                 vote_stake_lock[ 1 ];
 
   ulong                       shred_cnt;
 };
