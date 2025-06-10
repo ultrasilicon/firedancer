@@ -22,6 +22,7 @@ GeyserServiceImpl::~GeyserServiceImpl() {
 void
 GeyserServiceImpl::notify(fd_replay_notif_msg_t * msg) {
   lastinfo_ = *msg;
+  validhashes_[msg->slot_exec.block_hash] = msg->slot_exec.slot;
 }
 
 ::grpc::ServerBidiReactor<::geyser::SubscribeRequest, ::geyser::SubscribeUpdate>*
@@ -116,8 +117,13 @@ GeyserServiceImpl::IsBlockhashValid(::grpc::CallbackServerContext* context, cons
           Finish(grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "failed to decode hash"));
           return;
         }
-        response->set_slot(serv->lastinfo_.slot_exec.slot);
-        response->set_valid(true);
+        auto i = serv->validhashes_.find(hash);
+        if( i == serv->validhashes_.end() )
+          response->set_valid(false);
+        else {
+          response->set_slot(i->second);
+          response->set_valid(true);
+        }
         Finish(grpc::Status::OK);
       }
       void OnDone() override {

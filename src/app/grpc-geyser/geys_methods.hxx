@@ -3,16 +3,28 @@
 #include <grpcpp/health_check_service_interface.h>
 #include "geyser.grpc.pb.h"
 
+#include <map>
+
 extern "C" {
 #include "geys_fd_loop.h"
 #include "geys_filter.h"
 #include "../../discof/replay/fd_replay_notif.h"
 }
 
+struct fd_hash_cmp {
+    bool operator() (const fd_hash_t& a, const fd_hash_t& b) const {
+      for( uint i = 0; i < 4; ++i )
+        if( a.ul[i] != b.ul[i] )
+          return ( a.ul[i] < b.ul[i] );
+      return false;
+    }
+};
+
 class GeyserServiceImpl final : public geyser::Geyser::CallbackService{
     geys_fd_ctx_t * _loop_ctx;
     geys_filter_t * filt_;
     fd_replay_notif_msg_t lastinfo_;
+    std::map<fd_hash_t,ulong,fd_hash_cmp> validhashes_;
 
   public:
     GeyserServiceImpl(geys_fd_ctx_t * loop_ctx);
