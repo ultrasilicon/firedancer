@@ -14,6 +14,7 @@
 /* Struct definitions */
 typedef struct fd_exec_test_type_context {
     pb_bytes_array_t *content;
+    pb_callback_t typename;
 } fd_exec_test_type_context_t;
 
 typedef struct fd_exec_test_type_effects {
@@ -37,15 +38,16 @@ extern "C" {
 #endif
 
 /* Initializer values for message structs */
-#define FD_EXEC_TEST_TYPE_CONTEXT_INIT_DEFAULT   {NULL}
+#define FD_EXEC_TEST_TYPE_CONTEXT_INIT_DEFAULT   {NULL, {{NULL}, NULL}}
 #define FD_EXEC_TEST_TYPE_EFFECTS_INIT_DEFAULT   {0, NULL, NULL}
 #define FD_EXEC_TEST_TYPE_FIXTURE_INIT_DEFAULT   {false, FD_EXEC_TEST_FIXTURE_METADATA_INIT_DEFAULT, false, FD_EXEC_TEST_TYPE_CONTEXT_INIT_DEFAULT, false, FD_EXEC_TEST_TYPE_EFFECTS_INIT_DEFAULT}
-#define FD_EXEC_TEST_TYPE_CONTEXT_INIT_ZERO      {NULL}
+#define FD_EXEC_TEST_TYPE_CONTEXT_INIT_ZERO      {NULL, {{NULL}, NULL}}
 #define FD_EXEC_TEST_TYPE_EFFECTS_INIT_ZERO      {0, NULL, NULL}
 #define FD_EXEC_TEST_TYPE_FIXTURE_INIT_ZERO      {false, FD_EXEC_TEST_FIXTURE_METADATA_INIT_ZERO, false, FD_EXEC_TEST_TYPE_CONTEXT_INIT_ZERO, false, FD_EXEC_TEST_TYPE_EFFECTS_INIT_ZERO}
 
 /* Field tags (for use in manual encoding/decoding) */
 #define FD_EXEC_TEST_TYPE_CONTEXT_CONTENT_TAG    1
+#define FD_EXEC_TEST_TYPE_CONTEXT_TYPENAME_TAG   2
 #define FD_EXEC_TEST_TYPE_EFFECTS_RESULT_TAG     1
 #define FD_EXEC_TEST_TYPE_EFFECTS_REPRESENTATION_TAG 2
 #define FD_EXEC_TEST_TYPE_EFFECTS_YAML_TAG       3
@@ -55,8 +57,9 @@ extern "C" {
 
 /* Struct field encoding specification for nanopb */
 #define FD_EXEC_TEST_TYPE_CONTEXT_FIELDLIST(X, a) \
-X(a, POINTER,  SINGULAR, BYTES,    content,           1)
-#define FD_EXEC_TEST_TYPE_CONTEXT_CALLBACK NULL
+X(a, POINTER,  SINGULAR, BYTES,    content,           1) \
+X(a, CALLBACK, SINGULAR, STRING,   typename,          2)
+#define FD_EXEC_TEST_TYPE_CONTEXT_CALLBACK pb_default_field_callback
 #define FD_EXEC_TEST_TYPE_CONTEXT_DEFAULT NULL
 
 #define FD_EXEC_TEST_TYPE_EFFECTS_FIELDLIST(X, a) \
