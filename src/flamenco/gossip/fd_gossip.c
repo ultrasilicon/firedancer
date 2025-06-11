@@ -8,7 +8,7 @@
 #include "../../ballet/ed25519/fd_ed25519.h"
 #include "../../disco/keyguard/fd_keyguard.h"
 
-#define BLOOM_FILTER_MAX_BYTES          (512UL) /* TODO: Calculate for worst case contactinfo*/
+#define BLOOM_FILTER_MAX_BYTES          (512UL) /* TODO: Calculate for worst case contactinfo */
 #define BLOOM_FALSE_POSITIVE_RATE       (  0.1)
 #define BLOOM_NUM_KEYS                  (  8.0)
 
@@ -19,13 +19,26 @@ struct failed_insert{
 
 typedef struct failed_insert failed_insert_t;
 
+/* Push State holds a gossip push message buffer for
+   a valid push destination (e.g., peers in the active set
+   or entrypoints). This should be flushed out to the network
+   once capacity is reached. */
+struct push_state {
+  uchar            msg[ 1232UL ];
+  ulong            msg_sz; /* Also functions as cursor */
+  ulong            num_crds;
+  fd_ip4_port_t    push_dest[1];
+};
+
+typedef struct push_state push_state_t;
+
 struct fd_gossip_private {
   uchar               identity_pubkey[ 32UL ];
 
   fd_gossip_metrics_t metrics[1];
 
   fd_crds_t *         crds;
-  // fd_active_set_t *   active_set;
+  fd_active_set_t *   active_set;
   fd_ping_tracker_t * ping_tracker;
 
   long                next_pull_request;
@@ -51,6 +64,15 @@ struct fd_gossip_private {
 
   fd_gossip_send_fn   send_fn;
   void *              send_ctx;
+
+  /* Push state for each peer in the active set (300 max total) and entrypoints
+     (16 max total). active_push_state tracks the active set, and must be
+     flushed prior to a call to fd_active_set_rotate or fd_active_set_prune. */
+  push_state_t        active_push_state[ 300UL ];
+
+  /* entrypt_push_set is a separate push set that is used on a separate regime,
+     typically at bootup when the active set is sparse  */
+  push_state_t        entrypt_push_state[ 16UL ];
 };
 
 ulong
@@ -65,11 +87,50 @@ fd_gossip_footprint( ulong max_values ) {
   l = FD_LAYOUT_APPEND( l, alignof(fd_gossip_t), sizeof(fd_gossip_t) );
   l = FD_LAYOUT_APPEND( l, fd_crds_align(), fd_crds_footprint( max_values, max_values*4 /* FIXME: figure out better numbers */ ) );
   l = FD_LAYOUT_APPEND( l, alignof(uchar),  max_values/4*sizeof(failed_insert_t) ); /* failed inserts FIXME: figure out better numbers */
-  // l = FD_LAYOUT_APPEND( l, fd_active_set_align(), fd_active_set_footprint() );
+  l = FD_LAYOUT_APPEND( l, fd_active_set_align(), fd_active_set_footprint() );
   l = FD_LAYOUT_APPEND( l, fd_ping_tracker_align(), fd_ping_tracker_footprint() );
   l = FD_LAYOUT_APPEND( l, fd_bloom_align(), fd_bloom_footprint( BLOOM_FALSE_POSITIVE_RATE, BLOOM_FILTER_MAX_BYTES ) );
   l = FD_LAYOUT_FINI( l, fd_gossip_align() );
   return l;
+}
+
+static void
+push_state_new( push_state_t * state,
+                uchar const * identity_pubkey ) {
+  state->msg[ 0 ] = FD_GOSSIP_MESSAGE_PUSH;
+  fd_memcpy( &state->msg[ 4 ], identity_pubkey, 32UL );
+  state->msg_sz = 36UL; /* 4 byte tag + 32 byte sender pubkey */
+  state->num_crds = 0UL;
+}
+
+static void
+push_state_flush( fd_gossip_t *   gossip,
+                  push_state_t *  state,
+                  long            now ) {
+  if( FD_UNLIKELY( !state->msg_sz ) ) return; /* Nothing to flush */
+
+  /* Send the message */
+  gossip->send_fn( gossip->send_ctx, state->msg, state->msg_sz, state->push_dest, (ulong)now );
+
+  /* Reset the push state */
+  state->msg_sz = 36UL; /* 4 byte tag + 32 byte sender pubkey */
+  state->num_crds = 0UL;
+}
+
+static void
+push_state_append_crds( fd_gossip_t *                       gossip,
+                        push_state_t *                      state,
+                        uchar const *                       payload,
+                        fd_gossip_view_crds_value_t const * crds_value,
+                        long                                now ) {
+  ulong remaining_space = sizeof(state->msg) - state->msg_sz;
+  if( FD_UNLIKELY( remaining_space<crds_value->length ) ) {
+    push_state_flush( gossip, state, now );
+  }
+  if( FD_UNLIKELY( remaining_space<crds_value->length ) ) {
+    FD_LOG_ERR(( "Not enough space in push state to append CRDS value even after flushing" ));
+  }
+  fd_memcpy( &state->msg[ state->msg_sz ], payload + crds_value->value_off, crds_value->length );
 }
 
 void *
@@ -103,6 +164,7 @@ fd_gossip_new( void *                shmem,
   FD_SCRATCH_ALLOC_INIT( l, shmem );
   fd_gossip_t * gossip  = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_gossip_t), sizeof(fd_gossip_t) );
   void * crds           = FD_SCRATCH_ALLOC_APPEND( l, fd_crds_align(), fd_crds_footprint( max_values, max_values*4 ) );
+  void * active_set     = FD_SCRATCH_ALLOC_APPEND( l, fd_active_set_align(), fd_active_set_footprint() );
   void * failed_inserts = FD_SCRATCH_ALLOC_APPEND( l, alignof(uchar), max_values/4*sizeof(failed_insert_t) ); /* FIXME: figure out better numbers */
   void * ping_tracker   = FD_SCRATCH_ALLOC_APPEND( l, fd_ping_tracker_align(), fd_ping_tracker_footprint() );
   void * bloom          = FD_SCRATCH_ALLOC_APPEND( l, fd_bloom_align(), fd_bloom_footprint( BLOOM_FALSE_POSITIVE_RATE, BLOOM_FILTER_MAX_BYTES ) );
@@ -110,10 +172,10 @@ fd_gossip_new( void *                shmem,
   gossip->entrypoints_cnt = entrypoints_cnt;
   fd_memcpy( gossip->entrypoints, entrypoints, entrypoints_cnt*sizeof(fd_ip4_port_t) );
 
-  fd_crds_new( crds, rng, max_values, max_values*4 );
-  fd_ping_tracker_new( ping_tracker, rng );
-  fd_bloom_new( bloom, rng, BLOOM_FALSE_POSITIVE_RATE, BLOOM_FILTER_MAX_BYTES );
-
+  gossip->crds         = fd_crds_join( fd_crds_new( crds, rng, max_values, max_values*4 ) );
+  gossip->active_set   = fd_active_set_join( fd_active_set_new( active_set, rng ) );
+  gossip->ping_tracker = fd_ping_tracker_join( fd_ping_tracker_new( ping_tracker, rng ) );
+  gossip->bloom        = fd_bloom_join( fd_bloom_new( bloom, rng, BLOOM_FALSE_POSITIVE_RATE, BLOOM_FILTER_MAX_BYTES ) );
 
   gossip->failed_inserts.entries = (failed_insert_t *)failed_inserts;
   gossip->failed_inserts.cursor  = 0UL;
@@ -132,6 +194,16 @@ fd_gossip_new( void *                shmem,
   // fd_gossip_set_identity( gossip, identity_pubkey );
   fd_memcpy( gossip->identity_pubkey, identity_pubkey, 32UL );
 
+  /* Init push states */
+  for( ulong i=0UL; i<300UL; i++ ) {
+    push_state_new( &gossip->active_push_state[i], gossip->identity_pubkey );
+  }
+  for( ulong i=0UL; i<entrypoints_cnt; i++ ) {
+    push_state_t * state = &gossip->entrypt_push_state[i];
+    push_state_new( state, gossip->identity_pubkey );
+    *state->push_dest = gossip->entrypoints[i];
+  }
+
   return gossip;
 }
 
@@ -144,15 +216,7 @@ fd_gossip_join( void * shgossip ) {
     FD_LOG_ERR(( "misaligned shgossip" ));
   }
 
-  FD_SCRATCH_ALLOC_INIT( l, shgossip );
-  fd_gossip_t * gossip = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_gossip_t), sizeof(fd_gossip_t) );
-  void * ping_tracker  = FD_SCRATCH_ALLOC_APPEND( l, fd_ping_tracker_align(), fd_ping_tracker_footprint() );
-  void * bloom         = FD_SCRATCH_ALLOC_APPEND( l, fd_bloom_align(), fd_bloom_footprint( BLOOM_FALSE_POSITIVE_RATE, BLOOM_FILTER_MAX_BYTES ) );
-
-  gossip->ping_tracker = fd_ping_tracker_join( ping_tracker );
-  gossip->bloom        = fd_bloom_join( bloom );
-
-  return gossip;
+  return (fd_gossip_t *)shgossip;
 }
 
 static int
@@ -362,6 +426,35 @@ failed_inserts_purge( fd_gossip_t * gossip,
 //   return 0;
 // }
 
+static void
+push_state_insert( fd_gossip_t * gossip,
+                   uchar const * payload,
+                   fd_gossip_view_crds_value_t const * value,
+                   long          now ) {
+  ulong out_nodes[ 12UL ];
+  ulong out_nodes_cnt = fd_active_set_nodes( gossip->active_set,
+                                             gossip->identity_pubkey,
+                                             0UL, /* identity_stake FIXME */
+                                             payload+value->pubkey_off,
+                                             0UL, /* origin_stake FIXME */
+                                             0UL, /* ignore_prunes_if_peer_is_origin FIXME */
+                                             out_nodes );
+  if( FD_LIKELY( out_nodes_cnt ) ) {
+    for( ulong j=0UL; j<out_nodes_cnt; j++ ) {
+      ulong idx = out_nodes[ j ];
+      push_state_t * state = &gossip->active_push_state[ idx ];
+      push_state_append_crds( gossip, state, payload, value, now );
+    }
+  } else {
+    /* pick entrypoint to push value to ?? */
+    ulong idx = fd_rng_ulong_roll( gossip->rng, gossip->entrypoints_cnt );
+    push_state_append_crds( gossip,
+                            &gossip->entrypt_push_state[idx],
+                            payload,
+                            value,
+                            now );
+  }
+}
 static int
 rx_pull_response( fd_gossip_t *                          gossip,
                   fd_gossip_view_pull_response_t const * pull_response,
@@ -370,12 +463,11 @@ rx_pull_response( fd_gossip_t *                          gossip,
   /* TODO: use epoch_duration and make timeouts ... ? */
 
   for( ulong i=0UL; i<pull_response->crds_values_len.val; i++ ) {
+    fd_gossip_view_crds_value_t const * value = &pull_response->crds_values[ i ];
     fd_crds_entry_t * candidate =  fd_crds_acquire( gossip->crds );
 
-    /* Fill up with information needed for upsert */
-    fd_crds_populate_preflight( &pull_response->crds_values[i],
-                                payload,
-                                candidate );
+    /* Fill up with information needed for upsert check */
+    fd_crds_populate_preflight( value, payload, candidate );
 
     int upserts = fd_crds_upserts( gossip->crds, candidate );
 
@@ -387,7 +479,7 @@ rx_pull_response( fd_gossip_t *                          gossip,
 
     /* TODO: Is this jittered in Agave? */
     long accept_after_nanos;
-    if( FD_UNLIKELY( !memcmp( payload+pull_response->from_off, gossip->identity_pubkey, 32UL ) ) ) {
+    if( FD_UNLIKELY( !memcmp( payload+value->pubkey_off, gossip->identity_pubkey, 32UL ) ) ) {
       accept_after_nanos = 0L;
     // } else if( !stake( payload+pull_response->from_off ) ) {
     //   accept_after_nanos = now-15L*1000L*1000L*1000L;
@@ -396,11 +488,11 @@ rx_pull_response( fd_gossip_t *                          gossip,
     }
     int error = 0;
 
-    if( FD_LIKELY( accept_after_nanos<=pull_response->crds_values[ i ].wallclock.ts_nanos ) ||
+    if( FD_LIKELY( accept_after_nanos<=value->wallclock.ts_nanos ) ||
                    fd_crds_has_contact_info( gossip->crds,
-                                             payload+pull_response->crds_values[i].pubkey_off ) ) {
+                                             payload+value->pubkey_off ) ) {
       fd_crds_populate_full( gossip->crds,
-                             &pull_response->crds_values[i],
+                             value,
                              payload,
                              now,
                              1, /* has_upsert_info */
@@ -412,6 +504,9 @@ rx_pull_response( fd_gossip_t *                          gossip,
     }
     if( FD_UNLIKELY( !!error ) )
       fd_crds_release( gossip->crds, candidate );
+    else {
+      push_state_insert( gossip, payload, value, now );
+    }
   }
 
   return 0;
@@ -453,6 +548,8 @@ rx_push( fd_gossip_t *                 gossip,
       fd_crds_release( gossip->crds, candidate );
       if( FD_UNLIKELY( error>0 ) )      num_duplicates = (ulong)error;
       else if( FD_UNLIKELY( error<0 ) ) num_duplicates = ULONG_MAX;
+    } else {
+      push_state_insert( gossip, payload, value, now );
     }
 
 
