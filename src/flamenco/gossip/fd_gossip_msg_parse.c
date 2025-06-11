@@ -47,24 +47,6 @@ GEN_VIEW_LOAD( ulong )
   } while( 0 )
 */
 
-ulong
-fd_gossip_view_pubkey_offset( fd_gossip_view_t const * view ) {
-  switch( view->tag.val ){
-    case FD_GOSSIP_MESSAGE_PULL_REQUEST:
-      return view->pull_request->contact_info->pubkey_off;
-    case FD_GOSSIP_MESSAGE_PULL_RESPONSE:
-    case FD_GOSSIP_MESSAGE_PUSH:
-      break;
-    case FD_GOSSIP_MESSAGE_PRUNE:
-      /* TODO */
-    case FD_GOSSIP_MESSAGE_PING:
-      return view->ping->from_off;
-    case FD_GOSSIP_MESSAGE_PONG:
-      return view->pong->from_off;
-  }
-  return ULONG_MAX;
-}
-
 static ulong
 fd_gossip_msg_ping_pong_parse( fd_gossip_view_t * view,
                                uchar const *      payload,
@@ -72,10 +54,10 @@ fd_gossip_msg_ping_pong_parse( fd_gossip_view_t * view,
                                ulong              start_offset ) {
   CHECK_INIT( payload, payload_sz, start_offset );
   /* Ping/Pong share the same memory layout */
-  fd_gossip_view_ping_t * ping = view->ping;
-  CHECK_LEFT( 32UL ); ping->from_off      = GET_OFFSET(i); i+=32UL; /* Pubkey */
-  CHECK_LEFT( 32UL ); ping->token_off     = GET_OFFSET(i); i+=32UL; /* Token/Hash */
-  CHECK_LEFT( 64UL ); ping->signature_off = GET_OFFSET(i); i+=64UL; /* Signature */
+  CHECK_LEFT( sizeof(fd_gossip_view_ping_t) );
+  view->ping = (fd_gossip_view_ping_t *)(payload+i);
+  i+= sizeof(fd_gossip_view_ping_t);
+
   return i;
 }
 

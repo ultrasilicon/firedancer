@@ -240,29 +240,26 @@ verify_crds_values( fd_gossip_view_crds_value_t const * values,
 
 static int
 verify_ping_pong( fd_gossip_view_t const * view,
-                  uchar const *            payload,
                   fd_sha512_t *            sha ) {
   /* Ping/Pong messages */
-  ulong signature_off, pubkey_off, signable_data_off, signable_data_len;
+  uchar const * signature, * pubkey, * signable_data;
 
   if( view->tag.val==FD_GOSSIP_MESSAGE_PING ) {
-    signature_off     = view->ping->signature_off;
-    pubkey_off        = view->ping->from_off;
-    signable_data_off = view->ping->token_off;
-    signable_data_len = 32UL;
+    signature     = view->ping->signature;
+    pubkey        = view->ping->pubkey;
+    signable_data = view->ping->ping_token;
   } else if( view->tag.val==FD_GOSSIP_MESSAGE_PONG ) {
-    signature_off     = view->pong->signature_off;
-    pubkey_off        = view->pong->from_off;
-    signable_data_off = view->pong->hash_off;
-    signable_data_len = 32UL;
+    signature     = view->pong->signature;
+    pubkey        = view->pong->pubkey;
+    signable_data = view->pong->ping_hash;
   } else {
     FD_LOG_ERR(( "Invalid type %u, should not reach", view->tag.val ));
   }
 
-  return fd_ed25519_verify( payload+signable_data_off,
-                            signable_data_len,
-                            payload+signature_off,
-                            payload+pubkey_off,
+  return fd_ed25519_verify( signable_data,
+                            32UL,
+                            signature,
+                            pubkey,
                             sha );
 }
 
@@ -281,7 +278,7 @@ verify_signatures( fd_gossip_view_t const * view,
       return verify_prune( view->prune, payload, sha );
     case FD_GOSSIP_MESSAGE_PING:
     case FD_GOSSIP_MESSAGE_PONG:
-      return verify_ping_pong( view, payload, sha );
+      return verify_ping_pong( view, sha );
     default:
       return -1;
   };
@@ -492,19 +489,18 @@ static int
 rx_ping( fd_gossip_t *           gossip,
          fd_gossip_view_ping_t * ping,
          fd_ip4_port_t *         peer_address,
-         long                    now,
-         uchar const *           in_payload ) {
+         long                    now ) {
   /* TODO: have this point to dcache buffer directly instead */
-  uchar out_payload[ sizeof(fd_gossip_pong_tx_t) ];
+  uchar out_payload[ sizeof(fd_gossip_view_pong_t) + 4UL];
+  out_payload[0] = FD_GOSSIP_MESSAGE_PONG;
 
-  fd_gossip_pong_tx_t * out_pong = (fd_gossip_pong_tx_t *)out_payload;
-  out_pong->tag = FD_GOSSIP_MESSAGE_PONG;
+  fd_gossip_view_pong_t * out_pong = (fd_gossip_view_pong_t *)out_payload + 4UL;
 
   fd_memcpy( out_pong->pubkey, gossip->identity_pubkey, 32UL );
-  fd_ping_tracker_hash_ping_token( in_payload+ping->token_off, out_pong->ping_hash );
+  fd_ping_tracker_hash_ping_token( ping->ping_token, out_pong->ping_hash );
   gossip->sign_fn( gossip->sign_ctx, out_pong->ping_hash, 32UL, FD_KEYGUARD_SIGN_TYPE_SHA256_ED25519, out_pong->signature );
 
-  gossip->send_fn( gossip->send_ctx, (uchar *)out_payload, sizeof(fd_gossip_pong_tx_t), peer_address, (ulong)now );
+  gossip->send_fn( gossip->send_ctx, (uchar *)out_payload, sizeof(out_payload), peer_address, (ulong)now );
   return FD_GOSSIP_RX_OK;
 }
 
@@ -512,15 +508,14 @@ static int
 rx_pong( fd_gossip_t *           gossip,
          fd_gossip_view_pong_t * pong,
          fd_ip4_port_t *         peer_address,
-         long                    now,
-         uchar const *           in_payload ) {
+         long                    now ) {
   if( FD_UNLIKELY( is_entrypoint( gossip, peer_address ) )) return 0;
 
   fd_ping_tracker_register( gossip->ping_tracker,
-                            in_payload+pong->from_off,
+                            pong->pubkey,
                             0UL, /* FIXME: Get stake */
                             peer_address,
-                            in_payload+pong->hash_off,
+                            pong->ping_hash,
                             now );
   return 0;
 }
@@ -609,7 +604,7 @@ fd_gossip_rx( fd_gossip_t * gossip,
       error = rx_ping( gossip, view->ping, peer_address, now, data );
       break;
     case FD_GOSSIP_MESSAGE_PONG:
-      error = rx_pong( gossip, view->pong, peer_address, now, data );
+      error = rx_pong( gossip, view->pong, peer_address, now );
       break;
     default:
       FD_LOG_CRIT(( "Unknown gossip message type %d", view->tag.val ));
@@ -624,10 +619,10 @@ tx_ping( fd_gossip_t * gossip,
          long          now ) {
 
   /* TODO: have this point to dcache buffer directly instead. */
-  uchar out_payload[ sizeof(fd_gossip_ping_tx_t) ];
+  uchar out_payload[ sizeof(fd_gossip_view_ping_t) + 4UL ];
+  out_payload[0] = FD_GOSSIP_MESSAGE_PING;
 
-  fd_gossip_ping_tx_t * out_ping = (fd_gossip_ping_tx_t *)out_payload;
-  out_ping->tag = FD_GOSSIP_MESSAGE_PING;
+  fd_gossip_view_ping_t * out_ping = (fd_gossip_view_ping_t *)( out_payload + 4UL );
 
   uchar const *         peer_pubkey;
   uchar const *         ping_token;
@@ -642,7 +637,7 @@ tx_ping( fd_gossip_t * gossip,
     fd_memcpy( out_ping->ping_token, ping_token, 32UL );
     gossip->sign_fn( gossip->sign_ctx, out_ping->ping_token, 32UL, FD_KEYGUARD_SIGN_TYPE_SHA256_ED25519, out_ping->signature );
 
-    gossip->send_fn( gossip->send_ctx, (uchar *)out_ping, sizeof(fd_gossip_ping_tx_t), peer_address, (ulong)now );
+    gossip->send_fn( gossip->send_ctx, (uchar *)out_payload, sizeof(out_payload), peer_address, (ulong)now );
   }
 }
 

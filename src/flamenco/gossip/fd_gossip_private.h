@@ -185,18 +185,20 @@ struct fd_gossip_view_prune {
 
 typedef struct fd_gossip_view_prune fd_gossip_view_prune_t;
 
-struct fd_gossip_view_ping {
-  offset_t from_off;
-  offset_t token_off;
-  offset_t signature_off;
+/* Ping/Pong can be casted on to the payload bytes
+   directly */
+struct __attribute__((__packed__)) fd_gossip_view_ping {
+  uchar pubkey[ 32UL ];
+  uchar ping_token[ 32UL ];
+  uchar signature[ 64UL ];
 };
 
 typedef struct fd_gossip_view_ping fd_gossip_view_ping_t;
 
-struct fd_gossip_view_pong {
-  offset_t from_off;
-  offset_t hash_off;
-  offset_t signature_off;
+struct __attribute__((__packed__)) fd_gossip_view_pong {
+  uchar pubkey[ 32UL ];
+  uchar ping_hash[ 32UL ];
+  uchar signature[ 64UL ];
 };
 
 typedef struct fd_gossip_view_pong fd_gossip_view_pong_t;
@@ -208,36 +210,14 @@ struct fd_gossip_view {
     fd_gossip_view_pull_response_t pull_response[ 1 ];
     fd_gossip_view_push_t          push[ 1 ];
     fd_gossip_view_prune_t         prune[ 1 ];
-    fd_gossip_view_ping_t          ping[ 1 ];
-    fd_gossip_view_pong_t          pong[ 1 ];
+    fd_gossip_view_ping_t *        ping;
+    fd_gossip_view_pong_t *        pong;
   };
 };
 
 typedef struct fd_gossip_view fd_gossip_view_t;
 
 /* Begin Encoding related structs */
-
-struct __attribute__((__packed__)) fd_gossip_ping_tx {
-  uchar tag; /* FD_GOSSIP_MESSAGE_PING */
-  uchar _pad[ 3UL ];
-
-  uchar pubkey[ 32UL ];
-  uchar ping_token[ 32UL ];
-  uchar signature[ 64UL ];
-};
-
-typedef struct fd_gossip_ping_tx fd_gossip_ping_tx_t;
-
-struct __attribute__((__packed__)) fd_gossip_pong_tx {
-  uchar tag; /* FD_GOSSIP_MESSAGE_PING */
-  uchar _pad[ 3UL ];
-
-  uchar pubkey[ 32UL ];
-  uchar ping_hash[ 32UL ];
-  uchar signature[ 64UL ];
-};
-
-typedef struct fd_gossip_pong_tx fd_gossip_pong_tx_t;
 
 /* TODO: These end up looking very similar to views. Can we merge them? */
 struct fd_gossip_pull_request_encode_ctx {
@@ -258,9 +238,6 @@ struct fd_gossip_pull_request_encode_ctx {
 };
 
 typedef struct fd_gossip_pull_request_encode_ctx fd_gossip_pull_request_encode_ctx_t;
-
-ulong
-fd_gossip_view_pubkey_offset( fd_gossip_view_t const * view );
 
 ulong
 fd_gossip_msg_parse( fd_gossip_view_t *   view,
