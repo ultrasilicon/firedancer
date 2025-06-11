@@ -5,6 +5,7 @@
 // #include "fd_gossip_types.h"
 // #include "fd_crds_value.h"
 #include "../../util/fd_util.h"
+#include "fd_contact_info.h"
 
 /* Deriving maximum number of CRDS values a message can hold:
   - Maximum bytes the CRDS array can hold is
@@ -43,8 +44,8 @@
 
 typedef ushort offset_t;
 
-/* For primitive types, we store both the actual value and
-   its offset in the payload. */
+/* For some primitive fields, we store both the actual value and
+   its payload offset. */
 typedef struct { uchar  val; offset_t off; } uchar_view_t;
 typedef struct { ushort val; offset_t off; } ushort_view_t;
 typedef struct { uint   val; offset_t off; } uint_view_t;
@@ -227,7 +228,7 @@ struct fd_gossip_pull_request_encode_ctx {
 
   uchar * has_bits;
   ulong * bloom_vec_len;   /* Length of bloom bits vector */
-  ulong * bloom_bits;       /* Offset to start of bloom bits in payload */
+  ulong * bloom_bits;       /* Start of bloom bits in payload */
   ulong * bloom_bits_count; /* Number of bloom filter bits */
   ulong * bloom_num_bits_set; /* Number of bits set in the bloom filter */
 
@@ -258,14 +259,29 @@ fd_gossip_pull_request_encode_bloom_keys( fd_gossip_pull_request_encode_ctx_t * 
 
 int
 fd_gossip_pull_request_encode_bloom_bits( fd_gossip_pull_request_encode_ctx_t * ctx,
-                                           ulong const *                        bloom_bits,
-                                           ulong                                bloom_bits_len );
+                                          ulong const *                         bloom_bits,
+                                          ulong                                 bloom_bits_len );
+
+int
+fd_gossip_crds_contact_info_encode( fd_contact_info_t const * contact_info,
+                                    ulong *                   out_buf,
+                                    ulong                     out_buf_cap,
+                                    ulong *                   opt_encoded_sz );
+
+/* Handles case where new wallclock changes encoded representation of
+   compact-64 bit value */
+int
+fd_gossip_crds_contact_info_update_wallclock( ulong * contact_info_buf,
+                                              ulong   contact_info_buf_sz,
+                                              ulong   contact_info_buf_cap,
+                                              long    wallclock_nanos );
 
 /* Initializes a payload buffer for a gossip message with tag encoded.
    Returns offset into the buffer after tag, where the inner message
    should begin. */
-ulong
+int
 fd_gossip_init_msg_payload( uchar * payload,
                             ulong   payload_sz,
-                            uchar   tag );
+                            uchar   tag,
+                            ulong * start_cursor );
 #endif /* HEADER_fd_src_flamenco_gossip_fd_gossip_msg_h */
