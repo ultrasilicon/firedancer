@@ -140,7 +140,7 @@ fetch () {
   checkout_repo secp256k1 https://github.com/bitcoin-core/secp256k1 "v0.6.0"
   if [[ $DEVMODE == 1 ]]; then
     checkout_repo blst      https://github.com/supranational/blst     "v0.3.14"
-    checkout_repo rocksdb   https://github.com/facebook/rocksdb       "v9.7.4"
+    checkout_repo rocksdb   https://github.com/facebook/rocksdb       "v10.2.1"
     checkout_repo snappy    https://github.com/google/snappy          "1.2.2"
   fi
 }
@@ -162,7 +162,10 @@ check_fedora_pkgs () {
     protobuf-compiler  # Agave, solfuzz
   )
   if [[ $DEVMODE == 1 ]]; then
-    REQUIRED_RPMS+=( autoconf automake bison cmake clang flex gettext-devel gmp-devel llvm-toolset lcov )
+    REQUIRED_RPMS+=( autoconf automake bison cmake clang flex gettext-devel gmp-devel lcov )
+    if [[ "${ID_LIKE:-}" == *rhel* ]]; then
+      REQUIRED_RPMS+=( llvm-toolset )
+    fi
   fi
 
   echo "[~] Checking for required RPM packages"
@@ -530,6 +533,23 @@ install_rocksdb () {
   NJOBS=$(( $(nproc) / 2 ))
   NJOBS=$((NJOBS>0 ? NJOBS : 1))
   make clean
+
+  # Fix a random build failure
+  git checkout HEAD -- db/blob/blob_file_meta.h
+  git apply << EOF
+diff --git a/db/blob/blob_file_meta.h b/db/blob/blob_file_meta.h
+index d7c8a12..8cfff9b 100644
+--- a/db/blob/blob_file_meta.h
++++ b/db/blob/blob_file_meta.h
+@@ -5,6 +5,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <cassert>
+ #include <iosfwd>
+ #include <memory>
+EOF
 
   ROCKSDB_DISABLE_NUMA=1 \
   ROCKSDB_DISABLE_ZLIB=1 \

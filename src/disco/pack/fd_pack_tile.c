@@ -108,6 +108,9 @@ FD_IMPORT( wait_duration, "src/disco/pack/pack_delay.bin", ulong, 6, "" );
 #define FD_PACK_STRATEGY_BALANCED 1
 #define FD_PACK_STRATEGY_BUNDLE   2
 
+static char const * const schedule_strategy_strings[3] = { "PRF", "BAL", "BUN" };
+
+
 typedef struct {
   fd_acct_addr_t commission_pubkey[1];
   ulong          commission;
@@ -172,6 +175,15 @@ typedef struct {
      leader slot has ended.  Might be off by one housekeeping duration,
      but that should be small relative to a slot duration. */
   long  approx_wallclock_ns;
+
+  /* approx_tickcount is updated in during_housekeeping() with
+     fd_tickcount() and will match approx_wallclock_ns.  This is done
+     because we need to include an accurate nanosecond timestamp in
+     every fd_txn_p_t but don't want to have to call the expensive
+     fd_log_wallclock() in in the critical path. We can use
+     fd_tempo_tick_per_ns() to convert from ticks to nanoseconds over
+     small periods of time. */
+  long  approx_tickcount;
 
   fd_rng_t * rng;
 
@@ -380,6 +392,7 @@ metrics_write( fd_pack_ctx_t * ctx ) {
 static inline void
 during_housekeeping( fd_pack_ctx_t * ctx ) {
   ctx->approx_wallclock_ns = fd_log_wallclock();
+  ctx->approx_tickcount = fd_tickcount();
 
   if( FD_UNLIKELY( ctx->crank->enabled && fd_keyswitch_state_query( ctx->crank->keyswitch )==FD_KEYSWITCH_STATE_SWITCH_PENDING ) ) {
     fd_memcpy( ctx->crank->identity_pubkey, ctx->crank->keyswitch->bytes, 32UL );
@@ -916,11 +929,11 @@ during_frag( fd_pack_ctx_t * ctx,
        The transactions should have been parsed and verified. */
     FD_MCNT_INC( PACK, NORMAL_TRANSACTION_RECEIVED, 1UL );
 
-
     fd_memcpy( ctx->cur_spot->txnp->payload, fd_txn_m_payload( txnm ), payload_sz    );
     fd_memcpy( TXN(ctx->cur_spot->txnp),     txn,                      txn_t_sz      );
     fd_memcpy( ctx->cur_spot->alt_accts,     fd_txn_m_alut( txnm ),    addr_table_sz );
     ctx->cur_spot->txnp->payload_sz = payload_sz;
+    ctx->cur_spot->txnp->scheduler_arrival_time_nanos = ctx->approx_wallclock_ns + (long)((double)(fd_tickcount() - ctx->approx_tickcount) / ctx->ticks_per_ns);
 
     break;
   }
@@ -1099,13 +1112,16 @@ unprivileged_init( fd_topo_t *      topo,
   if( FD_UNLIKELY( bank_cnt>FD_PACK_MAX_BANK_TILES      ) ) FD_LOG_ERR(( "pack tile connects to too many banking tiles" ));
   if( FD_UNLIKELY( bank_cnt!=tile->pack.bank_tile_count ) ) FD_LOG_ERR(( "pack tile connects to %lu banking tiles, but tile->pack.bank_tile_count is %lu", bank_cnt, tile->pack.bank_tile_count ));
 
+  FD_TEST( (tile->pack.schedule_strategy>=0) & (tile->pack.schedule_strategy<=FD_PACK_STRATEGY_BUNDLE) );
 
   ctx->crank->enabled = tile->pack.bundle.enabled;
   if( FD_UNLIKELY( tile->pack.bundle.enabled ) ) {
     if( FD_UNLIKELY( !fd_bundle_crank_gen_init( ctx->crank->gen, (fd_acct_addr_t const *)tile->pack.bundle.tip_distribution_program_addr,
             (fd_acct_addr_t const *)tile->pack.bundle.tip_payment_program_addr,
             (fd_acct_addr_t const *)ctx->crank->vote_pubkey->b,
-            (fd_acct_addr_t const *)tile->pack.bundle.tip_distribution_authority, tile->pack.bundle.commission_bps ) ) ) {
+            (fd_acct_addr_t const *)tile->pack.bundle.tip_distribution_authority,
+            schedule_strategy_strings[ tile->pack.schedule_strategy ],
+            tile->pack.bundle.commission_bps ) ) ) {
       FD_LOG_ERR(( "constructing bundle generator failed" ));
     }
 
@@ -1144,8 +1160,6 @@ unprivileged_init( fd_topo_t *      topo,
                                                                                           extra_txn_deq_footprint() ) ) );
 #endif
 
-  FD_TEST( (tile->pack.schedule_strategy>=0) & (tile->pack.schedule_strategy<=FD_PACK_STRATEGY_BUNDLE) );
-
   ctx->cur_spot                      = NULL;
   ctx->is_bundle                     = 0;
   ctx->strategy                      = tile->pack.schedule_strategy;
@@ -1159,6 +1173,7 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->larger_shred_limits_per_block = tile->pack.larger_shred_limits_per_block;
   ctx->drain_banks                   = 0;
   ctx->approx_wallclock_ns           = fd_log_wallclock();
+  ctx->approx_tickcount              = fd_tickcount();
   ctx->rng                           = rng;
   ctx->ticks_per_ns                  = fd_tempo_tick_per_ns( NULL );
   ctx->last_successful_insert        = 0L;

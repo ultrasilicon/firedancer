@@ -47,7 +47,7 @@ CURRENT_FAILURE_COUNT=0
 while true; do
     source $NETWORK_PARAMETERS_FILE $NETWORK
     echo "Updated network parameters"
-    NEWEST_BUCKET=$(gcloud storage ls $BUCKET_ENDPOINT | sort -n -t / -k 4 | tail -n 1)
+    NEWEST_BUCKET=$(gcloud storage ls $BUCKET_ENDPOINT --billing-project=$BILLING_PROJECT | sort -n -t / -k 4 | tail -n 1)
     NEWEST_BUCKET_SLOT=$(echo $NEWEST_BUCKET | awk -F'/' '{print $(NF-1)}')
     LATEST_RUN_BUCKET_SLOT=$(cat $LATEST_RUN_BUCKET_SLOT_FILE)
 
@@ -66,7 +66,7 @@ while true; do
         LOG=/home/kbhargava/${NETWORK}_offline_replay_${NEWEST_BUCKET_SLOT}.log
         TEMP_LOG=/home/kbhargava/${NETWORK}_offline_replay_${NEWEST_BUCKET_SLOT}_temp.log
         send_slack_message "Log File: \`$LOG\`"
-        echo "" > $LOG
+        echo "" > $LOG && chmod 777 $LOG
         LEDGER_DIR=${FIREDANCER_REPO}/dump/${NETWORK}-${NEWEST_BUCKET_SLOT}
         send_slack_message "Ledger Directory: \`$LEDGER_DIR\`"
         OLD_SNAPSHOTS_DIR=${LEDGER_DIR}/old_snapshots
@@ -83,7 +83,7 @@ while true; do
             send_slack_message "Rocksdb already exists at \`$LEDGER_DIR/rocksdb\`"
         else
             while true; do
-                if gcloud storage ls ${SOLANA_BUCKET_PATH}/rocksdb.tar.zst | grep -q 'rocksdb.tar.zst'; then
+                if gcloud storage ls ${SOLANA_BUCKET_PATH}/rocksdb.tar.zst --billing-project=$BILLING_PROJECT | grep -q 'rocksdb.tar.zst'; then
                     send_slack_message "Rocksdb found. Starting to copy..."
                     break
                 else
@@ -91,7 +91,7 @@ while true; do
                     sleep 3600
                 fi
             done
-            gcloud storage cp ${SOLANA_BUCKET_PATH}/rocksdb.tar.zst .
+            gcloud storage cp ${SOLANA_BUCKET_PATH}/rocksdb.tar.zst . --billing-project=$BILLING_PROJECT
             zstd -d rocksdb.tar.zst && sleep 5 && rm -rf rocksdb.tar.zst
             tar -xf rocksdb.tar && sleep 5 && rm -rf rocksdb.tar
             send_slack_message "Downloaded rocksdb to \`$LEDGER_DIR/rocksdb\`"
@@ -105,9 +105,9 @@ while true; do
         HOURLY_SNAPSHOT_DIR=${SOLANA_BUCKET_PATH}/hourly
         echo "Hourly Snapshot Directory: $HOURLY_SNAPSHOT_DIR"
 
-        BASE_SNAPSHOT=$(gcloud storage ls "${SOLANA_BUCKET_PATH}/snapshot*.tar.zst" | sort -n -t - -k 3)
+        BASE_SNAPSHOT=$(gcloud storage ls "${SOLANA_BUCKET_PATH}/snapshot*.tar.zst" --billing-project=$BILLING_PROJECT | sort -n -t - -k 3)
 
-        HOURLY_SNAPSHOTS=$(gcloud storage ls "${HOURLY_SNAPSHOT_DIR}" | sort -n -t - -k 3)
+        HOURLY_SNAPSHOTS=$(gcloud storage ls "${HOURLY_SNAPSHOT_DIR}" --billing-project=$BILLING_PROJECT | sort -n -t - -k 3)
         SNAPSHOTS="${BASE_SNAPSHOT} ${HOURLY_SNAPSHOTS}"
 
         CLOSEST_HOURLY_SLOT=${ROCKSDB_ROOTED_MAX}
@@ -137,7 +137,7 @@ while true; do
             send_slack_message "Hourly snapshot already exists at \`$LEDGER_DIR/$CLOSEST_HOURLY_FILENAME\`"
         else
             rm -f $LEDGER_DIR/snapshot*.tar.zst
-            gcloud storage cp ${CLOSEST_HOURLY_URL} .
+            gcloud storage cp ${CLOSEST_HOURLY_URL} . --billing-project=$BILLING_PROJECT
             send_slack_message "Downloaded hourly snapshot to \`$LEDGER_DIR/$CLOSEST_HOURLY_FILENAME\`"
         fi
 
@@ -171,7 +171,7 @@ while true; do
 
             export ledger=$LEDGER_DIR
             echo "ledger: $ledger"
-            export snapshot=$LEDGER_REPLAY_SNAPSHOT
+            export snapshot=$(ls $LEDGER_REPLAY_SNAPSHOT)
             export end_slot=$ROCKSDB_ROOTED_MAX
             export funk_pages=$BACKTEST_FUNK_PAGES
             export index_max=$INDEX_MAX
@@ -196,7 +196,7 @@ while true; do
 
             $OBJDIR/bin/firedancer-dev configure init all --config $LEDGER_DIR/offline_replay.toml &> /dev/null
 
-            rm -rf $TEMP_LOG && touch $TEMP_LOG
+            rm -rf $TEMP_LOG && touch $TEMP_LOG && chmod 777 $TEMP_LOG
 
             set -x
                 $OBJDIR/bin/firedancer-dev backtest --config $LEDGER_DIR/offline_replay.toml &> /dev/null
@@ -314,8 +314,7 @@ while true; do
                 $AGAVE_LEDGER_TOOL create-snapshot $NEXT_ROOTED_SLOT -l $LEDGER_DIR
                 sleep 10
                 rm $LEDGER_DIR/ledger_tool -rf
-                # set LEDGER_REPLAY_SNAPSHOT to new snapshot
-                LEDGER_REPLAY_SNAPSHOT=$LEDGER_DIR/snapshot-${NEXT_ROOTED_SLOT}*
+
                 echo "New snapshot created at $LEDGER_REPLAY_SNAPSHOT"
                 # minify a rocksdb for the minimized snapshot
 
@@ -353,6 +352,9 @@ while true; do
                     send_slack_message "Minimized snapshot created at \`$MISMATCH_SNAPSHOT_FILE\`"
                 done
                 mv $OLD_SNAPSHOTS_DIR/snapshot-${NEXT_ROOTED_SLOT}* $LEDGER_DIR
+
+                # set LEDGER_REPLAY_SNAPSHOT to new snapshot
+                LEDGER_REPLAY_SNAPSHOT=$LEDGER_DIR/snapshot-${NEXT_ROOTED_SLOT}*
 
                 MISMATCH_TAR=$MISMATCH_DIR.tar.gz
                 cd $LEDGER_DIR
