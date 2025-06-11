@@ -852,6 +852,8 @@ after_frag( fd_repair_tile_ctx_t * ctx,
           }
         }
       }
+      /* remove the fec entry in forest */
+      fd_forest_fec_remove( ctx->forest, shred->slot, shred->fec_set_idx );
     }
 
     /* Insert the shred into the map. */
@@ -936,7 +938,7 @@ after_credit( fd_repair_tile_ctx_t * ctx,
         }
       } else {
         for( uint idx = head->buffered_idx + 1; idx < head->complete_idx; idx++ ) {
-          if( FD_LIKELY( !fd_forest_ele_idxs_test( head->idxs, idx ) ) ) {
+          if( FD_LIKELY( !fd_forest_fec_shred_test( forest, head->slot, idx ) ) ) {
             if( FD_LIKELY( fd_repair_need_window_index( ctx->repair, head->slot, idx ) ) ) {
 
               /* The multiple requests are for the same shred, but for
