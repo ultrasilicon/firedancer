@@ -258,9 +258,9 @@ verify_prune( fd_gossip_view_prune_t const * view,
   prune_sign_data_pre_t * pre = (prune_sign_data_pre_t *)sign_data;
   fd_memcpy( pre->prefix, "\xffSOLANA_PRUNE_DATA", 18UL );
   fd_memcpy( pre->origin, payload+view->origin_off, 32UL );
-  pre->prunes_len = view->prunes_len;
+  pre->prunes_len = view->prunes_len.val;
 
-  ulong prunes_arr_sz = view->prunes_len*32UL;
+  ulong prunes_arr_sz = view->prunes_len.val*32UL;
   fd_memcpy( sign_data+sizeof(prune_sign_data_pre_t), payload+view->prunes_off, prunes_arr_sz );
 
   prune_sign_data_post_t * post = (prune_sign_data_post_t *)( sign_data + sizeof(prune_sign_data_pre_t) + prunes_arr_sz );
@@ -559,27 +559,28 @@ rx_push( fd_gossip_t *                 gossip,
   return 0;
 }
 
-// static int
-// rx_prune( fd_gossip_t *             gossip,
-//           fd_gossip_prune_t const * prune,
-//           long                      now ) {
-//   if( FD_UNLIKELY( now-FD_MILLI_TO_NANOSEC(500L)>(long)prune->wallclock_nanos ) ) return FD_GOSSIP_RX_PRUNE_ERR_STALE;
-//   else if( FD_UNLIKELY( !!memcmp( gossip->identity_pubkey, prune->destination, 32UL ) ) ) return FD_GOSSIP_RX_PRUNE_ERR_DESTINATION;
+static int
+rx_prune( fd_gossip_t *                  gossip,
+          uchar const *                  payload,
+          fd_gossip_view_prune_t const * prune,
+          long                           now ) {
+  if( FD_UNLIKELY( now-FD_MILLI_TO_NANOSEC(500L)>(long)prune->wallclock.ts_nanos ) ) return FD_GOSSIP_RX_PRUNE_ERR_STALE;
+  else if( FD_UNLIKELY( !!memcmp( gossip->identity_pubkey, payload+prune->destination_off, 32UL ) ) ) return FD_GOSSIP_RX_PRUNE_ERR_DESTINATION;
 
-//   ulong identity_stake = 0UL; /* FIXME */
-//   for( ulong i=0UL; i<prune->prunes_len; i++ ) {
-//     ulong origin_stake = 0UL; /* FIXME */
+  ulong identity_stake = 0UL; /* FIXME */
+  ulong origin_stake   = 0UL; /* FIXME */
 
-//     fd_active_set_prune( gossip->active_set,
-//                          gossip->identity_pubkey,
-//                          identity_stake,
-//                          prune->from,
-//                          prune->destination,
-//                          prune->prunes[ i ],
-//                          origin_stake );
-//   }
-//   return FD_GOSSIP_RX_OK;
-// }
+  fd_active_set_prunes( gossip->active_set,
+                        gossip->identity_pubkey,
+                        identity_stake,
+                        payload+prune->prunes_off,
+                        prune->prunes_len.val,
+                        payload+prune->origin_off,
+                        origin_stake,
+                        NULL /* TODO: use out_node_idx to update push states */ );
+
+  return FD_GOSSIP_RX_OK;
+}
 
 
 static int
@@ -695,10 +696,10 @@ fd_gossip_rx( fd_gossip_t * gossip,
       break;
     break;
     case FD_GOSSIP_MESSAGE_PRUNE:
-      // error = rx_prune( gossip, message->prune, now );
+      error = rx_prune( gossip, data, view->prune, now );
       break;
     case FD_GOSSIP_MESSAGE_PING:
-      error = rx_ping( gossip, view->ping, peer_address, now, data );
+      error = rx_ping( gossip, view->ping, peer_address, now );
       break;
     case FD_GOSSIP_MESSAGE_PONG:
       error = rx_pong( gossip, view->pong, peer_address, now );

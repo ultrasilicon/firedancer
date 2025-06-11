@@ -104,13 +104,14 @@ fd_active_set_node_pubkey( fd_active_set_t * active_set,
                            ulong             peer_idx );
 
 void
-fd_active_set_prune( fd_active_set_t * active_set,
-                     uchar const *     identity_pubkey,
-                     ulong             identity_stake,
-                     uchar const *     peer,
-                     uchar const *     destination,
-                     uchar const *     origin,
-                     ulong             origin_stake );
+fd_active_set_prunes( fd_active_set_t * active_set,
+                      uchar const *     identity_pubkey,
+                      ulong             identity_stake,
+                      uchar const *     peers,
+                      ulong             peers_len,
+                      uchar const *     origin,
+                      ulong             origin_stake,
+                      ulong *           opt_out_node_idx );
 
 void
 fd_active_set_rotate( fd_active_set_t *     active_set,

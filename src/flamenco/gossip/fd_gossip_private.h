@@ -177,7 +177,7 @@ typedef struct fd_gossip_view_pull_request fd_gossip_view_pull_request_t;
 
 struct fd_gossip_view_prune {
   offset_t         origin_off;      /* Offset to the origin pubkey */
-  offset_t         prunes_len;      /* Number of prunes in the message */
+  ulong_view_t     prunes_len;      /* Number of prunes in the message */
   offset_t         prunes_off;      /* Offset to the start of pubkeys to prune */
   offset_t         destination_off; /* Offset to the destination pubkey */
   ushort           signature_off;   /* Offset to the signature */
