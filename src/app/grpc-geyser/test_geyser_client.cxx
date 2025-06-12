@@ -183,6 +183,9 @@ class GeyserClient {
     void testSubscribe() {
       // Data we are sending to the server.
       ::geyser::SubscribeRequest request;
+      ::geyser::SubscribeRequestFilterAccounts a;
+      a.add_owner()->operator=("Vote111111111111111111111111111111111111111");
+      request.mutable_accounts()->insert({"test", a});
 
       // Container for the data we expect from the server.
       ::geyser::SubscribeUpdate update;

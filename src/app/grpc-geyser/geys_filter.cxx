@@ -56,7 +56,7 @@ CompiledFilter::compile_internal(::geyser::SubscribeRequest * request) {
       if( !fd_base58_decode_32( s.c_str(), hash.uc ) ) return false;
       a->owners_.push_back(hash);
     }
-    accts_.push_back(std::unique_ptr<CompiledFilterAccount>(a));
+    accts_.emplace_back(a);
   }
 
   return true;
