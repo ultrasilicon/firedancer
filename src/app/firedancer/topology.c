@@ -980,7 +980,7 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
 
       strncpy( tile->send.identity_key_path, config->paths.identity_key, sizeof(tile->send.identity_key_path) );
     } else if( FD_UNLIKELY( !strcmp( tile->name, "tower" ) ) ) {
-      strncpy( tile->tower.funk_file, config->tiles.replay.funk_file, sizeof(tile->tower.funk_file) );
+      tile->tower.funk_obj_id = fd_pod_query_ulong( config->topo.props, "funk", ULONG_MAX );
       strncpy( tile->tower.identity_key_path, config->paths.identity_key, sizeof(tile->tower.identity_key_path) );
       strncpy( tile->tower.vote_acc_path, config->paths.vote_account, sizeof(tile->tower.vote_acc_path) );
     } else if( FD_UNLIKELY( !strcmp( tile->name, "rpcsrv" ) ) ) {
