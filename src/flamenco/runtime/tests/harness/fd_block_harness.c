@@ -367,18 +367,14 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   *slot_bm = slot_ctx->slot;
   fd_bank_mgr_slot_save( bank_mgr );
 
-  fd_fee_rate_governor_t * fee_rate_governor = fd_bank_mgr_fee_rate_governor_modify( bank_mgr );
-  *fee_rate_governor      = (fd_fee_rate_governor_t) { .target_lamports_per_signature  = 10000UL,
+  slot_ctx->bank->fee_rate_governor = (fd_fee_rate_governor_t) { .target_lamports_per_signature  = 10000UL,
                                                        .target_signatures_per_slot     = 20000UL,
                                                        .min_lamports_per_signature     = 5000UL,
                                                        .max_lamports_per_signature     = 100000UL,
                                                        .burn_percent                   = 50,
   };
-  fd_bank_mgr_fee_rate_governor_save( bank_mgr );
 
-  ulong * capitalization = fd_bank_mgr_capitalization_modify( bank_mgr );
-  *capitalization = test_ctx->slot_ctx.prev_epoch_capitalization;
-  fd_bank_mgr_capitalization_save( bank_mgr );
+  slot_ctx->bank->capitalization = test_ctx->slot_ctx.prev_epoch_capitalization;
 
   ulong * lamports_per_signature = fd_bank_mgr_lamports_per_signature_modify( bank_mgr );
   *lamports_per_signature = 5000UL;
@@ -636,9 +632,7 @@ fd_runtime_fuzz_block_run( fd_runtime_fuzz_runner_t * runner,
     effects->has_error = !!( res );
 
     /* Capture capitalization */
-    fd_bank_mgr_t   bank_mgr_obj;
-    fd_bank_mgr_t * bank_mgr     = fd_bank_mgr_join( &bank_mgr_obj, slot_ctx->funk, slot_ctx->funk_txn );
-    effects->slot_capitalization = *(fd_bank_mgr_capitalization_query( bank_mgr ));
+    effects->slot_capitalization = slot_ctx->bank->capitalization;
 
     /* Capture hashes */
     // uchar out_lt_hash[32];

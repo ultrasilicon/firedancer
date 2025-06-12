@@ -25,6 +25,17 @@ struct fd_bank {
   ulong             sibling_idx; /* index of the right-sibling in the node pool */
 
   uchar             block_hash_queue[FD_BANK_BLOCK_HASH_QUEUE_SIZE]__attribute__((aligned(128UL)));
+
+  fd_fee_rate_governor_t fee_rate_governor;
+  ulong                  capitalization;
+  ulong                  lamports_per_signature;
+  ulong                  prev_lamports_per_signature;
+  ulong                  transaction_count;
+  ulong                  parent_signature_cnt;
+  ulong                  tick_height;
+  ulong                  max_tick_height;
+  ulong                  hashes_per_tick;
+  uint128                ns_per_slot;
 };
 typedef struct fd_bank fd_bank_t;
 

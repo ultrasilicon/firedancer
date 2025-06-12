@@ -122,8 +122,6 @@ if( FD_UNLIKELY( !bank_mgr ) ) {                                                
 /*  Type,                              name,                        id,   footprint,   align */
 #define FD_BANK_MGR_ITER(X)                                                                    \
   X(ulong,                             slot,                        1UL,  8UL,         8UL   ) \
-  X(fd_fee_rate_governor_t,            fee_rate_governor,           2UL,  40UL,        8UL   ) \
-  X(ulong,                             capitalization,              3UL,  8UL,         8UL   ) \
   X(ulong,                             lamports_per_signature,      4UL,  8UL,         8UL   ) \
   X(ulong,                             prev_lamports_per_signature, 5UL,  8UL,         8UL   ) \
   X(ulong,                             transaction_count,           6UL,  8UL,         8UL   ) \

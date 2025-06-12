@@ -170,9 +170,7 @@ fd_write_builtin_account( fd_exec_slot_ctx_t * slot_ctx,
 
   fd_txn_account_mutable_fini( rec, funk, txn );
 
-  ulong * capitalization = fd_bank_mgr_capitalization_modify( slot_ctx->bank_mgr );
-  (*capitalization)++;
-  fd_bank_mgr_capitalization_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->capitalization++;
 
   // err = fd_acc_mgr_commit( acc_mgr, rec, slot_ctx );
   FD_TEST( !err );

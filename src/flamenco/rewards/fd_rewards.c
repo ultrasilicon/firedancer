@@ -825,8 +825,7 @@ calculate_rewards_for_partitioning( fd_exec_slot_ctx_t *                   slot_
   /* https://github.com/anza-xyz/agave/blob/7117ed9653ce19e8b2dea108eff1f3eb6a3378a7/runtime/src/bank/partitioned_epoch_rewards/calculation.rs#L227 */
   fd_prev_epoch_inflation_rewards_t rewards;
 
-  ulong * capitalization = fd_bank_mgr_capitalization_query( slot_ctx->bank_mgr );
-  calculate_previous_epoch_inflation_rewards( slot_ctx, *capitalization, prev_epoch, &rewards );
+  calculate_previous_epoch_inflation_rewards( slot_ctx, slot_ctx->bank->capitalization, prev_epoch, &rewards );
 
   fd_calculate_validator_rewards_result_t validator_result[1] = {0};
   calculate_validator_rewards( slot_ctx,
@@ -860,7 +859,7 @@ calculate_rewards_for_partitioning( fd_exec_slot_ctx_t *                   slot_
   result->foundation_rate              = rewards.foundation_rate;
   result->prev_epoch_duration_in_years = rewards.prev_epoch_duration_in_years;
 
-  result->capitalization               = *(fd_bank_mgr_capitalization_query( slot_ctx->bank_mgr ));
+  result->capitalization               = slot_ctx->bank->capitalization;
   result->point_value                  = validator_result->point_value;
 }
 
@@ -930,9 +929,7 @@ calculate_rewards_and_distribute_vote_rewards( fd_exec_slot_ctx_t *             
     FD_LOG_ERR(( "Unexpected rewards calculation result" ));
   }
 
-  ulong * capitalization = fd_bank_mgr_capitalization_modify( slot_ctx->bank_mgr );
-  *capitalization += result->distributed_rewards;
-  fd_bank_mgr_capitalization_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->capitalization += result->distributed_rewards;
 
   /* Cheap because this doesn't copy all the rewards, just pointers to the dlist */
   result->stake_rewards_by_partition = rewards_calc_result->stake_rewards_by_partition;
@@ -1069,9 +1066,7 @@ distribute_epoch_rewards_in_partition( fd_partitioned_stake_rewards_dlist_t * pa
 
   FD_LOG_DEBUG(( "lamports burned: %lu, lamports distributed: %lu", lamports_burned, lamports_distributed ));
 
-  ulong * capitalization = fd_bank_mgr_capitalization_modify( slot_ctx->bank_mgr );
-  *capitalization += lamports_distributed;
-  fd_bank_mgr_capitalization_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->capitalization += lamports_distributed;
 }
 
 /* Process reward distribution for the block if it is inside reward interval.

@@ -238,6 +238,13 @@ fd_banks_clone_from_parent( fd_banks_t * banks,
   /* Copy over fields from parent to child */
 
   memcpy( new_bank->block_hash_queue, parent_bank->block_hash_queue, 50000UL );
+  new_bank->fee_rate_governor           = parent_bank->fee_rate_governor;
+  new_bank->capitalization              = parent_bank->capitalization;
+  new_bank->lamports_per_signature      = parent_bank->lamports_per_signature;
+  new_bank->prev_lamports_per_signature = parent_bank->prev_lamports_per_signature;
+  new_bank->transaction_count           = parent_bank->transaction_count;
+  new_bank->parent_signature_cnt        = parent_bank->parent_signature_cnt;
+  new_bank->tick_height                 = parent_bank->tick_height;
 
   /* Return the new bank */
 

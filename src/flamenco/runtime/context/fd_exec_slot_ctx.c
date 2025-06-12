@@ -259,15 +259,11 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Fee Rate Governor */
 
-  fd_fee_rate_governor_t * fee_rate_governor = fd_bank_mgr_fee_rate_governor_modify( slot_ctx->bank_mgr );
-  *fee_rate_governor = oldbank->fee_rate_governor;
-  fd_bank_mgr_fee_rate_governor_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->fee_rate_governor = oldbank->fee_rate_governor;
 
   /* Capitalization */
 
-  ulong * capitalization = fd_bank_mgr_capitalization_modify( slot_ctx->bank_mgr );
-  *capitalization = oldbank->capitalization;
-  fd_bank_mgr_capitalization_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->capitalization = oldbank->capitalization;
 
   /* Lamports Per Signature */
 
