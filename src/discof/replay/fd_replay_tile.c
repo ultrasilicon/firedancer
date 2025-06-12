@@ -335,11 +335,9 @@ during_frag( fd_replay_tile_ctx_t * ctx,
              ulong                  ctl FD_PARAM_UNUSED ) {
 
   if( in_idx==BATCH_IN_IDX ) {
-    fd_hash_t * epoch_account_hash = fd_bank_mgr_epoch_account_hash_modify( ctx->slot_ctx->bank_mgr );
     uchar * src = (uchar *)fd_chunk_to_laddr( ctx->batch_in_mem, chunk );
-    fd_memcpy( epoch_account_hash, src, sizeof(fd_hash_t) );
-    fd_bank_mgr_epoch_account_hash_save( ctx->slot_ctx->bank_mgr );
-    FD_LOG_NOTICE(( "Epoch account hash calculated to be %s", FD_BASE58_ENC_32_ALLOCA( epoch_account_hash ) ));
+    fd_memcpy( &ctx->slot_ctx->bank->epoch_account_hash, src, sizeof(fd_hash_t) );
+    FD_LOG_NOTICE(( "Epoch account hash calculated to be %s", FD_BASE58_ENC_32_ALLOCA( &ctx->slot_ctx->bank->epoch_account_hash ) ));
   }
 }
 
@@ -834,10 +832,7 @@ funk_publish( fd_replay_tile_ctx_t * ctx,
                         NULL );
       FD_LOG_NOTICE(( "Done computing epoch account hash (%s)", FD_BASE58_ENC_32_ALLOCA( &out_hash ) ));
 
-      fd_hash_t * eah = fd_bank_mgr_epoch_account_hash_modify( bank_mgr );
-      fd_memcpy( eah, &out_hash, sizeof(fd_hash_t) );
-      fd_bank_mgr_epoch_account_hash_save( bank_mgr );
-
+      ctx->slot_ctx->bank->epoch_account_hash = out_hash;
 
       ctx->slot_ctx->bank->eah_start_slot = FD_SLOT_NULL;
     }
@@ -1057,8 +1052,8 @@ publish_slot_notifications( fd_replay_tile_ctx_t * ctx,
     msg[ 3 ] = *fd_bank_mgr_failed_txn_count_query( fork->slot_ctx->bank_mgr );
     msg[ 4 ] = *fd_bank_mgr_nonvote_failed_txn_count_query( fork->slot_ctx->bank_mgr );
     msg[ 5 ] = *fd_bank_mgr_total_compute_units_used_query( fork->slot_ctx->bank_mgr );
-    msg[ 6 ] = *fd_bank_mgr_execution_fees_query( fork->slot_ctx->bank_mgr );
-    msg[ 7 ] = *fd_bank_mgr_priority_fees_query( fork->slot_ctx->bank_mgr );
+    msg[ 6 ] = ctx->slot_ctx->bank->execution_fees;
+    msg[ 7 ] = ctx->slot_ctx->bank->priority_fees;
     msg[ 8 ] = 0UL; /* todo ... track tips */
     msg[ 9 ] = ctx->parent_slot;
     msg[ 10 ] = 0UL;  /* todo ... max compute units */
@@ -2346,13 +2341,9 @@ after_credit( fd_replay_tile_ctx_t * ctx,
     *slot = curr_slot;
     fd_bank_mgr_slot_save( fork->slot_ctx->bank_mgr );
 
-    ulong * execution_fees = fd_bank_mgr_execution_fees_modify( fork->slot_ctx->bank_mgr );
-    *execution_fees = 0UL;
-    fd_bank_mgr_execution_fees_save( fork->slot_ctx->bank_mgr );
+    ctx->slot_ctx->bank->execution_fees = 0UL;
 
-    ulong * priority_fees = fd_bank_mgr_priority_fees_modify( fork->slot_ctx->bank_mgr );
-    *priority_fees = 0UL;
-    fd_bank_mgr_priority_fees_save( fork->slot_ctx->bank_mgr );
+    ctx->slot_ctx->bank->priority_fees = 0UL;
 
     if( FD_UNLIKELY( ctx->slots_replayed_file ) ) {
       FD_LOG_DEBUG(( "writing %lu to slots file", prev_slot ));

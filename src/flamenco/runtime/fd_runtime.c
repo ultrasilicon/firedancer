@@ -477,15 +477,12 @@ fd_runtime_freeze( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad ) {
   ulong fees = 0UL;
   ulong burn = 0UL;
 
-  ulong * execution_fees = fd_bank_mgr_execution_fees_query( slot_ctx->bank_mgr );
-  ulong * priority_fees  = fd_bank_mgr_priority_fees_query( slot_ctx->bank_mgr );
-
   if( FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, reward_full_priority_fee ) ) {
-    ulong half_fee = *execution_fees / 2;
-    fees = fd_ulong_sat_add( *priority_fees, *execution_fees - half_fee );
+    ulong half_fee = slot_ctx->bank->execution_fees / 2;
+    fees = fd_ulong_sat_add( slot_ctx->bank->priority_fees, slot_ctx->bank->execution_fees - half_fee );
     burn = half_fee;
   } else {
-    ulong total_fees = fd_ulong_sat_add( *execution_fees, *priority_fees );
+    ulong total_fees = fd_ulong_sat_add( slot_ctx->bank->execution_fees, slot_ctx->bank->priority_fees );
     ulong half_fee = total_fees / 2;
     fees = total_fees - half_fee;
     burn = half_fee;
@@ -544,13 +541,9 @@ fd_runtime_freeze( fd_exec_slot_ctx_t * slot_ctx, fd_spad_t * runtime_spad ) {
     slot_ctx->bank->capitalization = fd_ulong_sat_sub( slot_ctx->bank->capitalization, burn );
     FD_LOG_DEBUG(( "fd_runtime_freeze: burn %lu, capitalization %lu->%lu ", burn, old, slot_ctx->bank->capitalization));
 
-    execution_fees  = fd_bank_mgr_execution_fees_modify( slot_ctx->bank_mgr );
-    *execution_fees = 0UL;
-    fd_bank_mgr_execution_fees_save( slot_ctx->bank_mgr );
+    slot_ctx->bank->execution_fees = 0UL;
 
-    priority_fees  = fd_bank_mgr_priority_fees_modify( slot_ctx->bank_mgr );
-    *priority_fees = 0UL;
-    fd_bank_mgr_priority_fees_save( slot_ctx->bank_mgr );
+    slot_ctx->bank->priority_fees = 0UL;
   }
 
   fd_runtime_run_incinerator( slot_ctx );
@@ -1568,16 +1561,12 @@ fd_runtime_block_execute_prepare( fd_exec_slot_ctx_t * slot_ctx,
   if( slot_ctx->blockstore && slot_ctx->slot != 0UL ) {
     fd_blockstore_block_height_update( slot_ctx->blockstore,
                                        slot_ctx->slot,
-                                       *(fd_bank_mgr_block_height_query( slot_ctx->bank_mgr )) );
+                                       slot_ctx->bank->block_height );
   }
 
-  ulong * execution_fees = fd_bank_mgr_execution_fees_modify( slot_ctx->bank_mgr );
-  *execution_fees = 0UL;
-  fd_bank_mgr_execution_fees_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->execution_fees = 0UL;
 
-  ulong * priority_fees = fd_bank_mgr_priority_fees_modify( slot_ctx->bank_mgr );
-  *priority_fees = 0UL;
-  fd_bank_mgr_priority_fees_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->priority_fees = 0UL;
 
   ulong * signature_cnt = fd_bank_mgr_signature_cnt_modify( slot_ctx->bank_mgr );
   *signature_cnt = 0UL;
@@ -1913,7 +1902,8 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
                          fd_capture_ctx_t *           capture_ctx,
                          fd_execute_txn_task_info_t * task_info,
                          fd_spad_t *                  finalize_spad,
-                         fd_bank_mgr_t *              bank_mgr ) {
+                         fd_bank_mgr_t *              bank_mgr,
+                         fd_bank_t *                  bank ) {
 
   /* for all accounts, if account->is_verified==true, propagate update
      to cache entry. */
@@ -1923,13 +1913,8 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Collect fees */
 
-  ulong * execution_fee = fd_bank_mgr_execution_fees_modify( bank_mgr );
-  *execution_fee += task_info->txn_ctx->execution_fee;
-  fd_bank_mgr_execution_fees_save( bank_mgr );
-
-  ulong * priority_fees = fd_bank_mgr_priority_fees_modify( bank_mgr );
-  *priority_fees += task_info->txn_ctx->priority_fee;
-  fd_bank_mgr_priority_fees_save( bank_mgr );
+  FD_ATOMIC_FETCH_AND_ADD( &bank->execution_fees, task_info->txn_ctx->execution_fee );
+  FD_ATOMIC_FETCH_AND_ADD( &bank->priority_fees, task_info->txn_ctx->priority_fee );
 
   fd_exec_txn_ctx_t * txn_ctx      = task_info->txn_ctx;
   int                 exec_txn_err = task_info->exec_res;
@@ -2154,7 +2139,7 @@ fd_runtime_prepare_execute_finalize_txn_task( void * tpool,
     return;
   }
 
-  fd_runtime_finalize_txn( slot_ctx, capture_ctx, task_info, task_info->txn_ctx->spad, task_info->txn_ctx->bank_mgr );
+  fd_runtime_finalize_txn( slot_ctx, capture_ctx, task_info, task_info->txn_ctx->spad, task_info->txn_ctx->bank_mgr, slot_ctx->bank );
 }
 
 /* fd_executor_txn_verify and fd_runtime_pre_execute_check are responisble
@@ -3488,9 +3473,7 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
   *rent_bm = genesis_block->rent;
   fd_bank_mgr_rent_save( slot_ctx->bank_mgr );
 
-  ulong * block_height = fd_bank_mgr_block_height_modify( slot_ctx->bank_mgr );
-  *block_height = 0UL;
-  fd_bank_mgr_block_height_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->block_height = 0UL;
 
   slot_ctx->bank->inflation = genesis_block->inflation;
 
@@ -3753,13 +3736,9 @@ fd_runtime_process_genesis_block( fd_exec_slot_ctx_t * slot_ctx,
   }
   fd_bank_mgr_poh_save( slot_ctx->bank_mgr );
 
-  ulong * execution_fees = fd_bank_mgr_execution_fees_modify( slot_ctx->bank_mgr );
-  *execution_fees = 0UL;
-  fd_bank_mgr_execution_fees_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->execution_fees = 0UL;
 
-  ulong * priority_fees = fd_bank_mgr_priority_fees_modify( slot_ctx->bank_mgr );
-  *priority_fees = 0UL;
-  fd_bank_mgr_priority_fees_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->priority_fees = 0UL;
 
   ulong * signature_cnt = fd_bank_mgr_signature_cnt_modify( slot_ctx->bank_mgr );
   *signature_cnt = 0UL;
@@ -4190,11 +4169,9 @@ fd_runtime_publish_old_txns( fd_exec_slot_ctx_t * slot_ctx,
       .para_arg_1 = tpool
     };
 
-    fd_hash_t * epoch_account_hash = fd_bank_mgr_epoch_account_hash_query( slot_ctx->bank_mgr );
-
     fd_accounts_hash( slot_ctx->funk,
                       slot_ctx->slot,
-                      epoch_account_hash,
+                      &slot_ctx->bank->epoch_account_hash,
                       runtime_spad,
                       fd_bank_mgr_features_query( slot_ctx->bank_mgr ),
                       &exec_para_ctx,
@@ -4301,9 +4278,7 @@ fd_runtime_block_pre_execute_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
                                                 int *                is_epoch_boundary ) {
 
   /* Update block height. */
-  ulong * block_height = fd_bank_mgr_block_height_modify( slot_ctx->bank_mgr );
-  *block_height += 1UL;
-  fd_bank_mgr_block_height_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->block_height += 1UL;
 
   ulong * prev_slot = fd_bank_mgr_prev_slot_query( slot_ctx->bank_mgr );
 
@@ -4314,9 +4289,7 @@ fd_runtime_block_pre_execute_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
     ulong             new_epoch  = fd_slot_to_epoch( epoch_schedule, slot_ctx->slot, &slot_idx );
     if( FD_UNLIKELY( slot_idx==1UL && new_epoch==0UL ) ) {
       /* The block after genesis has a height of 1. */
-      ulong * block_height = fd_bank_mgr_block_height_modify( slot_ctx->bank_mgr );
-      *block_height = 1UL;
-      fd_bank_mgr_block_height_save( slot_ctx->bank_mgr );
+      slot_ctx->bank->block_height = 1UL;
     }
 
     if( FD_UNLIKELY( prev_epoch<new_epoch || !slot_idx ) ) {

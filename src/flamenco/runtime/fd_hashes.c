@@ -228,8 +228,6 @@ fd_hash_bank( fd_exec_slot_ctx_t *    slot_ctx,
 
   slot_ctx->bank->prev_lamports_per_signature = slot_ctx->bank->lamports_per_signature;
 
-  fd_hash_t * epoch_account_hash = fd_bank_mgr_epoch_account_hash_query( slot_ctx->bank_mgr );
-
   fd_hash_t account_delta_hash;
 
   if( !FD_FEATURE_ACTIVE_BM( slot_ctx->bank_mgr, remove_accounts_delta_hash) ) {
@@ -261,7 +259,7 @@ fd_hash_bank( fd_exec_slot_ctx_t *    slot_ctx,
     if (fd_should_include_epoch_accounts_hash(slot_ctx)) {
       fd_sha256_init( &sha );
       fd_sha256_append( &sha, (uchar const *) &hash->hash, sizeof( fd_hash_t ) );
-      fd_sha256_append( &sha, (uchar const *) epoch_account_hash, sizeof( fd_hash_t ) );
+      fd_sha256_append( &sha, (uchar const *) &slot_ctx->bank->epoch_account_hash, sizeof( fd_hash_t ) );
       fd_sha256_fini( &sha, hash->hash );
     }
   }

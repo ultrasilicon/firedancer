@@ -48,9 +48,7 @@ fd_hashes_load( fd_exec_slot_ctx_t * slot_ctx ) {
     FD_LOG_ERR(( "missing recent block hashes account" ));
   }
 
-  ulong * execution_fees = fd_bank_mgr_execution_fees_modify( slot_ctx->bank_mgr );
-  FD_STORE( ulong, execution_fees, 0UL );
-  fd_bank_mgr_execution_fees_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->execution_fees = 0UL;
 }
 
 static int
@@ -480,8 +478,6 @@ fd_snapshot_hash( fd_exec_slot_ctx_t *    slot_ctx,
                   fd_lthash_value_t *     lt_hash ) {
   (void)check_hash;
 
-  fd_hash_t * epoch_account_hash = fd_bank_mgr_epoch_account_hash_query( slot_ctx->bank_mgr );
-
   if( fd_should_snapshot_include_epoch_accounts_hash( slot_ctx ) ) {
     FD_LOG_NOTICE(( "snapshot is including epoch account hash" ));
     fd_sha256_t h;
@@ -496,7 +492,7 @@ fd_snapshot_hash( fd_exec_slot_ctx_t *    slot_ctx,
 
     fd_sha256_init( &h );
     fd_sha256_append( &h, (uchar const *) hash.hash, sizeof( fd_hash_t ) );
-    fd_sha256_append( &h, (uchar const *) epoch_account_hash, sizeof( fd_hash_t ) );
+    fd_sha256_append( &h, (uchar const *) &slot_ctx->bank->epoch_account_hash, sizeof( fd_hash_t ) );
     fd_sha256_fini( &h, accounts_hash );
     return 0;
   }

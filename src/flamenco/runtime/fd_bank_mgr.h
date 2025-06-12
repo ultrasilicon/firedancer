@@ -122,10 +122,6 @@ if( FD_UNLIKELY( !bank_mgr ) ) {                                                
 /*  Type,                              name,                        id,   footprint,   align */
 #define FD_BANK_MGR_ITER(X)                                                                    \
   X(ulong,                             slot,                        1UL,  8UL,         8UL   ) \
-  X(ulong,                             block_height,                20UL, 8UL,         8UL   ) \
-  X(fd_hash_t,                         epoch_account_hash,          21UL, 32UL,        8UL   ) \
-  X(ulong,                             execution_fees,              22UL, 8UL,         8UL   ) \
-  X(ulong,                             priority_fees,               23UL, 8UL,         8UL   ) \
   X(fd_clock_timestamp_votes_global_t, clock_timestamp_votes,       24UL, 2000000UL,   1024UL) \
   X(ulong,                             signature_cnt,               25UL, 8UL,         8UL   ) \
   X(fd_account_keys_global_t,          stake_account_keys,          26UL, 160000000UL, 1024UL) \

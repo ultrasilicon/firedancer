@@ -315,19 +315,15 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Block Height */
 
-  ulong * block_height = fd_bank_mgr_block_height_modify( slot_ctx->bank_mgr );
-  *block_height = oldbank->block_height;
-  fd_bank_mgr_block_height_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->block_height = oldbank->block_height;
 
   /* Epoch Account Hash */
 
-  fd_hash_t * epoch_account_hash = fd_bank_mgr_epoch_account_hash_modify( slot_ctx->bank_mgr );
   if( manifest->epoch_account_hash ) {
-    *epoch_account_hash = *manifest->epoch_account_hash;
+    slot_ctx->bank->epoch_account_hash = *manifest->epoch_account_hash;
   } else {
-    memset( epoch_account_hash, 0, sizeof(fd_hash_t) );
+    memset( &slot_ctx->bank->epoch_account_hash, 0, sizeof(fd_hash_t) );
   }
-  fd_bank_mgr_epoch_account_hash_save( slot_ctx->bank_mgr );
 
   /* Prev Slot */
 
@@ -337,15 +333,11 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Execution Fees */
 
-  ulong * execution_fees = fd_bank_mgr_execution_fees_modify( slot_ctx->bank_mgr );
-  *execution_fees = oldbank->collector_fees;
-  fd_bank_mgr_execution_fees_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->execution_fees = oldbank->collector_fees;
 
   /* Priority Fees */
 
-  ulong * priority_fees = fd_bank_mgr_priority_fees_modify( slot_ctx->bank_mgr );
-  *priority_fees = 0UL;
-  fd_bank_mgr_priority_fees_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->priority_fees = 0UL;
 
   /* PoH */
 

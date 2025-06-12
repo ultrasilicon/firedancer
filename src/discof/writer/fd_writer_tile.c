@@ -56,6 +56,8 @@ struct fd_writer_tile_ctx {
 
   /* Local join of bank manager. R/W */
   fd_bank_mgr_t *              bank_mgr;
+  fd_banks_t *                 banks;
+  fd_bank_t *                  bank;
 };
 typedef struct fd_writer_tile_ctx fd_writer_tile_ctx_t;
 
@@ -160,6 +162,7 @@ during_frag( fd_writer_tile_ctx_t * ctx,
       ctx->slot_ctx = slot_ctx;
 
       ctx->bank_mgr = fd_bank_mgr_join( ctx->bank_mgr, ctx->funk, ctx->slot_ctx->funk_txn );
+      ctx->bank = fd_banks_get_bank( ctx->banks, ctx->slot_ctx->slot );
       return;
     }
 
@@ -197,7 +200,8 @@ during_frag( fd_writer_tile_ctx_t * ctx,
         FD_SPIN_PAUSE();
       }
       FD_SPAD_FRAME_BEGIN( ctx->spad ) {
-        fd_runtime_finalize_txn( ctx->slot_ctx, NULL, &info, ctx->spad, ctx->bank_mgr );
+        FD_TEST( ctx->bank );
+        fd_runtime_finalize_txn( ctx->slot_ctx, NULL, &info, ctx->spad, ctx->bank_mgr, ctx->bank );
       } FD_SPAD_FRAME_END;
     }
     /* Notify the replay tile. */
@@ -382,6 +386,20 @@ unprivileged_init( fd_topo_t *      topo,
   /********************************************************************/
 
   ctx->bank_mgr = fd_bank_mgr_join( bank_mgr_mem, ctx->funk, NULL );
+
+  /********************************************************************/
+  /* Bank                                                             */
+  /********************************************************************/
+
+  ulong banks_obj_id = fd_pod_queryf_ulong( topo->props, ULONG_MAX, "banks" );
+  if( FD_UNLIKELY( banks_obj_id==ULONG_MAX ) ) {
+    FD_LOG_ERR(( "Could not find topology object for banks" ));
+  }
+
+  ctx->banks = fd_banks_join( fd_topo_obj_laddr( topo, banks_obj_id ) );
+  if( FD_UNLIKELY( !ctx->banks ) ) {
+    FD_LOG_ERR(( "Failed to join banks" ));
+  }
 }
 
 static ulong

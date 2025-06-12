@@ -637,6 +637,9 @@ unprivileged_init( fd_topo_t *      topo,
   }
 
   ctx->banks = fd_banks_join( fd_topo_obj_laddr( topo, banks_obj_id ) );
+  if( FD_UNLIKELY( !ctx->banks ) ) {
+    FD_LOG_ERR(( "Failed to join banks" ));
+  }
 
   /********************************************************************/
   /* spad allocator                                                   */

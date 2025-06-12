@@ -326,13 +326,9 @@ fd_runtime_fuzz_txn_ctx_exec( fd_runtime_fuzz_runner_t * runner,
       task_info->exec_res    = fd_execute_txn( task_info );
   }
 
-  ulong * execution_fees = fd_bank_mgr_execution_fees_modify( slot_ctx->bank_mgr );
-  *execution_fees += task_info->txn_ctx->execution_fee;
-  fd_bank_mgr_execution_fees_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->execution_fees += task_info->txn_ctx->execution_fee;
 
-  ulong * priority_fees = fd_bank_mgr_priority_fees_modify( slot_ctx->bank_mgr );
-  *priority_fees += task_info->txn_ctx->priority_fee;
-  fd_bank_mgr_priority_fees_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->priority_fees += task_info->txn_ctx->priority_fee;
 
   return task_info;
 }
