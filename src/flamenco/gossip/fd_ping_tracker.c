@@ -297,7 +297,6 @@ fd_ping_tracker_register( fd_ping_tracker_t *   ping_tracker,
   peer->next_ping_nanos   = now+18L*60L*1000L*1000L*1000L; /* 18 minutes til we start trying to refresh */
   remove_tracking( ping_tracker, peer );
   peer->state = FD_PING_TRACKER_STATE_VALID;
-  for( ulong i=0UL; i<32UL; i++ ) peer->ping_token[ i ] = fd_rng_uchar( ping_tracker->rng );
   waiting_list_ele_push_tail( ping_tracker->waiting, peer, ping_tracker->pool );
 }
 

@@ -1,7 +1,5 @@
 #include "fd_crds.h"
 #include "../../../ballet/sha256/fd_sha256.h"
-// #include "fd_crds_value.h"
-#include <climits>
 #include <string.h>
 
 #define FD_CRDS_ALIGN 8UL
@@ -270,29 +268,28 @@ lookup_eq( fd_crds_key_t const * key0,
 #include "../../../util/tmpl/fd_map_chain.c"
 
 struct fd_crds_private {
-  fd_crds_entry_t *              pool;
+  fd_crds_entry_t *          pool;
 
-  evict_treap_t *                evict_treap;
-  staked_expire_dlist_t *        staked_expire_dlist;
-  unstaked_expire_dlist_t *      unstaked_expire_dlist;
-  hash_treap_t *                 hash_treap;
-  lookup_map_t *                 lookup_map;
+  evict_treap_t *            evict_treap;
+  staked_expire_dlist_t *    staked_expire_dlist;
+  unstaked_expire_dlist_t *  unstaked_expire_dlist;
+  hash_treap_t *             hash_treap;
+  lookup_map_t *             lookup_map;
 
-  ulong                          purged_len;
-  ulong                          purged_idx;
-  ulong                          purged_cap;
-  fd_crds_purged_t *             purged_list;
+  ulong                      purged_len;
+  ulong                      purged_idx;
+  ulong                      purged_cap;
+  fd_crds_purged_t *         purged_list;
+
+  int                        has_staked_node;
+  ulong                      magic;
 
   /* Contact Info side table */
   struct{
     fd_crds_contact_info_entry_t * pool;
     crds_contact_info_dlist_t *    dlist;
   } contact_info;
-
-  int                           has_staked_node;
-  ulong                         magic;
 };
-
 
 FD_FN_CONST ulong
 fd_crds_align( void ) {
@@ -484,7 +481,7 @@ fd_crds_expire( fd_crds_t * crds,
 
 fd_crds_entry_t *
 fd_crds_acquire( fd_crds_t * crds ) {
-  if( FD_UNLIKELY( crds_pool_free( crds->pool )==0UL ) ) {
+  if( FD_UNLIKELY( !crds_pool_free( crds->pool ) ) ) {
     evict_treap_fwd_iter_t head = evict_treap_fwd_iter_init( crds->evict_treap, crds->pool );
     FD_TEST( !evict_treap_fwd_iter_done( head ) );
     fd_crds_entry_t * evict = evict_treap_fwd_iter_ele( head, crds->pool );
@@ -509,7 +506,7 @@ fd_crds_release( fd_crds_t *       crds,
                  fd_crds_entry_t * value ) {
   if( FD_UNLIKELY( is_contact_info( value->key ) ) ){
     /* TODO: We might want checks here if fd_crds cannot guarantee that
-             value->contact_info.ci is valid when value is contact info */
+             value->contact_info.ci is valid when entry is contact info */
     crds_contact_info_pool_ele_release( crds->contact_info.pool, value->contact_info.ci );
   }
   crds_pool_ele_release( crds->pool, value );

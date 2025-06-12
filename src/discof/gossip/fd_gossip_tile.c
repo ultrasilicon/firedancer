@@ -56,7 +56,7 @@ struct fd_gossip_tile_ctx {
   fd_keyswitch_t *     keyswitch;
 
   fd_ip4_udp_hdrs_t    net_out_hdr[ 1 ]; /* Used to construct outgoing network packets */
-  ushort               net_id; /* Network ID for outgoing packets */
+  ushort               net_id;           /* Network ID for outgoing packets */
 };
 
 typedef struct fd_gossip_tile_ctx fd_gossip_tile_ctx_t;
@@ -98,6 +98,7 @@ gossip_send_fn( void *                ctx,
   ip4->check       = fd_ip4_hdr_check_fast( ip4 );
   ip4->net_id      = fd_ushort_bswap( gossip_ctx->net_id++ );
 
+  /* TODO: Construct payload in place to avoid memcpy here. */
   fd_memcpy( packet+sizeof(fd_ip4_udp_hdrs_t), payload, payload_sz );
 
   /* Publish fragment */
