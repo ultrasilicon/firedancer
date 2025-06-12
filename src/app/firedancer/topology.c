@@ -1027,6 +1027,12 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     } else if( FD_UNLIKELY( !strcmp( tile->name, "arch_f" ) ||
                             !strcmp( tile->name, "arch_w" ) ) ) {
       strncpy( tile->archiver.archiver_path, config->tiles.archiver.archiver_path, sizeof(tile->archiver.archiver_path) );
+    } else if( FD_UNLIKELY( !strcmp( tile->name, "back" ) ) ) {
+        strncpy( tile->archiver.archiver_path, config->tiles.archiver.archiver_path, PATH_MAX );
+        tile->archiver.end_slot = config->tiles.archiver.end_slot;
+        if( FD_UNLIKELY( 0==strlen( tile->archiver.archiver_path ) ) ) {
+          FD_LOG_ERR(( "`archiver.archiver_path` not specified in toml" ));
+        }
     } else {
       return 0;
     }

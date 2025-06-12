@@ -53,13 +53,7 @@ backtest_topo( config_t * config ) {
   /**********************************************************************/
   fd_topob_wksp( topo, "back" );
   fd_topo_tile_t * backtest_tile   = fd_topob_tile( topo, "back", "back", "metric_in", cpu_idx++, 0, 0 );
-  backtest_tile->archiver.end_slot = config->tiles.archiver.end_slot;
-  strncpy( backtest_tile->archiver.archiver_path, config->tiles.archiver.archiver_path, PATH_MAX );
-  if( FD_UNLIKELY( 0==strlen( backtest_tile->archiver.archiver_path ) ) ) {
-    FD_LOG_ERR(( "Rocksdb not found, check `archiver.archiver_path` in toml" ));
-  } else {
-    FD_LOG_NOTICE(( "Found rocksdb path from config: %s", backtest_tile->archiver.archiver_path ));
-  }
+  FD_LOG_NOTICE(( "Found rocksdb path from config: %s", backtest_tile->archiver.archiver_path ));
 
   /**********************************************************************/
   /* Add the replay tile to topo                                        */

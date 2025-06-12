@@ -375,10 +375,7 @@ fd_topob_auto_layout( fd_topo_t * topo,
     "tower",  /* FIREDANCER only */
     "rpcsrv", /* FIREDANCER only */
     "batch",  /* FIREDANCER only */
-    "pktgen",
-    "SnapRd",
-    "SnapDc",
-    "SnapIn",
+    "pktgen"
   };
 
   char const * CRITICAL_TILES[] = {
