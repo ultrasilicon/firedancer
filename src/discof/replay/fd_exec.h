@@ -8,16 +8,6 @@
 #include "../../flamenco/runtime/sysvar/fd_sysvar_epoch_schedule.h"
 #include "../../flamenco/runtime/fd_bank_mgr.h"
 
-/* Follows message structure in fd_stake_ci_stake_msg_init */
-struct fd_stake_weight_msg_t {
-  ulong epoch;               /* Epoch for which the stake weights are valid */
-  ulong staked_cnt;          /* Number of staked nodes */
-  ulong start_slot;          /* Start slot of the epoch */
-  ulong slot_cnt;            /* Number of slots in the epoch */
-  ulong excluded_stake;      /* Total stake that is excluded from leader selection */
-};
-typedef struct fd_stake_weight_msg_t fd_stake_weight_msg_t;
-
 /* Replay tile msg link formatting. The following take a pointer into
    a dcache region and formats it as a specific message type. */
 
