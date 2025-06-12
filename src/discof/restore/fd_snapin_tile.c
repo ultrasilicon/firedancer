@@ -7,6 +7,8 @@
 #include "../../flamenco/types/fd_types.h"
 #include "../../funk/fd_funk.h"
 #include "stream/fd_stream_ctx.h"
+#include "stream/fd_frag_writer.h"
+#include "fd_snapshot_messages.h"
 #include "../../flamenco/runtime/fd_runtime_public.h"
 #include <assert.h>
 #include <stdio.h>
@@ -17,7 +19,7 @@
 #define LINK_IN_MAX  1UL
 #define LINK_OUT_MAX 1UL
 
-#define SNAP_REPLAY_OUT_IDX 0UL
+#define MANIFEST_OUT_IDX 0UL
 
 #define SNAP_FSEQ_NO_SNAPSHOT 1UL
 #define SNAP_FSEQ_SNAPSHOT_LOADED 2UL
@@ -44,8 +46,8 @@ struct fd_snapin_tile {
   fd_funk_txn_t * funk_txn;
   uchar *         acc_data;
 
-  /* replay out */
-  fd_stream_writer_t * to_replay;
+  /* manifest out */
+  fd_frag_writer_t * manifest_writer;
 
   /* Shared fseq with replay tile */
   ulong * replay_snapshot_fseq;
@@ -87,22 +89,23 @@ fd_snapin_shutdown( fd_snapin_tile_t * ctx ) {
   for(;;) pause();
 }
 
-static ulong
-send_manifest_to_replay( fd_snapshot_parser_t * parser,
-                         void *                 _ctx,
-                         uchar const *          buf,
-                         ulong                  chunksz ) {
+static void
+send_manifest( fd_snapshot_parser_t * parser,
+               void *                 _ctx,
+               fd_solana_manifest_t * manifest ) {
   (void)parser;
   fd_snapin_tile_t * ctx = fd_type_pun( _ctx );
 
-  uchar * out     = fd_stream_writer_prepare( ctx->to_replay );
-  ulong   out_max = fd_stream_writer_publish_sz_max( ctx->to_replay );
+  uchar * snapshot_manifest_mem = fd_frag_writer_prepare( ctx->manifest_writer );
 
-  ulong sz = fd_ulong_min( chunksz, out_max );
-  fd_memcpy( out, buf, sz );
+  fd_snapshot_manifest_init_from_solana_manifest(snapshot_manifest_mem, manifest );
 
-  fd_stream_writer_publish( ctx->to_replay, sz, 0UL );
-  return sz;
+  // fd_frag_writer_publish( ctx->manifest_writer,
+  //                         sizeof(fd_snapshot_manifest_t),
+  //                         0UL,
+  //                         0UL,
+  //                         0UL,
+  //                         0UL );
 }
 
 __attribute__((unused)) static int
@@ -112,7 +115,6 @@ snapshot_is_duplicate_account_old( fd_snapshot_parser_t * parser,
   /* Check if account exists */
   fd_account_meta_t const * rec_meta = fd_funk_get_acc_meta_readonly( ctx->funk, ctx->funk_txn, account_key, NULL, NULL, NULL );
   if( rec_meta ) {
-    // FD_LOG_WARNING(("account exists with slot %lu", rec_meta->slot));
     if( rec_meta->slot > parser->accv_slot ) 
       return 1;
   }
@@ -132,7 +134,7 @@ snapshot_is_duplicate_account( fd_snapshot_parser_t * parser,
   return 0;
 }
 
-__attribute__((unused)) static void
+static void
 snapshot_insert_account( fd_snapshot_parser_t *          parser,
                          fd_solana_account_hdr_t const * hdr,
                          void *                          _ctx ) {
@@ -233,7 +235,8 @@ fd_snapin_check_parser_failed( fd_snapshot_parser_t * parser ) {
 
 static ulong
 scratch_align( void ) {
-  return fd_ulong_max( alignof(fd_snapin_tile_t), fd_snapshot_parser_align() );
+  return fd_ulong_max( alignof(fd_snapin_tile_t), 
+                       fd_ulong_max( fd_snapshot_parser_align(), fd_frag_writer_align() ) );
 }
 
 static ulong
@@ -242,6 +245,7 @@ scratch_footprint( fd_topo_tile_t const * tile ) {
   ulong l = FD_LAYOUT_INIT;
   l = FD_LAYOUT_APPEND( l, alignof(fd_snapin_tile_t),  sizeof(fd_snapin_tile_t)       );
   l = FD_LAYOUT_APPEND( l, fd_snapshot_parser_align(), fd_snapshot_parser_footprint() );
+  l = FD_LAYOUT_APPEND( l, fd_frag_writer_align(),     fd_frag_writer_footprint()     );
   return l;
 }
 
@@ -255,17 +259,18 @@ unprivileged_init( fd_topo_t *      topo,
   /* FIXME check link names */
 
   FD_SCRATCH_ALLOC_INIT( l, fd_topo_obj_laddr( topo, tile->tile_obj_id ) );
-  fd_snapin_tile_t * ctx = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_snapin_tile_t), sizeof(fd_snapin_tile_t) );
-  void * parser_mem      = FD_SCRATCH_ALLOC_APPEND( l, fd_snapshot_parser_align(), fd_snapshot_parser_footprint() );
+  fd_snapin_tile_t * ctx  = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_snapin_tile_t), sizeof(fd_snapin_tile_t) );
+  void * parser_mem       = FD_SCRATCH_ALLOC_APPEND( l, fd_snapshot_parser_align(), fd_snapshot_parser_footprint() );
+  void * manifest_out_mem = FD_SCRATCH_ALLOC_APPEND( l, fd_frag_writer_align(),     fd_frag_writer_footprint() );
 
-  fd_snapshot_parser_process_manifest_stream_fn_t manifest_cb = NULL;
-  if( 0==strcmp( topo->links[tile->out_link_id[ SNAP_REPLAY_OUT_IDX   ]].name, "snap_replay"   ) ) {
-    manifest_cb = send_manifest_to_replay;
+  fd_snapshot_parser_process_manifest_fn_t manifest_cb     = NULL;
+  if( 0==strcmp( topo->links[tile->out_link_id[ MANIFEST_OUT_IDX ]].name, "snap_replay"   ) ) {
+    manifest_cb     = send_manifest;
   }
 
   ctx->parser = fd_snapshot_parser_new( parser_mem,
                                         manifest_cb,
-                                        snapshot_insert_account_blind,
+                                        snapshot_insert_account,
                                         snapshot_copy_acc_data,
                                         snapshot_reset_acc_data,
                                         ctx );
@@ -285,6 +290,10 @@ unprivileged_init( fd_topo_t *      topo,
   if( FD_UNLIKELY( !ctx->replay_snapshot_fseq ) ) {
     FD_LOG_ERR(( "Failed to join replay snapshot fseq" ));
   }
+
+  /* init manifest out */
+  fd_topo_link_t * manifest_out_link = &topo->links[ tile->out_link_id[ MANIFEST_OUT_IDX ] ];
+  ctx->manifest_writer = fd_frag_writer_new( manifest_out_mem, manifest_out_link );
 
   ctx->funk_txn                              = fd_funk_txn_query( fd_funk_root( ctx->funk ), ctx->funk->txn_map );
   ctx->metrics.full.accounts_files_processed = 0UL;
@@ -307,19 +316,6 @@ fd_snapin_accumulate_metrics( fd_snapin_tile_t * ctx ) {
     ctx->metrics.incremental = fd_snapshot_parser_get_metrics( ctx->parser );
   } else {
     FD_LOG_ERR(("unexpected status"));
-  }
-}
-
-static void
-fd_snapin_init_from_stream_ctx( void * _ctx,
-                                fd_stream_ctx_t * stream_ctx ) {
-  fd_snapin_tile_t * ctx = fd_type_pun(_ctx);
-
-  if( FD_LIKELY( stream_ctx->out_cnt ) ) {
-    /* There's only one writer */
-    ctx->to_replay = fd_stream_writer_join( stream_ctx->writers[0] );
-    FD_TEST( ctx->to_replay );
-    fd_stream_writer_set_frag_sz_max( ctx->to_replay, DCACHE_SZ );
   }
 }
 
@@ -404,7 +400,7 @@ fd_snapin_run1(
 ) {
   fd_stream_ctx_run( stream_ctx,
     ctx,
-    fd_snapin_init_from_stream_ctx,
+    NULL,
     fd_snapin_in_update,
     NULL,
     metrics_write,

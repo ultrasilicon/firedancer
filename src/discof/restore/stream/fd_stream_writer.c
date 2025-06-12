@@ -50,6 +50,7 @@ fd_stream_writer_new( void *                  mem,
 
   FD_COMPILER_MFENCE();
   writer->magic = FD_STREAM_WRITER_MAGIC;
+  FD_COMPILER_MFENCE();
   return writer;
 }
 

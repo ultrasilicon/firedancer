@@ -109,28 +109,28 @@ fd_snapshot_parser_accv_prepare( fd_snapshot_parser_t * const self,
 /* fd_snapshot_restore_manifest_prepare prepares for consumption of the
    snapshot manifest. */
 
-// static int
-// fd_snapshot_parser_manifest_prepare( fd_snapshot_parser_t * self,
-//                                       ulong                  sz ) {
-//   /* Only read once */
-//   if( self->manifest_done ) {
-//     FD_LOG_WARNING(( "Snapshot file contains multiple manifests" ));
-//     self->state = SNAP_STATE_IGNORE;
-//     return 0;
-//   }
+static int
+fd_snapshot_parser_manifest_prepare( fd_snapshot_parser_t * self,
+                                      ulong                  sz ) {
+  /* Only read once */
+  if( self->manifest_done ) {
+    FD_LOG_WARNING(( "Snapshot file contains multiple manifests" ));
+    self->state = SNAP_STATE_IGNORE;
+    return 0;
+  }
 
-//   /* We don't support streaming manifest deserialization yet.  Thus,
-//      buffer the whole manifest in one place. */
-//   if( FD_UNLIKELY( !fd_snapshot_parser_prepare_buf( self, sz ) ) ) {
-//     self->flags |= SNAP_FLAG_FAILED;
-//     return ENOMEM;
-//   }
+  /* We don't support streaming manifest deserialization yet.  Thus,
+     buffer the whole manifest in one place. */
+  if( FD_UNLIKELY( !fd_snapshot_parser_prepare_buf( self, sz ) ) ) {
+    self->flags |= SNAP_FLAG_FAILED;
+    return ENOMEM;
+  }
 
-//   self->state  = SNAP_STATE_MANIFEST;
-//   self->buf_sz = sz;
+  self->state  = SNAP_STATE_MANIFEST;
+  self->buf_sz = sz;
 
-//   return 0;
-// }
+  return 0;
+}
 
 static void
 fd_snapshot_parser_restore_file( void *                self_,
@@ -156,10 +156,7 @@ fd_snapshot_parser_restore_file( void *                self_,
   } else if( fd_memeq( meta->name, "snapshots/status_cache", sizeof("snapshots/status_cache") ) ) {
     /* TODO */
   } else if(0==strncmp( meta->name, "snapshots/", sizeof("snapshots/")-1 ) ) {
-    // fd_snapshot_parser_manifest_prepare( self, sz );
-    self->state  = SNAP_STATE_MANIFEST;
-    self->buf_sz = sz;
-    /* TODO */
+    fd_snapshot_parser_manifest_prepare( self, sz );
   }
 
 }
@@ -270,6 +267,12 @@ fd_snapshot_parser_accv_index( fd_snapshot_parser_t *          self,
   return 0;
 }
 
+static void
+fd_snapshot_parser_set_manifest_buf( fd_snapshot_parser_t * self ) {
+  self->manifest_buf   = (uchar *)fd_ulong_align_up( (ulong)self->buf + self->buf_sz, fd_solana_manifest_align() );
+  self->manifest_bufsz = (ulong)( self->buf + self->buf_max - self->manifest_buf );
+}
+
 /* snapshot_restore_manifest imports a snapshot manifest into the
    given slot context.  Also populates the accv index.  Destroys the
    existing bank structure. */
@@ -300,14 +303,14 @@ fd_snapshot_parser_restore_manifest( fd_snapshot_parser_t * self ) {
     FD_LOG_ERR(( "fd_solana_manifest_decode_footprint failed (%d)", err ));
   }
 
-  uchar * scratch    = (uchar *)fd_ulong_align_up( (ulong)decode.dataend, fd_solana_manifest_align() );
-  ulong   scratch_sz = (ulong)( self->buf + self->buf_max - scratch );
+  fd_snapshot_parser_set_manifest_buf( self );
+
   FD_LOG_WARNING(("total_sz for manifest is %lu", total_sz));
-  if( FD_UNLIKELY( total_sz > scratch_sz ) ) {
+  if( FD_UNLIKELY( total_sz > self->manifest_bufsz ) ) {
   FD_LOG_ERR(( "Cannot decode snapshot. Insufficient scratch buffer size (need %lu, have %lu bytes)",
-              (ulong)scratch + total_sz - (ulong)self->buf, self->buf_max ));
+              (ulong)self->manifest_buf + total_sz - (ulong)self->buf, self->buf_max ));
   }
-  fd_solana_manifest_t * manifest = fd_solana_manifest_decode( scratch, &decode );
+  fd_solana_manifest_t * manifest = fd_solana_manifest_decode( self->manifest_buf, &decode );
 
   char acc_hash_cstr[ FD_BASE58_ENCODED_32_SZ ];
   fd_base58_encode_32( manifest->accounts_db.bank_hash_info.accounts_hash.uc, NULL, acc_hash_cstr );
@@ -337,6 +340,11 @@ fd_snapshot_parser_restore_manifest( fd_snapshot_parser_t * self ) {
   self->metrics.accounts_files_total = accounts_db.storages_len;
   if( FD_LIKELY( !err ) ) {
     err = fd_snapshot_parser_accv_index( self, &accounts_db );
+  }
+
+  /* manifest cb */
+  if( self->manifest_cb ) {
+    self->manifest_cb( self, self->cb_arg, manifest );
   }
 
   /* Discard buffer to reclaim heap space */
@@ -385,10 +393,6 @@ fd_snapshot_parser_read_manifest_chunk( fd_snapshot_parser_t * self,
   uchar const * end = fd_snapshot_parser_read_buffered( self, buf, bufsz );
   ulong chunksz     = (ulong)(end - buf);
   ulong consumed_sz = chunksz;
-
-  if( self->manifest_cb ) {
-    consumed_sz = self->manifest_cb( self, self->cb_arg, buf, chunksz );
-  }
 
   if( fd_snapshot_parser_hdr_read_is_complete( self ) ) {
     fd_snapshot_parser_restore_manifest( self );

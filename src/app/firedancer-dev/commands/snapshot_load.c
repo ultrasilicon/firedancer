@@ -6,6 +6,7 @@
 #include "../../../util/pod/fd_pod_format.h"
 #include "../../../util/tile/fd_tile_private.h"
 #include "../../../flamenco/snapshot/fd_snapshot_loader.h"
+#include "../../../discof/restore/fd_snapshot_messages.h"
 #include <sys/resource.h>
 #include <linux/capability.h>
 #include <unistd.h>
@@ -72,6 +73,9 @@ snapshot_load_topo( config_t *     config,
   /* fseq for communicating snapshot loading done */
   fd_topob_wksp( topo, "snap_fseq" );
   fd_topo_obj_t * snapshot_fseq_obj = fd_topob_obj( topo, "fseq", "snap_fseq" );
+
+  fd_topob_wksp( topo, "snap_replay" );
+  fd_topob_link( topo, "snap_replay", "snap_replay",   128UL,                     sizeof(fd_snapshot_manifest_t), 1UL );
 
   /* Uncompressed data stream */
   fd_topob_wksp( topo, "snap_stream" );
@@ -175,6 +179,8 @@ snapshot_load_topo( config_t *     config,
   fd_topob_tile_uses( topo, snapin_tile, snapshot_fseq_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
   snapin_tile->snapin.fseq_obj_id = snapshot_fseq_obj->id;
   fd_pod_insertf_ulong( topo->props, snapshot_fseq_obj->id, "snap_fseq" );
+
+  fd_topob_tile_out( topo, "SnapIn", 0UL, "snap_replay", 0UL );
 
   for( ulong i=0UL; i<topo->tile_cnt; i++ ) {
     fd_topo_tile_t * tile = &topo->tiles[ i ];

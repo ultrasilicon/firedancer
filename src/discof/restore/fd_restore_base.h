@@ -2,6 +2,8 @@
 #define HEADER_fd_src_discof_restore_fd_restore_base_h
 
 #include "../../tango/mcache/fd_mcache.h"
+#include "../../flamenco/types/fd_types_custom.h"
+#include "../../ballet/lthash/fd_lthash.h"
 
 #define STATUS_WAITING 0UL
 #define STATUS_FULL    1UL

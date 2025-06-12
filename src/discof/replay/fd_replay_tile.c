@@ -2161,36 +2161,36 @@ handle_writer_state_updates( fd_replay_tile_ctx_t * ctx ) {
 
 }
 
-static int
-process_manifest_chunk( fd_replay_tile_ctx_t * ctx,
-                        fd_stream_frag_meta_t const * frag ) {
-  /* check som bit which indicates a message containing the size of the manifest */
+// static int
+// process_manifest_chunk( fd_replay_tile_ctx_t * ctx,
+//                         fd_stream_frag_meta_t const * frag ) {
+//   /* check som bit which indicates a message containing the size of the manifest */
 
-  /* copy into a buffer to hold the manifest */
-}
+//   /* copy into a buffer to hold the manifest */
+// }
 
-static void
-poll_manifest_reader( fd_replay_tile_ctx_t * ctx ) {
-  fd_frag_reader_consume_ctx_t consume_ctx;
-  long diff = fd_stream_reader_poll_frag( ctx->manifest_reader, 
-                                          SNAP_IN_IDX,
-                                          &consume_ctx );
-  if( FD_UNLIKELY( diff <0L ) ) {
-    fd_stream_reader_process_overrun( ctx->manifest_reader,
-                                      &consume_ctx,
-                                      diff );
-  } else if( FD_UNLIKELY( diff ) ) {
-    /* nothing new to poll */
-    return;
-  } else {
-    fd_stream_frag_meta_t const * frag = fd_type_pun_const( consume_ctx.mline );
-    int consumed_frag = process_manifest_chunk( ctx, frag );
+// static void
+// poll_manifest_reader( fd_replay_tile_ctx_t * ctx ) {
+//   fd_frag_reader_consume_ctx_t consume_ctx;
+//   long diff = fd_stream_reader_poll_frag( ctx->manifest_reader, 
+//                                           SNAP_IN_IDX,
+//                                           &consume_ctx );
+//   if( FD_UNLIKELY( diff <0L ) ) {
+//     fd_stream_reader_process_overrun( ctx->manifest_reader,
+//                                       &consume_ctx,
+//                                       diff );
+//   } else if( FD_UNLIKELY( diff ) ) {
+//     /* nothing new to poll */
+//     return;
+//   // } else {
+//   //   fd_stream_frag_meta_t const * frag = fd_type_pun_const( consume_ctx.mline );
+//   //   int consumed_frag = process_manifest_chunk( ctx, frag );
     
-    if( FD_LIKELY( consumed_frag ) ) {
-      fd_stream_reader_consume_frag( ctx->manifest_reader, &consume_ctx );
-    }
-  }
-}
+//   //   if( FD_LIKELY( consumed_frag ) ) {
+//   //     fd_stream_reader_consume_frag( ctx->manifest_reader, &consume_ctx );
+//   //   }
+//   }
+// }
 
 static void
 after_credit( fd_replay_tile_ctx_t * ctx,

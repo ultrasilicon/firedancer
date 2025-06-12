@@ -11,6 +11,7 @@
 #include "../../flamenco/runtime/fd_txncache.h"
 #include "../../flamenco/snapshot/fd_snapshot_base.h"
 #include "../../util/tile/fd_tile_private.h"
+#include "../../discof/restore/fd_snapshot_messages.h"
 
 #include <sys/random.h>
 #include <sys/types.h>
@@ -324,11 +325,11 @@ fd_topo_initialize( config_t * config ) {
 
   /* TODO: The MTU is currently relatively arbitrary and needs to be resized to the size of the largest
      message that is outbound from the replay to exec. */
-  FOR(exec_tile_cnt)   fd_topob_link( topo, "replay_exec",  "replay_exec",  128UL,                                    10240UL,                       exec_tile_cnt );
-  FOR(writer_tile_cnt) fd_topob_link( topo, "replay_wtr",   "replay_wtr",   128UL,                                    FD_REPLAY_WRITER_MTU,          1UL );
-  fd_topo_link_t * snap_zstd_link   = fd_topob_link( topo, "snap_zstd",    "snap_zstd",    512UL,                     0UL,                           0UL );
-  fd_topo_link_t * snapin_link      = fd_topob_link( topo, "snap_stream", "snap_stream",   512UL,                     0UL,                           0UL );
-  fd_topo_link_t * snap_replay_link = fd_topob_link( topo, "snap_replay", "snap_replay",   512UL,                     0UL,                           0UL );
+  FOR(exec_tile_cnt)   fd_topob_link( topo, "replay_exec",  "replay_exec",  128UL,                                    10240UL,                        exec_tile_cnt );
+  FOR(writer_tile_cnt) fd_topob_link( topo, "replay_wtr",   "replay_wtr",   128UL,                                    FD_REPLAY_WRITER_MTU,           1UL );
+  fd_topo_link_t * snap_zstd_link   = fd_topob_link( topo, "snap_zstd",    "snap_zstd",    512UL,                     0UL,                            0UL );
+  fd_topo_link_t * snapin_link      = fd_topob_link( topo, "snap_stream", "snap_stream",   512UL,                     0UL,                            0UL );
+  fd_topob_link( topo, "snap_replay", "snap_replay",   128UL,                     sizeof(fd_snapshot_manifest_t), 1UL );
   /* Assuming the number of writer tiles is sufficient to keep up with
      the number of exec tiles, under equilibrium, we should have at least
      enough link space to buffer worst case input shuffling done by the
@@ -539,7 +540,6 @@ fd_topo_initialize( config_t * config ) {
 
   fd_topo_obj_t * zstd_dcache        = fd_topob_link_set_dcache( topo, snap_zstd_link, "snap_zstd", (16<<20UL) );
   fd_topo_obj_t * snapin_dcache      = fd_topob_link_set_dcache( topo, snapin_link, "snap_stream", (16<<20UL) );
-  fd_topo_obj_t * snap_replay_dcache = fd_topob_link_set_dcache( topo, snap_replay_link, "snap_replay", (16<<20UL) );
   fd_topo_obj_t * snapshot_fseq_obj  = fd_topob_obj( topo, "fseq", "snap_fseq" );
   FD_TEST( fd_pod_insertf_ulong( topo->props, snapshot_fseq_obj->id, "snap_fseq" ) );
 
@@ -551,9 +551,6 @@ fd_topo_initialize( config_t * config ) {
   fd_topob_tile_uses( topo, snapin_tile, snapshot_fseq_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
   fd_topob_tile_uses( topo, snapin_tile, runtime_pub_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
   fd_topob_tile_uses( topo, replay_tile, snapshot_fseq_obj, FD_SHMEM_JOIN_MODE_READ_ONLY );
-
-  fd_topob_tile_uses( topo, snapin_tile, snap_replay_dcache, FD_SHMEM_JOIN_MODE_READ_WRITE );
-  fd_topob_tile_uses( topo, replay_tile, snap_replay_dcache, FD_SHMEM_JOIN_MODE_READ_ONLY );
 
   /* There's another special fseq that's used to communicate the shred
     version from the Agave boot path to the shred tile. */
@@ -738,7 +735,7 @@ fd_topo_initialize( config_t * config ) {
   fd_topob_tile_out( topo, "SnapDc", 0UL, "snap_stream", 0UL );
   fd_topob_tile_in  ( topo, "SnapIn", 0UL, "metric_in", "snap_stream", 0UL, FD_TOPOB_RELIABLE, FD_TOPOB_POLLED   );
   fd_topob_tile_out( topo, "SnapIn", 0UL, "snap_replay", 0UL );
-  fd_topob_tile_in( topo, "replay", 0UL, "metric_in", "snap_replay", 0UL, FD_TOPOB_RELIABLE, FD_TOPOB_POLLED );
+  fd_topob_tile_in( topo, "replay", 0UL, "metric_in", "snap_replay", 0UL, FD_TOPOB_UNRELIABLE, FD_TOPOB_UNPOLLED );
 
   if( config->tiles.archiver.enabled ) {
     fd_topob_wksp( topo, "arch_f" );
