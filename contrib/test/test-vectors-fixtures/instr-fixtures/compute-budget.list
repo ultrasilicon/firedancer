@@ -1,3 +1,4 @@
+dump/test-vectors/instr/fixtures/compute-budget/c8bdafbb48d2a9572a3ba7c1eb31d709.000fdb2d.honggfuzz.bin.fix
 dump/test-vectors/instr/fixtures/compute-budget/00c6568bf4e1cd7d9e906dc858f16972.0002827f.honggfuzz.bin.fix
 dump/test-vectors/instr/fixtures/compute-budget/02046d420c2cc52d208ea2548243e0c9.000277b3.honggfuzz.bin.fix
 dump/test-vectors/instr/fixtures/compute-budget/0532e704bd59196c28ce30aea1506844.00028fcc.honggfuzz.bin.fix
@@ -90,7 +91,6 @@ dump/test-vectors/instr/fixtures/compute-budget/bd2f3dbb37a3e0bf7453026a4a8e8f9b
 dump/test-vectors/instr/fixtures/compute-budget/bdefa1d64a43b36c7cc75ae598e94d92.000458d1.honggfuzz.bin.fix
 dump/test-vectors/instr/fixtures/compute-budget/c07034171086b8743611594a3d69d746.0007c892.honggfuzz.bin.fix
 dump/test-vectors/instr/fixtures/compute-budget/c5ec9afea497bd6674a6f0c3d717be10.00020ad3.honggfuzz.bin.fix
-dump/test-vectors/instr/fixtures/compute-budget/c8bdafbb48d2a9572a3ba7c1eb31d709.000fdb2d.honggfuzz.bin.fix
 dump/test-vectors/instr/fixtures/compute-budget/ccfcda6a5d32adc6fe0dc464e137eb59.000be792.honggfuzz.bin.fix
 dump/test-vectors/instr/fixtures/compute-budget/cda328848f6a005db2ae3c2daa2c2fe2.000cf926.honggfuzz.bin.fix
 dump/test-vectors/instr/fixtures/compute-budget/cdcf157e0fa4b499e313e7281a4d1a47.0001fd8a.honggfuzz.bin.fix
