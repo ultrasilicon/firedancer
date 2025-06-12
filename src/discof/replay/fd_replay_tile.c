@@ -2268,8 +2268,7 @@ after_credit( fd_replay_tile_ctx_t * ctx,
     /**************************************************************************************************/
 
     fd_runtime_block_info_t runtime_block_info[1];
-    ulong * signature_cnt = fd_bank_mgr_signature_cnt_query( fork->slot_ctx->bank_mgr );
-    runtime_block_info->signature_cnt = *signature_cnt;
+    runtime_block_info->signature_cnt = ctx->slot_ctx->bank->signature_cnt;
 
     ctx->block_finalizing = 0;
 

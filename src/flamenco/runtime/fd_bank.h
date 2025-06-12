@@ -54,6 +54,7 @@ struct fd_bank {
   fd_hash_t              epoch_account_hash;
   ulong                  execution_fees;
   ulong                  priority_fees;
+  ulong                  signature_cnt;
 
   /* CoW Fields. These are only copied when explicitly requested by
      the caller. A lock is used to prevent contention between multiple
