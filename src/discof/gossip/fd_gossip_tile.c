@@ -28,35 +28,35 @@ typedef struct {
 } fd_gossip_out_ctx_t;
 
 struct fd_gossip_tile_ctx {
-  fd_gossip_t * gossip;
+  fd_gossip_t *        gossip;
 
-  fd_pubkey_t   identity_key[1]; /* Just the public key */
+  fd_contact_info_t    my_contact_info[1];
 
-  uint          rng_seed;
-  ulong         rng_idx;
+  uint                 rng_seed;
+  ulong                rng_idx;
 
-  double        ticks_per_ns;
-  long          last_wallclock;
-  long          last_tickcount;
+  double               ticks_per_ns;
+  long                 last_wallclock;
+  long                 last_tickcount;
 
-  uchar         buffer[ FD_NET_MTU ];
+  uchar                buffer[ FD_NET_MTU ];
 
-  fd_gossip_in_ctx_t in[ 32UL ];
-  int                in_kind[ 32UL ];
+  fd_gossip_in_ctx_t   in[ 32UL ];
+  int                  in_kind[ 32UL ];
 
-  fd_gossip_out_ctx_t net_out[ 1 ];
-  fd_frag_meta_t * net_out_mcache;
-  ulong            net_out_seq;
-  ulong            net_out_depth;
+  fd_gossip_out_ctx_t  net_out[ 1 ];
+  fd_frag_meta_t *     net_out_mcache;
+  ulong                net_out_seq;
+  ulong                net_out_depth;
 
-  fd_gossip_out_ctx_t gossip_out[ 1 ];
-  fd_gossip_out_ctx_t sign_out[ 1 ];
+  fd_gossip_out_ctx_t  gossip_out[ 1 ];
+  fd_gossip_out_ctx_t  sign_out[ 1 ];
 
   fd_keyguard_client_t keyguard_client[ 1 ];
   fd_keyswitch_t *     keyswitch;
 
-  fd_ip4_udp_hdrs_t   net_out_hdr[ 1 ]; /* Used to construct outgoing network packets */
-  ushort              net_id; /* Network ID for outgoing packets */
+  fd_ip4_udp_hdrs_t    net_out_hdr[ 1 ]; /* Used to construct outgoing network packets */
+  ushort               net_id; /* Network ID for outgoing packets */
 };
 
 typedef struct fd_gossip_tile_ctx fd_gossip_tile_ctx_t;
@@ -179,14 +179,16 @@ after_frag( fd_gossip_tile_ctx_t * ctx,
             ulong                  tsorig FD_PARAM_UNUSED,
             ulong                  tspub  FD_PARAM_UNUSED,
             fd_stem_context_t *    stem   FD_PARAM_UNUSED) {
+  long now = ctx->last_wallclock + (long)((double)(fd_tickcount()-ctx->last_tickcount)/ctx->ticks_per_ns);
   if( FD_UNLIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET ) ) {
-    long now = ctx->last_wallclock + (long)((double)(fd_tickcount()-ctx->last_tickcount)/ctx->ticks_per_ns);
 
     fd_gossip_advance( ctx->gossip, now );
     fd_gossip_rx( ctx->gossip, ctx->buffer, sz, now );
   } else if( FD_UNLIKELY( ctx->in_kind[ in_idx ]==IN_KIND_SHRED_VERSION ) ) {
     FD_MGAUGE_SET( GOSSIP, SHRED_VERSION, (ushort)sig );
-    fd_gossip_set_expected_shred_version( ctx->gossip, 1, (ushort)sig );
+    ctx->my_contact_info->shred_version   = (ushort)sig;
+    ctx->my_contact_info->wallclock_nanos = now;
+    fd_gossip_set_my_contact_info( ctx->gossip, ctx->my_contact_info );
   } else {
     FD_LOG_ERR(( "unexpected in_kind %d", ctx->in_kind[ in_idx ] ));
   }
@@ -203,7 +205,7 @@ privileged_init( fd_topo_t *      topo,
   if( FD_UNLIKELY( !strcmp( tile->gossip.identity_key_path, "" ) ) )
     FD_LOG_ERR(( "identity_key_path not set" ));
 
-  ctx->identity_key[ 0 ] = *(fd_pubkey_t const *)fd_type_pun_const( fd_keyload_load( tile->gossip.identity_key_path, /* pubkey only: */ 1 ) );
+  fd_memcpy( ctx->my_contact_info->pubkey, fd_type_pun_const( fd_keyload_load( tile->gossip.identity_key_path, /* pubkey only: */ 1 ) ), 32UL );
   FD_TEST( 4UL==getrandom( &ctx->rng_seed, 4UL, 0 ) );
   FD_TEST( 8UL==getrandom( &ctx->rng_idx,  8UL, 0 ) );
 }
@@ -244,14 +246,21 @@ unprivileged_init( fd_topo_t *      topo,
 
   fd_rng_t rng[ 1 ];
   FD_TEST( fd_rng_join( fd_rng_new( rng, ctx->rng_seed, ctx->rng_idx ) ) );
+
+  /* TODO setup my_contact_info */
+  if( tile->gossip.has_expected_shred_version ) {
+    ctx->my_contact_info->shred_version = tile->gossip.expected_shred_version;
+  } else {
+    ctx->my_contact_info->shred_version = 0;
+  }
+  ctx->my_contact_info->wallclock_nanos = ctx->last_wallclock;
+
   ctx->gossip = fd_gossip_join( fd_gossip_new( gossip,
                                                rng,
                                                tile->gossip.max_entries,
-                                               tile->gossip.has_expected_shred_version,
-                                               tile->gossip.expected_shred_version,
                                                tile->gossip.entrypoints_cnt,
                                                tile->gossip.entrypoints,
-                                               ctx->identity_key->uc,
+                                               ctx->my_contact_info,
 
                                                gossip_send_fn,
                                                (void*)ctx,

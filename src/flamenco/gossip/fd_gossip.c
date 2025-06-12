@@ -25,9 +25,10 @@ typedef struct failed_insert failed_insert_t;
    once capacity is reached. */
 struct push_state {
   uchar            msg[ 1232UL ];
-  ulong            msg_sz; /* Also functions as cursor */
+  ulong            msg_sz;    /* Also functions as cursor */
   ulong            num_crds;
   fd_ip4_port_t    push_dest[1];
+  uchar            has_my_ci; /* Whether my contact info is already in the push */
 };
 
 typedef struct push_state push_state_t;
@@ -51,6 +52,9 @@ struct fd_gossip_private {
   fd_rng_t *          rng;
   fd_bloom_t *        bloom;
 
+  /* TODO: has_shred_version */
+  ushort              expected_shred_version;
+
   struct {
     failed_insert_t * entries;
     ulong             cursor; /* index into next entry to write to */
@@ -64,6 +68,12 @@ struct fd_gossip_private {
 
   fd_gossip_send_fn   send_fn;
   void *              send_ctx;
+
+  struct {
+    uchar                       crds_val[ 1232UL ]; /* CRDS value for the push message */
+    ulong                       crds_val_sz;        /* Size of the CRDS value */
+    fd_gossip_view_crds_value_t contact_info[ 1 ];  /* CRDS view for the contact info */
+  } my_contact_info;
 
   /* Push state for each peer in the active set (300 max total) and entrypoints
      (16 max total). active_push_state tracks the active set, and must be
@@ -99,58 +109,22 @@ push_state_new( push_state_t * state,
                 uchar const * identity_pubkey ) {
   state->msg[ 0 ] = FD_GOSSIP_MESSAGE_PUSH;
   fd_memcpy( &state->msg[ 4 ], identity_pubkey, 32UL );
-  state->msg_sz = 36UL; /* 4 byte tag + 32 byte sender pubkey */
-  state->num_crds = 0UL;
-}
-
-static void
-push_state_flush( fd_gossip_t *   gossip,
-                  push_state_t *  state,
-                  long            now ) {
-  if( FD_UNLIKELY( !state->msg_sz ) ) return; /* Nothing to flush */
-
-  /* Send the message */
-  gossip->send_fn( gossip->send_ctx, state->msg, state->msg_sz, state->push_dest, (ulong)now );
-
-  /* Reset the push state */
-  state->msg_sz = 36UL; /* 4 byte tag + 32 byte sender pubkey */
-  state->num_crds = 0UL;
-}
-
-static void
-push_state_append_crds( fd_gossip_t *                       gossip,
-                        push_state_t *                      state,
-                        uchar const *                       payload,
-                        fd_gossip_view_crds_value_t const * crds_value,
-                        long                                now ) {
-  ulong remaining_space = sizeof(state->msg) - state->msg_sz;
-  if( FD_UNLIKELY( remaining_space<crds_value->length ) ) {
-    push_state_flush( gossip, state, now );
-  }
-  if( FD_UNLIKELY( remaining_space<crds_value->length ) ) {
-    FD_LOG_ERR(( "Not enough space in push state to append CRDS value even after flushing" ));
-  }
-  fd_memcpy( &state->msg[ state->msg_sz ], payload + crds_value->value_off, crds_value->length );
+  state->msg_sz     = 36UL; /* 4 byte tag + 32 byte sender pubkey */
+  state->num_crds   = 0UL;
+  state->has_my_ci  = 0;
 }
 
 void *
-fd_gossip_new( void *                shmem,
-               fd_rng_t *            rng,
-               ulong                 max_values,
-               int                   has_expected_shred_version,
-               ushort                expected_shred_version,
-               ulong                 entrypoints_cnt,
-               fd_ip4_port_t const * entrypoints,
-               uchar const *         identity_pubkey,
-               fd_gossip_send_fn     send_fn,
-               void *                send_ctx,
-               fd_gossip_sign_fn     sign_fn,
-               void *                sign_ctx ) {
-  (void)has_expected_shred_version;
-  (void)expected_shred_version;
-  (void)entrypoints;
-  (void)entrypoints_cnt;
-
+fd_gossip_new( void *                    shmem,
+               fd_rng_t *                rng,
+               ulong                     max_values,
+               ulong                     entrypoints_cnt,
+               fd_ip4_port_t const *     entrypoints,
+               fd_contact_info_t const * my_contact_info,
+               fd_gossip_send_fn         send_fn,
+               void *                    send_ctx,
+               fd_gossip_sign_fn         sign_fn,
+               void *                    sign_ctx ) {
   if( FD_UNLIKELY( !shmem ) ) {
     FD_LOG_ERR(( "NULL shmem" ));
   }
@@ -190,10 +164,6 @@ fd_gossip_new( void *                shmem,
   gossip->sign_fn          = sign_fn;
   gossip->sign_ctx         = sign_ctx;
 
-  // fd_gossip_set_expected_shred_version( gossip, has_expected_shred_version, expected_shred_version );
-  // fd_gossip_set_identity( gossip, identity_pubkey );
-  fd_memcpy( gossip->identity_pubkey, identity_pubkey, 32UL );
-
   /* Init push states */
   for( ulong i=0UL; i<300UL; i++ ) {
     push_state_new( &gossip->active_push_state[i], gossip->identity_pubkey );
@@ -204,6 +174,7 @@ fd_gossip_new( void *                shmem,
     *state->push_dest = gossip->entrypoints[i];
   }
 
+  fd_gossip_set_my_contact_info( gossip, my_contact_info );
   return gossip;
 }
 
@@ -232,6 +203,76 @@ static fd_ip4_port_t
 random_entrypoint( fd_gossip_t const * gossip ) {
   ulong idx = fd_rng_ulong_roll( gossip->rng, gossip->entrypoints_cnt );
   return gossip->entrypoints[ idx ];
+}
+
+static void
+push_state_flush( fd_gossip_t *   gossip,
+                  push_state_t *  state,
+                  long            now ) {
+  if( FD_UNLIKELY( !state->num_crds ) ) return; /* Nothing to flush */
+
+  /* Send the message */
+  gossip->send_fn( gossip->send_ctx, state->msg, state->msg_sz, state->push_dest, (ulong)now );
+
+  /* Reset the push state */
+  state->msg_sz     = 36UL; /* 4 byte tag + 32 byte sender pubkey */
+  state->num_crds   = 0UL;
+  state->has_my_ci  = 0;
+}
+
+static void
+push_state_append_crds( fd_gossip_t *                       gossip,
+                        push_state_t *                      state,
+                        uchar const *                       payload,
+                        fd_gossip_view_crds_value_t const * crds_value,
+                        long                                now ) {
+  ulong remaining_space = sizeof(state->msg) - state->msg_sz;
+  if( FD_UNLIKELY( remaining_space<crds_value->length ) ) {
+    push_state_flush( gossip, state, now );
+  }
+  if( FD_UNLIKELY( remaining_space<crds_value->length ) ) {
+    FD_LOG_ERR(( "Not enough space in push state to append CRDS value even after flushing" ));
+  }
+  fd_memcpy( &state->msg[ state->msg_sz ], payload + crds_value->value_off, crds_value->length );
+  state->msg_sz   += crds_value->length;
+  state->num_crds += 1UL;
+}
+
+static void
+push_my_contact_info( fd_gossip_t * gossip, long now ){
+  for( ulong i=0UL; i<300; i++ ) {
+    push_state_t * state = &gossip->active_push_state[i];
+    if( state->has_my_ci ) continue;
+    push_state_append_crds( gossip,
+                            state,
+                            gossip->my_contact_info.crds_val,
+                            gossip->my_contact_info.contact_info,
+                            now );
+    state->has_my_ci = 1;
+  }
+  for( ulong i=0UL; i<gossip->entrypoints_cnt; i++ ) {
+    push_state_t * state = &gossip->entrypt_push_state[i];
+    if( state->has_my_ci ) continue;
+    push_state_append_crds( gossip,
+                            state,
+                            gossip->my_contact_info.crds_val,
+                            gossip->my_contact_info.contact_info,
+                            now );
+    state->has_my_ci = 1;
+  }
+}
+
+void
+fd_gossip_set_my_contact_info(fd_gossip_t *             gossip,
+                              fd_contact_info_t const * contact_info ) {
+  fd_memcpy( gossip->identity_pubkey, contact_info->pubkey, 32UL );
+  gossip->expected_shred_version = contact_info->shred_version;
+
+  fd_gossip_crds_contact_info_encode( contact_info,
+                                      gossip->my_contact_info.crds_val,
+                                      1232UL,
+                                      &gossip->my_contact_info.crds_val_sz );
+  push_my_contact_info( gossip, contact_info->wallclock_nanos );
 }
 
 struct __attribute__((__packed__)) prune_sign_data_pre {
@@ -862,7 +903,6 @@ tx_pull_request( fd_gossip_t * gossip,
     peer = random_entrypoint( gossip );
   }
 
-  /* TODO: Send the pull request to the peer */
   uchar payload[ 1232UL ];
 
   fd_gossip_pull_request_encode_ctx_t ctx[ 1 ];
@@ -881,6 +921,12 @@ tx_pull_request( fd_gossip_t * gossip,
 
   /* TODO: contactinfo */
   long rem_sz = 1232L - (ctx->contact_info - payload);
+  if( FD_UNLIKELY( rem_sz<(long)gossip->my_contact_info.crds_val_sz ) ) {
+    FD_LOG_ERR(( "Not enough space in pull request for contact info, check bloom filter params" ));
+  }
+
+  fd_memcpy( ctx->contact_info, gossip->my_contact_info.crds_val, gossip->my_contact_info.crds_val_sz );
+
 
 }
 

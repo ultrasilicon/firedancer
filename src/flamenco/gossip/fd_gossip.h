@@ -3,6 +3,7 @@
 
 #include "../../util/rng/fd_rng.h"
 #include "../../util/net/fd_net_headers.h"
+#include "fd_contact_info.h"
 
 #define FD_GOSSIP_RX_OK                         (0)
 
@@ -94,18 +95,16 @@ FD_FN_CONST ulong
 fd_gossip_footprint( ulong max_values );
 
 void *
-fd_gossip_new( void *                shmem,
-               fd_rng_t *            rng,
-               ulong                 max_values,
-               int                   has_expected_shred_version,
-               ushort                expected_shred_version,
-               ulong                 entrypoints_cnt,
-               fd_ip4_port_t const * entrypoints,
-               uchar const *         identity_pubkey,
-               fd_gossip_send_fn     send_fn,
-               void *                send_ctx,
-               fd_gossip_sign_fn     sign_fn,
-               void *                sign_ctx );
+fd_gossip_new( void *                    shmem,
+               fd_rng_t *                rng,
+               ulong                     max_values,
+               ulong                     entrypoints_cnt,
+               fd_ip4_port_t const *     entrypoints,
+               fd_contact_info_t const * my_contact_info,
+               fd_gossip_send_fn         send_fn,
+               void *                    send_ctx,
+               fd_gossip_sign_fn         sign_fn,
+               void *                    sign_ctx );
 
 fd_gossip_t *
 fd_gossip_join( void * shgossip );
@@ -113,14 +112,28 @@ fd_gossip_join( void * shgossip );
 fd_gossip_metrics_t const *
 fd_gossip_metrics( fd_gossip_t const * gossip );
 
-void
-fd_gossip_set_expected_shred_version( fd_gossip_t * gossip,
-                                      int           has_expected_shred_version,
-                                      ushort        expected_shred_version );
+/* fd_gossip stores the node's contact info for various purposes:
 
+      - The pubkey specified in contact_info will serve as the
+        identity key, used in various checks of the rx path.
+
+        - Therefore this function also serves as the set_identity
+          function.
+
+      - If the shred version specified in the contact_info is non-zero,
+        it will be used to determine whether to accept or drop incoming
+        messages from peers.
+
+      - The contact info will be periodically gossiped to peers via
+        push messages.
+
+        - contact_info should have its wallclock correctly updated
+          in order to avoid timeouts on peers
+
+          TODO: update wallclock ourselves? */
 void
-fd_gossip_set_identity( fd_gossip_t * gossip,
-                        uchar const * identity_pubkey );
+fd_gossip_set_my_contact_info( fd_gossip_t *             gossip,
+                               fd_contact_info_t const * contact_info );
 
 /* fd_gossip_advance advances the gossip protocol to the provided time,
    performing any necessary updates and actions along the way.  The

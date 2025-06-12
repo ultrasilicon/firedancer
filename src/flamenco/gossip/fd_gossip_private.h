@@ -264,7 +264,7 @@ fd_gossip_pull_request_encode_bloom_bits( fd_gossip_pull_request_encode_ctx_t * 
 
 int
 fd_gossip_crds_contact_info_encode( fd_contact_info_t const * contact_info,
-                                    ulong *                   out_buf,
+                                    uchar *                   out_buf,
                                     ulong                     out_buf_cap,
                                     ulong *                   opt_encoded_sz );
 
@@ -272,7 +272,7 @@ fd_gossip_crds_contact_info_encode( fd_contact_info_t const * contact_info,
    compact-64 bit value */
 int
 fd_gossip_crds_contact_info_update_wallclock( ulong * contact_info_buf,
-                                              ulong   contact_info_buf_sz,
+                                              ulong * contact_info_buf_sz,
                                               ulong   contact_info_buf_cap,
                                               long    wallclock_nanos );
 
