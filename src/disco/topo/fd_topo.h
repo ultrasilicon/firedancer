@@ -450,6 +450,13 @@ typedef struct {
       char identity_key_path[ PATH_MAX ];
       char vote_acc_path[ PATH_MAX ];
     } tower;
+    struct {
+      char dump_path[ PATH_MAX ];
+
+      /* Set internally by the capture tile */
+      int shreds_fd;
+      int requests_fd;
+    } kappa;
   };
 } fd_topo_tile_t;
 
