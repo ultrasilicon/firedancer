@@ -395,10 +395,15 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
   fd_bank_mgr_last_restart_slot_save( slot_ctx->bank_mgr );
 
   /* FIXME: Remove the magic number here. */
+  FD_LOG_WARNING(("FOOTPRITN %lu", fd_clock_timestamp_vote_t_map_footprint( 50000UL )));
   fd_clock_timestamp_votes_global_t * clock_timestamp_votes = fd_bank_clock_timestamp_votes_modify( slot_ctx->banks, slot_ctx->bank );
+  FD_LOG_WARNING(("STFU ASDF %lu", slot_ctx->banks->clock_timestamp_votes_pool[1].next));
   uchar * clock_pool_mem = (uchar *)fd_ulong_align_up( (ulong)clock_timestamp_votes + sizeof(fd_clock_timestamp_votes_global_t), fd_clock_timestamp_vote_t_map_align() );
+  FD_LOG_WARNING(("STFU ASDF %lu", slot_ctx->banks->clock_timestamp_votes_pool[1].next));
   fd_clock_timestamp_vote_t_mapnode_t * clock_pool = fd_clock_timestamp_vote_t_map_join( fd_clock_timestamp_vote_t_map_new(clock_pool_mem, 50000UL ) );
+  FD_LOG_WARNING(("STFU ASDF %lu", slot_ctx->banks->clock_timestamp_votes_pool[1].next));
   clock_timestamp_votes->votes_pool_offset = (ulong)fd_clock_timestamp_vote_t_map_leave( clock_pool) - (ulong)clock_timestamp_votes;
+  FD_LOG_WARNING(("STFU ASDF %lu", slot_ctx->banks->clock_timestamp_votes_pool[1].next));
   clock_timestamp_votes->votes_root_offset = 0UL;
 
   recover_clock( slot_ctx, runtime_spad );

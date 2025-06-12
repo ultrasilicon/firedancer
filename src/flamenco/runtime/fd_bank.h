@@ -76,7 +76,7 @@ fd_bank_footprint( void );
 
 struct fd_bank_clock_timestamp_votes {
   ulong next;
-  uchar votes[2000000UL]__attribute__((aligned(128UL)));
+  uchar votes[5000000UL]__attribute__((aligned(128UL)));
 };
 typedef struct fd_bank_clock_timestamp_votes fd_bank_clock_timestamp_votes_t;
 

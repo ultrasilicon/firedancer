@@ -2174,6 +2174,8 @@ fd_vote_record_timestamp_vote_with_slot( fd_pubkey_t const *  vote_acc,
                                          fd_bank_t *          bank ) {
 
 
+  FD_TEST(banks->clock_timestamp_votes_pool[1].next != 24997);
+
   fd_rwlock_write( &bank->clock_timestamp_votes_lock );
 
   fd_clock_timestamp_votes_global_t * clock_timestamp_votes = fd_bank_clock_timestamp_votes_modify( banks, bank );
@@ -2181,7 +2183,7 @@ fd_vote_record_timestamp_vote_with_slot( fd_pubkey_t const *  vote_acc,
   fd_clock_timestamp_vote_t_mapnode_t * pool = fd_clock_timestamp_votes_votes_pool_join( clock_timestamp_votes );
   fd_clock_timestamp_vote_t_mapnode_t * root = fd_clock_timestamp_votes_votes_root_join( clock_timestamp_votes );
 
-  FD_LOG_WARNING(("RECORD"));
+  //FD_LOG_WARNING(("RECORD"));
 
   if( FD_UNLIKELY( !pool ) ) {
     FD_LOG_ERR(( "Timestamp vote account pool not allocated" ));

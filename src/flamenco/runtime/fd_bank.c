@@ -27,6 +27,7 @@ fd_bank_clock_timestamp_votes_query( fd_banks_t * banks, fd_bank_t * bank ) {
 
 fd_clock_timestamp_votes_global_t *
 fd_bank_clock_timestamp_votes_modify( fd_banks_t * banks, fd_bank_t * bank ) {
+
   /* If the dirty flag is set, then we already have a votes pool that
      corresponds to this bank and it can be returned. */
   if( bank->clock_timestamp_votes_dirty ) {
@@ -40,12 +41,17 @@ fd_bank_clock_timestamp_votes_modify( fd_banks_t * banks, fd_bank_t * bank ) {
      a parent bank if one exists and set the dirty flag. */
 
   fd_bank_clock_timestamp_votes_t * child_ctv = fd_bank_clock_timestamp_votes_pool_ele_acquire( banks->clock_timestamp_votes_pool );
+  if( FD_UNLIKELY( !child_ctv ) ) {
+    FD_LOG_CRIT(( "Failed to acquire clock timestamp votes pool element" ));
+  }
+
+  ulong child_idx = fd_bank_clock_timestamp_votes_pool_idx( banks->clock_timestamp_votes_pool, child_ctv );
   if( bank->clock_timestamp_votes_pool_idx!=fd_bank_clock_timestamp_votes_pool_idx_null( banks->clock_timestamp_votes_pool ) ) {
     fd_bank_clock_timestamp_votes_t * parent_ctv = fd_bank_clock_timestamp_votes_pool_ele( banks->clock_timestamp_votes_pool, bank->clock_timestamp_votes_pool_idx );
     memcpy( child_ctv->votes, parent_ctv->votes, 2000000UL );
   }
 
-  bank->clock_timestamp_votes_pool_idx = fd_bank_clock_timestamp_votes_pool_idx( banks->clock_timestamp_votes_pool, child_ctv );
+  bank->clock_timestamp_votes_pool_idx = child_idx;
   bank->clock_timestamp_votes_dirty    = 1;
 
   return (fd_clock_timestamp_votes_global_t *)child_ctv->votes;
@@ -92,6 +98,7 @@ fd_banks_new( void * shmem, ulong max_banks ) {
   void * map_mem                        = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_map_align(),                       fd_banks_map_footprint( max_banks ) );
   void * clock_timestamp_votes_pool_mem = FD_SCRATCH_ALLOC_APPEND( l, fd_bank_clock_timestamp_votes_pool_align(), fd_bank_clock_timestamp_votes_pool_footprint( max_banks ) );
 
+  memset( clock_timestamp_votes_pool_mem, 0, fd_bank_clock_timestamp_votes_pool_footprint( max_banks ) );
 
   if( FD_UNLIKELY( FD_SCRATCH_ALLOC_FINI( l, fd_banks_align() ) != (ulong)banks + fd_banks_footprint( max_banks ) ) ) {
     FD_LOG_WARNING(( "fd_banks_new: bad layout" ));
