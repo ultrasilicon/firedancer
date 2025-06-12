@@ -9,6 +9,7 @@
 #include "../fd_acc_mgr.h"
 #include "../fd_txncache.h"
 #include "../fd_bank_hash_cmp.h"
+#include "../fd_bank.h"
 
 /* Return data for syscalls */
 
@@ -70,6 +71,7 @@ struct fd_exec_txn_ctx {
   uchar                       bank_mgr_mem[48]__attribute__((aligned(8UL)));
   fd_bank_mgr_t *             bank_mgr;
 
+  fd_bank_t * bank;
 
   /* All pointers starting here are valid local joins in txn execution. */
   fd_features_t                        features;

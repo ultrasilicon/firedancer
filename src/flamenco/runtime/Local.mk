@@ -33,6 +33,9 @@ $(call add-objs,fd_runtime_public,fd_flamenco)
 $(call add-hdrs,fd_bank_mgr.h)
 $(call add-objs,fd_bank_mgr,fd_flamenco)
 
+$(call add-hdrs,fd_bank.h)
+$(call add-objs,fd_bank,fd_flamenco)
+
 $(call add-hdrs,fd_borrowed_account.h)
 $(call add-objs,fd_borrowed_account,fd_flamenco)
 
@@ -40,6 +43,8 @@ $(call add-hdrs, tests/fd_dump_pb.h)
 $(call add-objs, tests/fd_dump_pb,fd_flamenco)
 
 $(call add-hdrs,fd_rent_lists.h)
+
+$(call make-unit-test,test_bank,test_bank,fd_flamenco fd_ballet fd_util)
 
 $(call make-unit-test,test_txncache,test_txncache,fd_flamenco fd_ballet fd_util)
 

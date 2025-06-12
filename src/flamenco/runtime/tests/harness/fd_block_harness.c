@@ -244,6 +244,10 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   fd_bank_mgr_t   bank_mgr_obj;
   fd_bank_mgr_t * bank_mgr = fd_bank_mgr_join( &bank_mgr_obj, slot_ctx->funk, slot_ctx->funk_txn );
 
+  void * banks_mem = fd_spad_alloc( runner->spad, fd_banks_align(), fd_banks_footprint( 1UL ) );
+  fd_banks_t * banks = fd_banks_join( fd_banks_new( banks_mem, 1UL ) );
+  slot_ctx->bank = fd_banks_init_bank( banks, slot );
+
   ulong * prev_slot = fd_bank_mgr_prev_slot_modify( bank_mgr );
   *prev_slot = test_ctx->slot_ctx.prev_slot;
   fd_bank_mgr_prev_slot_save( bank_mgr );
@@ -385,7 +389,7 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   fd_bank_mgr_prev_lamports_per_signature_save( bank_mgr );
 
   /* Initialize the blockhash queue and recent blockhashes sysvar from the input blockhash queue */
-  fd_block_hash_queue_global_t * block_hash_queue = fd_bank_mgr_block_hash_queue_modify( bank_mgr );
+  fd_block_hash_queue_global_t * block_hash_queue = (fd_block_hash_queue_global_t *)&slot_ctx->bank->block_hash_queue[0];
   uchar * last_hash_mem = (uchar *)fd_ulong_align_up( (ulong)block_hash_queue + sizeof(fd_block_hash_queue_global_t), alignof(fd_hash_t) );
   uchar * ages_pool_mem = (uchar *)fd_ulong_align_up( (ulong)last_hash_mem + sizeof(fd_hash_t), fd_hash_hash_age_pair_t_map_align() );
   fd_hash_hash_age_pair_t_mapnode_t * ages_pool = fd_hash_hash_age_pair_t_map_join( fd_hash_hash_age_pair_t_map_new( ages_pool_mem, FD_BLOCKHASH_QUEUE_MAX_ENTRIES ) );
@@ -397,7 +401,6 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   block_hash_queue->last_hash_offset = (ulong)last_hash_mem - (ulong)block_hash_queue;
 
   fd_memset( last_hash_mem, 0, sizeof(fd_hash_t) );
-  fd_bank_mgr_block_hash_queue_save( bank_mgr );
 
   /* TODO: Restore this from input */
   fd_clock_timestamp_votes_global_t * clock_timestamp_votes = fd_bank_mgr_clock_timestamp_votes_modify( bank_mgr );

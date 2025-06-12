@@ -92,7 +92,7 @@ fd_hash_hash_age_pair_t_map_join_new( void * * alloc_mem, ulong len ) {
   return fd_hash_hash_age_pair_t_map_join( fd_hash_hash_age_pair_t_map_new( map_mem, len ) );
 }
 /* Encoded Size: Dynamic */
-struct fd_block_hash_queue {
+struct __attribute__((aligned(128UL))) fd_block_hash_queue {
   ulong last_hash_index;
   fd_hash_t * last_hash;
   fd_hash_hash_age_pair_t_mapnode_t * ages_pool;
@@ -100,9 +100,9 @@ struct fd_block_hash_queue {
   ulong max_age;
 };
 typedef struct fd_block_hash_queue fd_block_hash_queue_t;
-#define FD_BLOCK_HASH_QUEUE_ALIGN alignof(fd_block_hash_queue_t)
+#define FD_BLOCK_HASH_QUEUE_ALIGN (128UL)
 
-struct fd_block_hash_queue_global {
+struct __attribute__((aligned(128UL))) fd_block_hash_queue_global {
   ulong last_hash_index;
   ulong last_hash_offset;
   ulong ages_pool_offset;
@@ -110,7 +110,7 @@ struct fd_block_hash_queue_global {
   ulong max_age;
 };
 typedef struct fd_block_hash_queue_global fd_block_hash_queue_global_t;
-#define FD_BLOCK_HASH_QUEUE_GLOBAL_ALIGN alignof(fd_block_hash_queue_global_t)
+#define FD_BLOCK_HASH_QUEUE_GLOBAL_ALIGN (128UL)
 
 FD_FN_UNUSED static fd_hash_t * fd_block_hash_queue_last_hash_join( fd_block_hash_queue_global_t const * struct_mem ) {
   return (fd_hash_t *)fd_type_pun( (uchar *)struct_mem + struct_mem->last_hash_offset );

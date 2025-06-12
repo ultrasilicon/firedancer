@@ -10,6 +10,7 @@
 #include "../fd_txncache.h"
 #include "../fd_acc_mgr.h"
 #include "../fd_bank_hash_cmp.h"
+#include "../fd_bank.h"
 
 /* fd_exec_slot_ctx_t is the context that stays constant during all
    transactions in a block. */
@@ -20,6 +21,9 @@ struct fd_exec_slot_ctx {
   ulong                       slot;
 
   fd_funk_txn_t *             funk_txn;
+
+  fd_banks_t *                banks;
+  fd_bank_t *                 bank;
 
   fd_bank_hash_cmp_t *        bank_hash_cmp;
 

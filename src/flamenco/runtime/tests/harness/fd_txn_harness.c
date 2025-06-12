@@ -41,6 +41,12 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
 
   slot_ctx->bank_mgr = fd_bank_mgr_join( fd_bank_mgr_new( slot_ctx->bank_mgr_mem ), slot_ctx->funk, slot_ctx->funk_txn );
 
+  uchar * banks_mem = fd_spad_alloc( runner->spad, fd_banks_align(), fd_banks_footprint( 1UL ) );
+  slot_ctx->banks = fd_banks_join( fd_banks_new( banks_mem, 1UL ) );
+  FD_TEST( slot_ctx->banks );
+  slot_ctx->bank = fd_banks_init_bank( slot_ctx->banks, 0UL );
+  FD_TEST( slot_ctx->bank );
+
   /* Restore feature flags */
 
   fd_exec_test_feature_set_t const * feature_set = &test_ctx->epoch_ctx.features;
@@ -75,8 +81,6 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
 
   /* Add accounts to bpf program cache */
   fd_bpf_scan_and_create_bpf_program_cache_entry( slot_ctx, runner->spad );
-
-
 
   /* Setup Bank manager */
 
@@ -222,7 +226,7 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   ulong num_blockhashes = test_ctx->blockhash_queue_count;
 
   /* Blockhash queue init */
-  fd_block_hash_queue_global_t * block_hash_queue = fd_bank_mgr_block_hash_queue_modify( slot_ctx->bank_mgr );
+  fd_block_hash_queue_global_t * block_hash_queue = (fd_block_hash_queue_global_t *)&slot_ctx->bank->block_hash_queue[0];
   uchar * last_hash_mem = (uchar *)fd_ulong_align_up( (ulong)block_hash_queue + sizeof(fd_block_hash_queue_global_t), alignof(fd_hash_t) );
   uchar * ages_pool_mem = (uchar *)fd_ulong_align_up( (ulong)last_hash_mem + sizeof(fd_hash_t), fd_hash_hash_age_pair_t_map_align() );
   fd_hash_hash_age_pair_t_mapnode_t * ages_pool = fd_hash_hash_age_pair_t_map_join( fd_hash_hash_age_pair_t_map_new( ages_pool_mem, 400 ) );
@@ -232,9 +236,6 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   block_hash_queue->ages_pool_offset = (ulong)fd_hash_hash_age_pair_t_map_leave( ages_pool ) - (ulong)block_hash_queue;
   block_hash_queue->last_hash_index  = 0UL;
   block_hash_queue->last_hash_offset = (ulong)last_hash_mem - (ulong)block_hash_queue;
-
-  fd_bank_mgr_block_hash_queue_save( slot_ctx->bank_mgr );
-
 
   // Save lamports per signature for most recent blockhash, if sysvar cache contains recent block hashes
   fd_recent_block_hashes_global_t const * rbh_global = fd_sysvar_recent_hashes_read( funk, funk_txn, runner->spad );

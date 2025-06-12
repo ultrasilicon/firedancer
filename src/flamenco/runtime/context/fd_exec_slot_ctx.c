@@ -163,10 +163,13 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
                           fd_solana_manifest_global_t * manifest_global,
                           fd_spad_t *                  runtime_spad ) {
 
+  FD_TEST( slot_ctx->banks );
+  slot_ctx->bank = fd_banks_init_bank( slot_ctx->banks, manifest->bank.slot );
+  FD_TEST( slot_ctx->bank );
+  FD_LOG_WARNING(("BANK %p", (void*)slot_ctx->bank));
+
   fd_vote_accounts_pair_global_t_mapnode_t * vote_accounts_pool = fd_vote_accounts_vote_accounts_pool_join( &manifest_global->bank.stakes.vote_accounts );
   fd_vote_accounts_pair_global_t_mapnode_t * vote_accounts_root = fd_vote_accounts_vote_accounts_root_join( &manifest_global->bank.stakes.vote_accounts );
-
-
 
   for( fd_vote_accounts_pair_global_t_mapnode_t * n = fd_vote_accounts_pair_global_t_map_minimum( vote_accounts_pool, vote_accounts_root );
        n;
@@ -203,12 +206,16 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Block Hash Queue */
 
-  fd_block_hash_queue_global_t * bhq = fd_bank_mgr_block_hash_queue_modify( slot_ctx->bank_mgr );
+  FD_LOG_WARNING(("BANK %p", (void*)slot_ctx->bank));
 
+
+  fd_block_hash_queue_global_t * bhq = (fd_block_hash_queue_global_t *)&slot_ctx->bank->block_hash_queue[0];
   uchar * last_hash_mem = (uchar *)fd_ulong_align_up( (ulong)bhq + sizeof(fd_block_hash_queue_global_t), alignof(fd_hash_t) );
   uchar * ages_pool_mem = (uchar *)fd_ulong_align_up( (ulong)last_hash_mem + sizeof(fd_hash_t), fd_hash_hash_age_pair_t_map_align() );
+    FD_LOG_WARNING(("BANK %p", (void*)slot_ctx->bank));
 
-  fd_hash_hash_age_pair_t_mapnode_t * ages_pool = fd_hash_hash_age_pair_t_map_join( fd_hash_hash_age_pair_t_map_new( ages_pool_mem, 400 ) );
+
+  fd_hash_hash_age_pair_t_mapnode_t * ages_pool = fd_hash_hash_age_pair_t_map_join( fd_hash_hash_age_pair_t_map_new( ages_pool_mem, 301 ) );
   fd_hash_hash_age_pair_t_mapnode_t * ages_root = NULL;
 
   bhq->last_hash_index = oldbank->blockhash_queue.last_hash_index;
@@ -219,18 +226,24 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
   }
   bhq->last_hash_offset = (ulong)last_hash_mem - (ulong)bhq;
 
+    FD_LOG_WARNING(("BANK %p", (void*)slot_ctx->bank));
+
+
   for( ulong i=0UL; i<oldbank->blockhash_queue.ages_len; i++ ) {
     fd_hash_hash_age_pair_t * elem = &oldbank->blockhash_queue.ages[i];
     fd_hash_hash_age_pair_t_mapnode_t * node = fd_hash_hash_age_pair_t_map_acquire( ages_pool );
     node->elem = *elem;
     fd_hash_hash_age_pair_t_map_insert( ages_pool, &ages_root, node );
   }
+
+  FD_LOG_WARNING(("BANK %p", (void*)slot_ctx->bank));
   bhq->ages_pool_offset = (ulong)fd_hash_hash_age_pair_t_map_leave( ages_pool ) - (ulong)bhq;
   bhq->ages_root_offset = (ulong)ages_root - (ulong)bhq;
 
   bhq->max_age = oldbank->blockhash_queue.max_age;
 
-  fd_bank_mgr_block_hash_queue_save( slot_ctx->bank_mgr );
+
+  //fd_bank_mgr_block_hash_queue_save( slot_ctx->bank_mgr );
 
   /* Bank Hash */
   fd_hash_t * bank_hash = fd_bank_mgr_bank_hash_modify( slot_ctx->bank_mgr );

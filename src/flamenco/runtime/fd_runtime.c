@@ -3030,7 +3030,7 @@ fd_runtime_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
 
   /* Distribute rewards */
 
-  fd_block_hash_queue_global_t const * bhq              = fd_bank_mgr_block_hash_queue_query( slot_ctx->bank_mgr );
+  fd_block_hash_queue_global_t const * bhq              = (fd_block_hash_queue_global_t *)&slot_ctx->bank->block_hash_queue[0];
   fd_hash_t const *                    parent_blockhash = fd_block_hash_queue_last_hash_join( bhq );
 
   fd_begin_partitioned_rewards( slot_ctx,
@@ -3529,7 +3529,7 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
   *inflation = genesis_block->inflation;
   fd_bank_mgr_inflation_save( slot_ctx->bank_mgr );
 
-  fd_block_hash_queue_global_t *      block_hash_queue = fd_bank_mgr_block_hash_queue_modify( slot_ctx->bank_mgr );
+  fd_block_hash_queue_global_t *      block_hash_queue = (fd_block_hash_queue_global_t *)&slot_ctx->bank->block_hash_queue[0];
   uchar *                             last_hash_mem    = (uchar *)fd_ulong_align_up( (ulong)block_hash_queue + sizeof(fd_block_hash_queue_global_t), alignof(fd_hash_t) );
   uchar *                             ages_pool_mem    = (uchar *)fd_ulong_align_up( (ulong)last_hash_mem + sizeof(fd_hash_t), fd_hash_hash_age_pair_t_map_align() );
   fd_hash_hash_age_pair_t_mapnode_t * ages_pool        = fd_hash_hash_age_pair_t_map_join( fd_hash_hash_age_pair_t_map_new( ages_pool_mem, 400 ) );
@@ -3548,7 +3548,6 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
   block_hash_queue->ages_pool_offset = (ulong)fd_hash_hash_age_pair_t_map_leave( ages_pool ) - (ulong)block_hash_queue;
   block_hash_queue->ages_root_offset = (ulong)ages_root - (ulong)block_hash_queue;
   block_hash_queue->max_age          = FD_BLOCKHASH_QUEUE_MAX_ENTRIES;
-  fd_bank_mgr_block_hash_queue_save( slot_ctx->bank_mgr );
 
   fd_fee_rate_governor_t * fee_rate_governor = fd_bank_mgr_fee_rate_governor_query( slot_ctx->bank_mgr );
   *fee_rate_governor      = genesis_block->fee_rate_governor;
@@ -4226,6 +4225,10 @@ fd_runtime_publish_old_txns( fd_exec_slot_ctx_t * slot_ctx,
       if( FD_UNLIKELY( !fd_funk_txn_publish( funk, txn, 1 ) ) ) {
         FD_LOG_ERR(( "No transactions were published" ));
       }
+
+      /* Also publish the bank */
+      ulong slot = txn->xid.ul[0];
+      fd_banks_publish( slot_ctx->banks, slot );
 
       ulong * eah_start_slot = fd_bank_mgr_eah_start_slot_query( slot_ctx->bank_mgr );
       if( txn->xid.ul[0] >= *eah_start_slot ) {

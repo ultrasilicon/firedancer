@@ -152,7 +152,11 @@ struct fd_exec_tile_ctx {
   fd_bank_mgr_t *       bank_mgr;
 
   /* Current slot being executed. */
-  ulong               slot;
+  ulong                 slot;
+
+  /* Current bank being executed. */
+  fd_banks_t *           banks;
+  fd_bank_t *            bank;
 };
 typedef struct fd_exec_tile_ctx fd_exec_tile_ctx_t;
 
@@ -251,6 +255,13 @@ execute_txn( fd_exec_tile_ctx_t * ctx ) {
   if( FD_UNLIKELY( !ctx->bank_mgr ) ) {
     FD_LOG_ERR(( "Could not join bank mgr for slot %lu", ctx->slot ));
   }
+
+  ctx->bank = fd_banks_get_bank( ctx->banks, ctx->slot );
+  if( FD_UNLIKELY( !ctx->bank ) ) {
+    FD_LOG_ERR(( "Could not get bank for slot %lu", ctx->slot ));
+  }
+
+  ctx->txn_ctx->bank     = ctx->bank;
   ctx->txn_ctx->bank_mgr = ctx->bank_mgr;
   ctx->txn_ctx->slot     = *(fd_bank_mgr_slot_query( ctx->bank_mgr ));
   ctx->txn_ctx->features = *(fd_bank_mgr_features_query( ctx->bank_mgr ));
@@ -325,6 +336,7 @@ hash_accounts( fd_exec_tile_ctx_t *                ctx,
     FD_LOG_ERR(( "Could not join bank mgr for slot %lu", ctx->slot ));
   }
   ctx->txn_ctx->bank_mgr = ctx->bank_mgr;
+  ctx->txn_ctx->bank     = ctx->bank;
   ctx->txn_ctx->slot     = *(fd_bank_mgr_slot_query( ctx->bank_mgr ));
 
   ulong start_idx = msg->start_idx;
@@ -614,6 +626,17 @@ unprivileged_init( fd_topo_t *      topo,
   if( FD_UNLIKELY( !ctx->runtime_spad ) ) {
     FD_LOG_ERR(( "Failed to get and join runtime spad" ));
   }
+
+  /********************************************************************/
+  /* banks                                                            */
+  /********************************************************************/
+
+  ulong banks_obj_id = fd_pod_queryf_ulong( topo->props, ULONG_MAX, "banks" );
+  if( FD_UNLIKELY( banks_obj_id==ULONG_MAX ) ) {
+    FD_LOG_ERR(( "Could not find topology object for banks" ));
+  }
+
+  ctx->banks = fd_banks_join( fd_topo_obj_laddr( topo, banks_obj_id ) );
 
   /********************************************************************/
   /* spad allocator                                                   */

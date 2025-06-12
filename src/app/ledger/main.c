@@ -348,6 +348,9 @@ runtime_replay( fd_ledger_args_t * ledger_args ) {
     }
     fd_bank_mgr_max_tick_height_save( ledger_args->slot_ctx->bank_mgr );
 
+    FD_LOG_WARNING(("CLONING BANK %lu FROM %lu", slot, prev_slot));
+    ledger_args->slot_ctx->bank = fd_banks_clone_from_parent( ledger_args->slot_ctx->banks, slot, prev_slot );
+
     ulong blk_txn_cnt = 0UL;
     FD_LOG_NOTICE(( "Used memory in spad before slot=%lu %lu", slot, ledger_args->runtime_spad->mem_used ));
     FD_TEST( fd_runtime_block_eval_tpool( ledger_args->slot_ctx,
@@ -1086,6 +1089,11 @@ replay( fd_ledger_args_t * args ) {
   init_tpool( args ); /* Sets up tpool */
   init_exec_spads( args, 1 ); /* Sets up spad */
 
+  uchar *      banks_mem = fd_wksp_alloc_laddr( args->wksp, fd_banks_align(), fd_banks_footprint( 128UL ), 0xABCABC123 );
+  fd_banks_t * banks     = fd_banks_join( fd_banks_new( banks_mem, 128UL ) );
+  FD_TEST( banks );
+
+
   void * runtime_public_mem = fd_wksp_alloc_laddr( args->wksp,
     fd_runtime_public_align(),
     fd_runtime_public_footprint( args->runtime_mem_bound ), 0x3E64F44C9F44366AUL );
@@ -1115,6 +1123,8 @@ replay( fd_ledger_args_t * args ) {
 
   FD_TEST( args->slot_ctx->bank_mgr_mem );
   args->slot_ctx->bank_mgr = fd_bank_mgr_join( fd_bank_mgr_new( args->slot_ctx->bank_mgr_mem ), funk, NULL );
+  args->slot_ctx->banks    = banks;
+  FD_TEST( args->slot_ctx->banks );
 
   fd_cluster_version_t * cluster_version = fd_bank_mgr_cluster_version_modify( args->slot_ctx->bank_mgr );
 

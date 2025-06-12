@@ -74,7 +74,7 @@ most_recent_block_hash( fd_exec_instr_ctx_t * ctx,
   /* The environment config blockhash comes from `bank.last_blockhash_and_lamports_per_signature()`,
      which takes the top element from the blockhash queue.
      https://github.com/anza-xyz/agave/blob/v2.1.6/programs/system/src/system_instruction.rs#L47 */
-  fd_block_hash_queue_global_t * block_hash_queue = fd_bank_mgr_block_hash_queue_query( ctx->txn_ctx->bank_mgr );
+  fd_block_hash_queue_global_t * block_hash_queue = (fd_block_hash_queue_global_t *)&ctx->txn_ctx->bank->block_hash_queue[0];
   fd_hash_t const * last_hash = fd_block_hash_queue_last_hash_join( block_hash_queue );
   if( FD_UNLIKELY( last_hash==NULL ) ) {
     // Agave panics if this blockhash was never set at the start of the txn batch
@@ -878,7 +878,7 @@ fd_system_program_exec_upgrade_nonce_account( fd_exec_instr_ctx_t * ctx ) {
    Note: We check 151 and not 150 due to a known bug in agave. */
 int
 fd_check_transaction_age( fd_exec_txn_ctx_t * txn_ctx ) {
-  fd_block_hash_queue_global_t * block_hash_queue = fd_bank_mgr_block_hash_queue_query( txn_ctx->bank_mgr );
+  fd_block_hash_queue_global_t * block_hash_queue = (fd_block_hash_queue_global_t *)&txn_ctx->bank->block_hash_queue[0];
   fd_hash_t *                    last_blockhash   = fd_block_hash_queue_last_hash_join( block_hash_queue );
 
   /* check_transaction_age */

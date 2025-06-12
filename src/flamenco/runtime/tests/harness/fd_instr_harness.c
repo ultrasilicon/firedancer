@@ -49,12 +49,16 @@ fd_runtime_fuzz_instr_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   slot_ctx->funk         = funk;
   slot_ctx->runtime_wksp = runner->wksp;
 
-  /* Restore feature flags */
-
-
   /* Bank manager */
 
-  slot_ctx->bank_mgr = fd_bank_mgr_join( fd_bank_mgr_new( slot_ctx->bank_mgr_mem ), slot_ctx->funk, funk_txn );
+  uchar * banks_mem = fd_spad_alloc( runner->spad, fd_banks_align(), fd_banks_footprint( 1UL ) );
+  slot_ctx->banks = fd_banks_join( fd_banks_new( banks_mem, 1UL ) );
+  FD_TEST( slot_ctx->banks );
+
+  slot_ctx->bank = fd_banks_init_bank( slot_ctx->banks, 0UL );
+  FD_TEST( slot_ctx->bank );
+
+  slot_ctx->bank_mgr = fd_bank_mgr_join( fd_bank_mgr_new( slot_ctx->banks ), slot_ctx->funk, funk_txn );
 
   fd_features_t * features = fd_bank_mgr_features_modify( slot_ctx->bank_mgr );
   fd_exec_test_feature_set_t const * feature_set = &test_ctx->epoch_context.features;
@@ -73,7 +77,7 @@ fd_runtime_fuzz_instr_ctx_create( fd_runtime_fuzz_runner_t *           runner,
 
   /* Blockhash queue init */
 
-  fd_block_hash_queue_global_t * block_hash_queue = fd_bank_mgr_block_hash_queue_modify( slot_ctx->bank_mgr );
+  fd_block_hash_queue_global_t * block_hash_queue = (fd_block_hash_queue_global_t *)&slot_ctx->bank->block_hash_queue[0];
 
   uchar * last_hash_mem = (uchar *)fd_ulong_align_up( (ulong)block_hash_queue + sizeof(fd_block_hash_queue_global_t), alignof(fd_hash_t) );
   uchar * ages_pool_mem = (uchar *)fd_ulong_align_up( (ulong)last_hash_mem + sizeof(fd_hash_t), fd_hash_hash_age_pair_t_map_align() );
@@ -86,7 +90,6 @@ fd_runtime_fuzz_instr_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   block_hash_queue->last_hash_offset = (ulong)last_hash_mem - (ulong)block_hash_queue;
 
   memset( last_hash_mem, 0, sizeof(fd_hash_t) );
-  fd_bank_mgr_block_hash_queue_save( slot_ctx->bank_mgr );
 
   /* Set up txn context */
 
@@ -311,13 +314,14 @@ fd_runtime_fuzz_instr_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   if( rbh_global && !deq_fd_block_block_hash_entry_t_empty( rbh->hashes ) ) {
     fd_block_block_hash_entry_t const * last = deq_fd_block_block_hash_entry_t_peek_tail_const( rbh->hashes );
     if( last ) {
-      block_hash_queue = fd_bank_mgr_block_hash_queue_modify( slot_ctx->bank_mgr );
+      block_hash_queue = (fd_block_hash_queue_global_t *)&slot_ctx->bank->block_hash_queue[0];
       fd_hash_t * last_hash = fd_block_hash_queue_last_hash_join( block_hash_queue );
       fd_memcpy( last_hash, &last->blockhash, sizeof(fd_hash_t) );
-      fd_bank_mgr_block_hash_queue_save( slot_ctx->bank_mgr );
+
       ulong * lamports_per_signature = fd_bank_mgr_lamports_per_signature_modify( slot_ctx->bank_mgr );
       *lamports_per_signature = last->fee_calculator.lamports_per_signature;
       fd_bank_mgr_lamports_per_signature_save( slot_ctx->bank_mgr );
+
       ulong * prev_lamports_per_signature = fd_bank_mgr_prev_lamports_per_signature_modify( slot_ctx->bank_mgr );
       *prev_lamports_per_signature = last->fee_calculator.lamports_per_signature;
       fd_bank_mgr_prev_lamports_per_signature_save( slot_ctx->bank_mgr );

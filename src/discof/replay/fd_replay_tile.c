@@ -269,6 +269,8 @@ struct fd_replay_tile_ctx {
   ulong * exec_slice_deque; /* Deque to buffer exec slices - lives in spad */
 
   ulong enable_bank_hash_cmp;
+
+  fd_banks_t * banks;
 };
 typedef struct fd_replay_tile_ctx fd_replay_tile_ctx_t;
 
@@ -1210,6 +1212,10 @@ prepare_new_block_execution( fd_replay_tile_ctx_t * ctx,
   FD_TEST( fork == child );
 
   FD_LOG_NOTICE(( "new block execution - slot: %lu, parent_slot: %lu", curr_slot, ctx->parent_slot ));
+  ctx->slot_ctx->banks = ctx->banks;
+  FD_TEST( ctx->banks );
+  ctx->slot_ctx->bank = fd_banks_clone_from_parent( ctx->banks, curr_slot, ctx->parent_slot );
+  FD_TEST( ctx->slot_ctx->bank );
 
   /* if it is an epoch boundary, push out stake weights */
 
@@ -1327,7 +1333,7 @@ init_poh( fd_replay_tile_ctx_t * ctx ) {
   msg->ticks_per_slot   = *(fd_bank_mgr_ticks_per_slot_query( ctx->slot_ctx->bank_mgr ));
   msg->tick_duration_ns = (ulong)(*fd_bank_mgr_ns_per_slot_query( ctx->slot_ctx->bank_mgr ) / *(fd_bank_mgr_ticks_per_slot_query( ctx->slot_ctx->bank_mgr )));
 
-  fd_block_hash_queue_global_t * bhq       = fd_bank_mgr_block_hash_queue_query( ctx->slot_ctx->bank_mgr );
+  fd_block_hash_queue_global_t * bhq       = (fd_block_hash_queue_global_t *)&ctx->slot_ctx->bank->block_hash_queue[0];
   fd_hash_t *                    last_hash = fd_block_hash_queue_last_hash_join( bhq );
   if( last_hash ) {
     memcpy(msg->last_entry_hash, last_hash, sizeof(fd_hash_t));
@@ -1889,6 +1895,7 @@ init_snapshot( fd_replay_tile_ctx_t * ctx,
 
   uchar * slot_ctx_mem        = fd_spad_alloc_check( ctx->runtime_spad, FD_EXEC_SLOT_CTX_ALIGN, FD_EXEC_SLOT_CTX_FOOTPRINT );
   ctx->slot_ctx               = fd_exec_slot_ctx_join( fd_exec_slot_ctx_new( slot_ctx_mem ) );
+  ctx->slot_ctx->banks        = ctx->banks;
 
   ctx->slot_ctx->bank_mgr = fd_bank_mgr_join( fd_bank_mgr_new( ctx->slot_ctx->bank_mgr_mem ), ctx->funk, NULL );
 
@@ -2496,6 +2503,19 @@ privileged_init( fd_topo_t *      topo,
     FD_LOG_ERR(( "no runtime_public" ));
   }
 
+  /**********************************************************************/
+  /* banks                                                              */
+  /**********************************************************************/
+
+  ulong banks_obj_id = fd_pod_queryf_ulong( topo->props, ULONG_MAX, "banks" );
+  if( FD_UNLIKELY( banks_obj_id==ULONG_MAX ) ) {
+    FD_LOG_ERR(( "no banks" ));
+  }
+
+  ctx->banks = fd_banks_join( fd_topo_obj_laddr( topo, banks_obj_id ) );
+  if( FD_UNLIKELY( !ctx->banks ) ) {
+    FD_LOG_ERR(( "failed to join banks" ));
+  }
 
   /* Open Funk */
   fd_funk_txn_start_write( NULL );

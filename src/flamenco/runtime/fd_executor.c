@@ -1288,6 +1288,8 @@ fd_exec_txn_ctx_from_exec_slot_ctx( fd_exec_slot_ctx_t const * slot_ctx,
   ctx->enable_exec_recording       = slot_ctx->enable_exec_recording;
 
   ctx->bank_mgr = fd_bank_mgr_join( fd_bank_mgr_new( ctx->bank_mgr_mem ), slot_ctx->funk, slot_ctx->funk_txn );
+  ctx->bank = slot_ctx->bank;
+  FD_TEST( ctx->bank );
 
   ulong * slot = fd_bank_mgr_slot_query( ctx->bank_mgr );
   ctx->slot = !!slot ? *slot : 0UL;

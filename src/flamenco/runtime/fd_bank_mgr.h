@@ -121,7 +121,6 @@ if( FD_UNLIKELY( !bank_mgr ) ) {                                                
 /* Add new members to the bank manager here. */
 /*  Type,                              name,                        id,   footprint,   align */
 #define FD_BANK_MGR_ITER(X)                                                                    \
-  X(fd_block_hash_queue_global_t,      block_hash_queue,            0UL,  50000UL,     1024UL) \
   X(ulong,                             slot,                        1UL,  8UL,         8UL   ) \
   X(fd_fee_rate_governor_t,            fee_rate_governor,           2UL,  40UL,        8UL   ) \
   X(ulong,                             capitalization,              3UL,  8UL,         8UL   ) \
