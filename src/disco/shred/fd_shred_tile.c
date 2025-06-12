@@ -571,6 +571,11 @@ during_frag( fd_shred_ctx_t * ctx,
         ulong padding_sz      = load_for_32_shreds - last_load_sz;
         ulong batch_sz_padded = batch_sz + padding_sz;
 
+        /* ................. */
+        /* TODO remove when ready */
+        FD_TEST( (batch_sz_padded % load_for_32_shreds) == 0 );
+        /* ................. */
+
         if( FD_UNLIKELY( SHOULD_PROCESS_THESE_SHREDS ) ) {
           /* If it's our turn, shred this batch. FD_UNLIKELY because shred
              tile cnt generally >= 2 */
@@ -590,6 +595,33 @@ during_frag( fd_shred_ctx_t * ctx,
             fd_fec_set_t * out = ctx->fec_sets + ctx->shredder_fec_set_idx;
 
             FD_TEST( fd_shredder_next_fec_set( ctx->shredder, out, chained_merkle_root ) );
+
+            /* ................. */
+            /* TODO remove when ready*/
+            if( FD_UNLIKELY( out->data_shred_cnt!=32UL ) ) {
+              FD_LOG_WARNING(( "out->data_shred_cnt %lu", out->data_shred_cnt ));
+              FD_LOG_WARNING(( "... load_for_32_shreds %lu entry_sz %lu batch_sz %lu padding_sz %lu batch_sz_padded %lu microblocks %lu", load_for_32_shreds, entry_sz, batch_sz, padding_sz, batch_sz_padded, ctx->pending_batch.microblock_cnt )); }
+            FD_TEST( out->data_shred_cnt==32UL );
+
+            if( FD_UNLIKELY( out->parity_shred_cnt!=32UL ) ) {
+              FD_LOG_WARNING(( "out->parity_shred_cnt %lu", out->parity_shred_cnt )); }
+            FD_TEST( out->parity_shred_cnt==32UL );
+
+            uchar * * data_shreds = out->data_shreds;
+            for( ulong si=0UL; si<out->data_shred_cnt; si++ ) {
+              fd_shred_t * shred = (fd_shred_t *)data_shreds[ si ];
+              FD_TEST( shred->slot == target_slot );
+              FD_TEST( shred->idx == (uint)(ctx->shredder->data_idx_offset-out->data_shred_cnt+si) );
+              FD_TEST( shred->fec_set_idx == (uint)(ctx->shredder->data_idx_offset-out->data_shred_cnt) );
+              uchar exp_flags_mask = 0xc0;
+              uchar flags_for_last = 0;
+              flags_for_last |= (uchar)fd_ulong_if( (pend_sz <= load_for_32_shreds) && (entry_meta->block_complete), 0x80, 0x00 );
+              flags_for_last |= (uchar)fd_ulong_if( (pend_sz <= load_for_32_shreds), 0x40, 0x00 );
+              uchar exp_flags = (uchar)fd_ulong_if( si==(out->data_shred_cnt-1), flags_for_last, 0);
+              if( FD_UNLIKELY( ((uchar)(shred->data.flags & exp_flags_mask)) != exp_flags ) ) { FD_LOG_WARNING(( "si %lu, pend_sz %lu <= %lu load_for_32_shreds, entry_meta->block_complete %d, exp_flags %02x got_flags %02x", si, pend_sz, load_for_32_shreds, entry_meta->block_complete, exp_flags, (uchar)(shred->data.flags & exp_flags_mask) )); }
+              FD_TEST( ((uchar)(shred->data.flags & exp_flags_mask)) == exp_flags );
+            }
+            /* ................. */
 
             d_rcvd_join( d_rcvd_new( d_rcvd_delete( d_rcvd_leave( out->data_shred_rcvd   ) ) ) );
             p_rcvd_join( p_rcvd_new( p_rcvd_delete( p_rcvd_leave( out->parity_shred_rcvd ) ) ) );
@@ -946,6 +978,17 @@ after_frag( fd_shred_ctx_t *    ctx,
 
     ulong s34_cnt     = 2UL + !!(s34[ 1 ].shred_cnt) + !!(s34[ 3 ].shred_cnt);
     ulong txn_per_s34 = shredded_txn_cnt[ fset_k ] / s34_cnt;
+
+    /* ................. */
+    /* TODO remove when ready */
+    if(ctx->in_kind[ in_idx ]==IN_KIND_POH) {
+      FD_TEST( set->data_shred_cnt==32UL );
+      FD_TEST( set->parity_shred_cnt==32UL );
+      FD_TEST( s34[ 1 ].shred_cnt==0UL );
+      FD_TEST( s34[ 3 ].shred_cnt==0UL );
+      FD_TEST( s34_cnt==2UL );
+    }
+    /* ................. */
 
     /* Attribute the transactions evenly to the non-empty shred34s */
     for( ulong j=0UL; j<4UL; j++ ) s34[ j ].est_txn_cnt = fd_ulong_if( s34[ j ].shred_cnt>0UL, txn_per_s34, 0UL );
