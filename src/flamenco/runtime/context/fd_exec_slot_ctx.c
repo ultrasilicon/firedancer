@@ -267,21 +267,15 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Lamports Per Signature */
 
-  ulong * lamports_per_signature = fd_bank_mgr_lamports_per_signature_modify( slot_ctx->bank_mgr );
-  *lamports_per_signature = manifest->lamports_per_signature;
-  fd_bank_mgr_lamports_per_signature_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->lamports_per_signature = manifest->lamports_per_signature;
 
   /* Previous Lamports Per Signature */
 
-  ulong * prev_lamports_per_signature = fd_bank_mgr_prev_lamports_per_signature_modify( slot_ctx->bank_mgr );
-  *prev_lamports_per_signature = manifest->lamports_per_signature;
-  fd_bank_mgr_prev_lamports_per_signature_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->prev_lamports_per_signature = manifest->lamports_per_signature;
 
   /* Transaction Count */
 
-  ulong * transaction_count = fd_bank_mgr_transaction_count_modify( slot_ctx->bank_mgr );
-  *transaction_count = oldbank->transaction_count;
-  fd_bank_mgr_transaction_count_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->transaction_count = oldbank->transaction_count;
 
   /* Parent Signature Count */
 

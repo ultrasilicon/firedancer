@@ -88,13 +88,9 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   *prev_slot = slot_ctx->slot - 1; // Can underflow, but its fine since it will correctly be ULONG_MAX
   fd_bank_mgr_prev_slot_save( slot_ctx->bank_mgr );
 
-  ulong * lamports_per_signature = fd_bank_mgr_lamports_per_signature_modify( slot_ctx->bank_mgr );
-  *lamports_per_signature = 5000;
-  fd_bank_mgr_lamports_per_signature_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->lamports_per_signature = 5000UL;
 
-  ulong * prev_lamports_per_signature = fd_bank_mgr_prev_lamports_per_signature_modify( slot_ctx->bank_mgr );
-  *prev_lamports_per_signature = 5000;
-  fd_bank_mgr_prev_lamports_per_signature_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->prev_lamports_per_signature = 5000UL;
 
   slot_ctx->bank->fee_rate_governor.burn_percent                  = 50;
   slot_ctx->bank->fee_rate_governor.min_lamports_per_signature    = 0;
@@ -245,13 +241,9 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   if( rbh_global && !deq_fd_block_block_hash_entry_t_empty( rbh->hashes ) ) {
     fd_block_block_hash_entry_t const * last = deq_fd_block_block_hash_entry_t_peek_head_const( rbh->hashes );
     if( last && last->fee_calculator.lamports_per_signature!=0UL ) {
-      lamports_per_signature = fd_bank_mgr_lamports_per_signature_modify( slot_ctx->bank_mgr );
-      *lamports_per_signature = last->fee_calculator.lamports_per_signature;
-      fd_bank_mgr_lamports_per_signature_save( slot_ctx->bank_mgr );
+      slot_ctx->bank->lamports_per_signature = last->fee_calculator.lamports_per_signature;
+      slot_ctx->bank->prev_lamports_per_signature = last->fee_calculator.lamports_per_signature;
 
-      ulong * prev_lamports_per_signature = fd_bank_mgr_prev_lamports_per_signature_modify( slot_ctx->bank_mgr );
-      *prev_lamports_per_signature = last->fee_calculator.lamports_per_signature;
-      fd_bank_mgr_prev_lamports_per_signature_save( slot_ctx->bank_mgr );
     }
   }
 

@@ -78,8 +78,6 @@ fd_sysvar_recent_hashes_init( fd_exec_slot_ctx_t * slot_ctx,
 static void
 register_blockhash( fd_exec_slot_ctx_t * slot_ctx, fd_hash_t const * hash ) {
 
-  ulong * lamports_per_signature = fd_bank_mgr_lamports_per_signature_query( slot_ctx->bank_mgr );
-
   fd_block_hash_queue_global_t *      bhq       = (fd_block_hash_queue_global_t *)&slot_ctx->bank->block_hash_queue[0];
   fd_hash_hash_age_pair_t_mapnode_t * ages_pool = fd_block_hash_queue_ages_pool_join( bhq );
   fd_hash_hash_age_pair_t_mapnode_t * ages_root = fd_block_hash_queue_ages_root_join( bhq );
@@ -93,7 +91,6 @@ register_blockhash( fd_exec_slot_ctx_t * slot_ctx, fd_hash_t const * hash ) {
          Agave to stay conformant with their implementation.
          https://github.com/anza-xyz/agave/blob/e8750ba574d9ac7b72e944bc1227dc7372e3a490/accounts-db/src/blockhash_queue.rs#L109 */
       if( bhq->last_hash_index - n->elem.val.hash_index > bhq->max_age ) {
-        FD_LOG_WARNING(("REMOVING %lu", bhq->last_hash_index - n->elem.val.hash_index));
         fd_hash_hash_age_pair_t_map_remove( ages_pool, &ages_root, n );
         fd_hash_hash_age_pair_t_map_release( ages_pool, n );
       }
@@ -103,7 +100,7 @@ register_blockhash( fd_exec_slot_ctx_t * slot_ctx, fd_hash_t const * hash ) {
   fd_hash_hash_age_pair_t_mapnode_t * node = fd_hash_hash_age_pair_t_map_acquire( ages_pool );
   node->elem = (fd_hash_hash_age_pair_t){
     .key = *hash,
-    .val = (fd_hash_age_t){ .hash_index = bhq->last_hash_index, .fee_calculator = (fd_fee_calculator_t){.lamports_per_signature = *lamports_per_signature}, .timestamp = (ulong)fd_log_wallclock() }
+    .val = (fd_hash_age_t){ .hash_index = bhq->last_hash_index, .fee_calculator = (fd_fee_calculator_t){ .lamports_per_signature = slot_ctx->bank->lamports_per_signature }, .timestamp = (ulong)fd_log_wallclock() }
   };
   // https://github.com/anza-xyz/agave/blob/e8750ba574d9ac7b72e944bc1227dc7372e3a490/accounts-db/src/blockhash_queue.rs#L121-L128
   fd_hash_hash_age_pair_t_map_insert( ages_pool, &ages_root, node );

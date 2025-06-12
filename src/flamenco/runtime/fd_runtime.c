@@ -1009,7 +1009,6 @@ fd_runtime_new_fee_rate_governor_derived( fd_exec_slot_ctx_t *   slot_ctx,
                                           ulong                  latest_singatures_per_slot ) {
 
   fd_fee_rate_governor_t * base_fee_rate_governor = &slot_ctx->bank->fee_rate_governor;
-  ulong *                  lamports_per_signature = fd_bank_mgr_lamports_per_signature_query( slot_ctx->bank_mgr );
 
   fd_fee_rate_governor_t me = {
     .target_signatures_per_slot    = base_fee_rate_governor->target_signatures_per_slot,
@@ -1032,7 +1031,7 @@ fd_runtime_new_fee_rate_governor_derived( fd_exec_slot_ctx_t *   slot_ctx,
         / me.target_signatures_per_slot
       )
     );
-    long gap = (long)desired_lamports_per_signature - (long)*lamports_per_signature;
+    long gap = (long)desired_lamports_per_signature - (long)slot_ctx->bank->lamports_per_signature;
     if ( gap == 0 ) {
       new_lamports_per_signature = desired_lamports_per_signature;
     } else {
@@ -1043,7 +1042,7 @@ fd_runtime_new_fee_rate_governor_derived( fd_exec_slot_ctx_t *   slot_ctx,
         me.max_lamports_per_signature,
         fd_ulong_max(
           me.min_lamports_per_signature,
-          (ulong)((long)*lamports_per_signature + gap_adjust)
+          (ulong)((long)slot_ctx->bank->lamports_per_signature + gap_adjust)
         )
       );
     }
@@ -1053,19 +1052,15 @@ fd_runtime_new_fee_rate_governor_derived( fd_exec_slot_ctx_t *   slot_ctx,
     me.max_lamports_per_signature = me.target_lamports_per_signature;
   }
 
-  ulong * prev_lamports_per_signature = fd_bank_mgr_prev_lamports_per_signature_modify( slot_ctx->bank_mgr );
-  if( FD_UNLIKELY( *lamports_per_signature==0UL ) ) {
-    *prev_lamports_per_signature = new_lamports_per_signature;
+  if( FD_UNLIKELY( slot_ctx->bank->lamports_per_signature==0UL ) ) {
+    slot_ctx->bank->prev_lamports_per_signature = new_lamports_per_signature;
   } else {
-    *prev_lamports_per_signature = *lamports_per_signature;
+    slot_ctx->bank->prev_lamports_per_signature = slot_ctx->bank->lamports_per_signature;
   }
-  fd_bank_mgr_prev_lamports_per_signature_save( slot_ctx->bank_mgr );
 
   slot_ctx->bank->fee_rate_governor = me;
 
-  lamports_per_signature = fd_bank_mgr_lamports_per_signature_modify( slot_ctx->bank_mgr );
-  *lamports_per_signature = new_lamports_per_signature;
-  fd_bank_mgr_lamports_per_signature_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->lamports_per_signature = new_lamports_per_signature;
 }
 
 static int
@@ -3541,13 +3536,9 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
 
   slot_ctx->bank->fee_rate_governor = genesis_block->fee_rate_governor;
 
-  ulong * lamports_per_signature = fd_bank_mgr_lamports_per_signature_modify( slot_ctx->bank_mgr );
-  *lamports_per_signature = 0UL;
-  fd_bank_mgr_lamports_per_signature_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->lamports_per_signature = 0UL;
 
-  ulong * prev_lamports_per_signature = fd_bank_mgr_prev_lamports_per_signature_modify( slot_ctx->bank_mgr );
-  *prev_lamports_per_signature = 0UL;
-  fd_bank_mgr_prev_lamports_per_signature_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->prev_lamports_per_signature = 0UL;
 
   ulong * max_tick_height = fd_bank_mgr_max_tick_height_modify( slot_ctx->bank_mgr );
   *max_tick_height = genesis_block->ticks_per_slot * (slot_ctx->slot + 1);
@@ -4508,9 +4499,7 @@ fd_runtime_block_eval_tpool( fd_exec_slot_ctx_t * slot_ctx,
                 tps,
                 FD_BASE58_ENC_32_ALLOCA( leader ) ));
 
-  ulong * transaction_count = fd_bank_mgr_transaction_count_modify( slot_ctx->bank_mgr );
-  *transaction_count += block_info.txn_cnt;
-  fd_bank_mgr_transaction_count_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->transaction_count += block_info.txn_cnt;
 
   ulong * prev_slot = fd_bank_mgr_prev_slot_modify( slot_ctx->bank_mgr );
   *prev_slot = slot;
