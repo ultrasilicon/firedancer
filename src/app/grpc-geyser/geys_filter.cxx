@@ -20,6 +20,10 @@ struct CompiledFilterAccount {
     std::vector<fd_hash_t> owners_;
 };
 
+struct CompiledFilterSlot {
+    std::string name_;
+};
+
 class CompiledFilter {
   public:
     static CompiledFilter * compile(::geyser::SubscribeRequest * request) {
@@ -31,11 +35,13 @@ class CompiledFilter {
     }
 
     bool filterAccount(fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz);
+    bool filterSlot(fd_replay_notif_msg_t * msg);
 
   private:
     bool compile_internal(::geyser::SubscribeRequest * request);
 
     std::vector<std::unique_ptr<CompiledFilterAccount>> accts_;
+    std::vector<std::unique_ptr<CompiledFilterSlot>> slots_;
 };
 
 bool
@@ -59,6 +65,12 @@ CompiledFilter::compile_internal(::geyser::SubscribeRequest * request) {
     accts_.emplace_back(a);
   }
 
+  for( auto& i : request->slots() ) {
+    auto* a = new CompiledFilterSlot();
+    a->name_ = i.first;
+    slots_.emplace_back(a);
+  }
+
   return true;
 }
 
@@ -75,6 +87,14 @@ CompiledFilter::filterAccount(fd_pubkey_t * key, fd_account_meta_t * meta, const
   return false;
 }
 
+bool
+CompiledFilter::filterSlot(fd_replay_notif_msg_t * msg) {
+  if( !slots_.empty() ) {
+    return true;
+  }
+  return false;
+}
+
 struct geys_filter {
     struct Elem {
         CompiledFilter * filter_;
@@ -87,6 +107,7 @@ struct geys_filter {
 
     geys_filter(fd_spad_t * spad, fd_funk_t * funk) : spad_(spad), funk_(funk) { }
     void filter_acct(ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz);
+    void filter_slot(fd_replay_notif_msg_t * msg);
 };
 
 geys_filter_t *
@@ -141,8 +162,26 @@ geys_filter::filter_acct(ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta
 }
 
 void
+geys_filter::filter_slot(fd_replay_notif_msg_t * msg) {
+  for( auto& i : elems_ ) {
+    if( i.filter_->filterSlot(msg) ) {
+
+      auto* update = new ::geyser::SubscribeUpdate();
+      auto* slot = new ::geyser::SubscribeUpdateSlot();
+      update->set_allocated_slot(slot);
+      slot->set_slot(msg->slot_exec.slot);
+      slot->set_parent(msg->slot_exec.parent);
+
+      i.reactor_->Update( update );
+    }
+  }
+}
+
+void
 geys_filter_notify(geys_filter_t * filter, fd_replay_notif_msg_t * msg, uchar * blk_data, ulong blk_sz) {
   filter->serv_->notify(msg);
+
+  filter->filter_slot(msg);
 
   fd_funk_txn_map_t * txn_map = fd_funk_txn_map( filter->funk_ );
   fd_funk_txn_xid_t xid;

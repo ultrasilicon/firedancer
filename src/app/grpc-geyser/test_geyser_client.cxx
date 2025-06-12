@@ -35,6 +35,14 @@ printUpdate(::geyser::SubscribeUpdate const * update) {
       "  owner=" << std::string(owner, owner_len) << "\n" <<
       "  executable=" << info.executable() << "\n";
   }
+
+  if( update->update_oneof_case() == ::geyser::SubscribeUpdate::kSlot ) {
+    auto& slot = update->slot();
+    std::cout <<
+      "slot\n" <<
+      "  slot=" << slot.slot() << "\n" <<
+      "  parent=" << slot.parent() << "\n";
+  }
 }
 
 class GeyserClient {
@@ -183,9 +191,13 @@ class GeyserClient {
     void testSubscribe() {
       // Data we are sending to the server.
       ::geyser::SubscribeRequest request;
+
       ::geyser::SubscribeRequestFilterAccounts a;
       a.add_owner()->operator=("Vote111111111111111111111111111111111111111");
       request.mutable_accounts()->insert({"test", a});
+
+      ::geyser::SubscribeRequestFilterSlots b;
+      request.mutable_slots()->insert({"test2", b});
 
       // Container for the data we expect from the server.
       ::geyser::SubscribeUpdate update;
@@ -198,7 +210,7 @@ class GeyserClient {
       auto rpc(stub_->Subscribe(&context));
       rpc->Write(request);
 
-      for( unsigned cnt = 0; cnt < 10; ) {
+      for( unsigned cnt = 0; cnt < 50; ) {
         if( rpc->Read(&update) ) {
           printUpdate(&update);
           ++cnt;
