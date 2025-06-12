@@ -31,6 +31,9 @@
    12 peers in each bucket.  The bloom filter is used to track which
    origins the peer has pruned. */
 
+#define FD_ACTIVE_SET_STAKE_ENTRIES    (25UL)
+#define FD_ACTIVE_SET_PEERS_PER_ENTRY  (12UL)
+#define FD_ACTIVE_SET_MAX_PEERS        (FD_ACTIVE_SET_STAKE_ENTRIES*FD_ACTIVE_SET_PEERS_PER_ENTRY) /* 300 */
 struct fd_active_set_peer {
   uchar        pubkey[ 32UL ];
   fd_bloom_t * bloom;
@@ -41,7 +44,7 @@ typedef struct fd_active_set_peer fd_active_set_peer_t;
 struct fd_active_set_entry {
   ulong                nodes_idx;
   ulong                nodes_len;
-  fd_active_set_peer_t nodes[ 12UL ][ 1UL ];
+  fd_active_set_peer_t nodes[ FD_ACTIVE_SET_PEERS_PER_ENTRY ][ 1UL ];
 };
 
 typedef struct fd_active_set_entry fd_active_set_entry_t;
@@ -49,7 +52,7 @@ typedef struct fd_active_set_entry fd_active_set_entry_t;
 #define FD_ACTIVE_SET_ALIGN     (64UL)
 
 struct __attribute__((aligned(FD_ACTIVE_SET_ALIGN))) fd_active_set_private {
-  fd_active_set_entry_t entries[ 25UL ][ 1UL ];
+  fd_active_set_entry_t entries[ FD_ACTIVE_SET_STAKE_ENTRIES ][ 1UL ];
 
   fd_rng_t * rng;
 

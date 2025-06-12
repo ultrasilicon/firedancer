@@ -75,10 +75,10 @@ struct fd_gossip_private {
     fd_gossip_view_crds_value_t contact_info[ 1 ];  /* CRDS view for the contact info */
   } my_contact_info;
 
-  /* Push state for each peer in the active set (300 max total) and entrypoints
+  /* Push state for each peer in the active set and entrypoints
      (16 max total). active_push_state tracks the active set, and must be
      flushed prior to a call to fd_active_set_rotate or fd_active_set_prune. */
-  push_state_t        active_push_state[ 300UL ];
+  push_state_t        active_push_state[ FD_ACTIVE_SET_MAX_PEERS ];
 
   /* entrypt_push_set is a separate push set that is used on a separate regime,
      typically at bootup when the active set is sparse  */
@@ -165,7 +165,7 @@ fd_gossip_new( void *                    shmem,
   gossip->sign_ctx         = sign_ctx;
 
   /* Init push states */
-  for( ulong i=0UL; i<300UL; i++ ) {
+  for( ulong i=0UL; i<FD_ACTIVE_SET_MAX_PEERS; i++ ) {
     push_state_new( &gossip->active_push_state[i], gossip->identity_pubkey );
   }
   for( ulong i=0UL; i<entrypoints_cnt; i++ ) {
@@ -240,7 +240,7 @@ push_state_append_crds( fd_gossip_t *                       gossip,
 
 static void
 push_my_contact_info( fd_gossip_t * gossip, long now ){
-  for( ulong i=0UL; i<300; i++ ) {
+  for( ulong i=0UL; i<FD_ACTIVE_SET_MAX_PEERS; i++ ) {
     push_state_t * state = &gossip->active_push_state[i];
     if( state->has_my_ci ) continue;
     push_state_append_crds( gossip,
@@ -832,8 +832,8 @@ tx_ping( fd_gossip_t * gossip,
   //                                          ignore_prunes_if_peer_is_origin,
   //                                          nodes );
 
-  //   ulong targets_len[ 300UL ] = { 0UL };
-  //   fd_crds_value_t * targets[ 300UL ][ 4096UL ];
+  //   ulong targets_len[ FD_ACTIVE_SET_MAX_PEERSUL ] = { 0UL };
+  //   fd_crds_value_t * targets[ FD_ACTIVE_SET_MAX_PEERSUL ][ 4096UL ];
 
   //   for( ulong i=0UL i<fd_ulong_min( 9UL, nodes_len ); i++ ) {
   //     targets[ nodes[ i ] ][ targets_len[ nodes[ i ] ] ] = value;
@@ -845,7 +845,7 @@ tx_ping( fd_gossip_t * gossip,
   //   if( FD_UNLIKELY( num_pushes>=4096UL ) ) break;
   // }
 
-  // for( ulong i=0UL; i<300UL; i++ ) {
+  // for( ulong i=0UL; i<FD_ACTIVE_SET_MAX_PEERSUL; i++ ) {
   //   fd_gossip_push_t * push = new_outgoing( gossip );
 
   //   for( ulong j=0UL; j<targets_len[ i ]; j++ ) {
