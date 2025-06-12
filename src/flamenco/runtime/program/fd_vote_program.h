@@ -10,6 +10,7 @@
    Address: Vote111111111111111111111111111111111111111 */
 
 #include "../context/fd_exec_instr_ctx.h"
+#include "../fd_bank.h"
 
 /* Vote program custom error codes */
 
@@ -72,7 +73,8 @@ void
 fd_vote_record_timestamp_vote_with_slot( fd_pubkey_t const *  vote_acc,
                                          long                 timestamp,
                                          ulong                slot,
-                                         fd_bank_mgr_t *      bank_mgr );
+                                         fd_banks_t *         banks,
+                                         fd_bank_t *          bank );
 
 struct fd_commission_split {
   ulong voter_portion;

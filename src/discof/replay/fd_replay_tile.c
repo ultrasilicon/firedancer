@@ -2067,7 +2067,7 @@ publish_votes_to_plugin( fd_replay_tile_ctx_t * ctx,
 
     fd_clock_timestamp_vote_t_mapnode_t query;
     memcpy( query.elem.pubkey.uc, n->elem.key.uc, 32UL );
-    fd_clock_timestamp_votes_global_t *   clock_timestamp_votes = fd_bank_mgr_clock_timestamp_votes_query( fork->slot_ctx->bank_mgr );
+    fd_clock_timestamp_votes_global_t *   clock_timestamp_votes = fd_bank_clock_timestamp_votes_query( ctx->slot_ctx->banks, ctx->slot_ctx->bank );
     fd_clock_timestamp_vote_t_mapnode_t * timestamp_votes_root  = fd_clock_timestamp_votes_votes_root_join( clock_timestamp_votes );
     fd_clock_timestamp_vote_t_mapnode_t * timestamp_votes_pool  = fd_clock_timestamp_votes_votes_pool_join( clock_timestamp_votes );
 

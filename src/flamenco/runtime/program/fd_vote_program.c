@@ -2170,11 +2170,18 @@ void
 fd_vote_record_timestamp_vote_with_slot( fd_pubkey_t const *  vote_acc,
                                          long                 timestamp,
                                          ulong                slot,
-                                         fd_bank_mgr_t *      bank_mgr ) {
+                                         fd_banks_t *         banks,
+                                         fd_bank_t *          bank ) {
 
-  fd_clock_timestamp_votes_global_t * clock_timestamp_votes = fd_bank_mgr_clock_timestamp_votes_modify( bank_mgr );
+
+  fd_rwlock_write( &bank->clock_timestamp_votes_lock );
+
+  fd_clock_timestamp_votes_global_t * clock_timestamp_votes = fd_bank_clock_timestamp_votes_modify( banks, bank );
+
   fd_clock_timestamp_vote_t_mapnode_t * pool = fd_clock_timestamp_votes_votes_pool_join( clock_timestamp_votes );
   fd_clock_timestamp_vote_t_mapnode_t * root = fd_clock_timestamp_votes_votes_root_join( clock_timestamp_votes );
+
+  FD_LOG_WARNING(("RECORD"));
 
   if( FD_UNLIKELY( !pool ) ) {
     FD_LOG_ERR(( "Timestamp vote account pool not allocated" ));
@@ -2199,7 +2206,8 @@ fd_vote_record_timestamp_vote_with_slot( fd_pubkey_t const *  vote_acc,
 
   fd_clock_timestamp_votes_votes_pool_update( clock_timestamp_votes, pool );
   fd_clock_timestamp_votes_votes_root_update( clock_timestamp_votes, root );
-  fd_bank_mgr_clock_timestamp_votes_save( bank_mgr );
+
+  fd_rwlock_unwrite( &bank->clock_timestamp_votes_lock );
 }
 
 // https://github.com/anza-xyz/agave/blob/v2.0.1/sdk/program/src/vote/state/mod.rs#L751

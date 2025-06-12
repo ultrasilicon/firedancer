@@ -14,6 +14,43 @@ fd_bank_footprint( void ) {
   return FD_LAYOUT_FINI( l, fd_bank_align() );
 }
 
+/* Bank accesssors */
+
+fd_clock_timestamp_votes_global_t *
+fd_bank_clock_timestamp_votes_query( fd_banks_t * banks, fd_bank_t * bank ) {
+  if( bank->clock_timestamp_votes_pool_idx==fd_bank_clock_timestamp_votes_pool_idx_null( banks->clock_timestamp_votes_pool ) ) {
+    return NULL;
+  }
+  fd_bank_clock_timestamp_votes_t * bank_ctv = fd_bank_clock_timestamp_votes_pool_ele( banks->clock_timestamp_votes_pool, bank->clock_timestamp_votes_pool_idx );
+  return (fd_clock_timestamp_votes_global_t *)bank_ctv->votes;
+}
+
+fd_clock_timestamp_votes_global_t *
+fd_bank_clock_timestamp_votes_modify( fd_banks_t * banks, fd_bank_t * bank ) {
+  /* If the dirty flag is set, then we already have a votes pool that
+     corresponds to this bank and it can be returned. */
+  if( bank->clock_timestamp_votes_dirty ) {
+    fd_bank_clock_timestamp_votes_t * bank_ctv = fd_bank_clock_timestamp_votes_pool_ele( banks->clock_timestamp_votes_pool, bank->clock_timestamp_votes_pool_idx );
+    return (fd_clock_timestamp_votes_global_t *)bank_ctv->votes;
+  }
+
+  FD_LOG_WARNING(("CLOCK TIMESTAMP VOTES DIRTY"));
+
+  /* If the dirty flag is not set, we need to copy the votes pool from
+     a parent bank if one exists and set the dirty flag. */
+
+  fd_bank_clock_timestamp_votes_t * child_ctv = fd_bank_clock_timestamp_votes_pool_ele_acquire( banks->clock_timestamp_votes_pool );
+  if( bank->clock_timestamp_votes_pool_idx!=fd_bank_clock_timestamp_votes_pool_idx_null( banks->clock_timestamp_votes_pool ) ) {
+    fd_bank_clock_timestamp_votes_t * parent_ctv = fd_bank_clock_timestamp_votes_pool_ele( banks->clock_timestamp_votes_pool, bank->clock_timestamp_votes_pool_idx );
+    memcpy( child_ctv->votes, parent_ctv->votes, 2000000UL );
+  }
+
+  bank->clock_timestamp_votes_pool_idx = fd_bank_clock_timestamp_votes_pool_idx( banks->clock_timestamp_votes_pool, child_ctv );
+  bank->clock_timestamp_votes_dirty    = 1;
+
+  return (fd_clock_timestamp_votes_global_t *)child_ctv->votes;
+}
+
 /**********************************************************************/
 
 ulong
@@ -28,6 +65,7 @@ fd_banks_footprint( ulong max_banks ) {
   l = FD_LAYOUT_APPEND( l, fd_banks_align(), sizeof(fd_banks_t) );
   l = FD_LAYOUT_APPEND( l, fd_banks_pool_align(), fd_banks_pool_footprint( max_banks ) );
   l = FD_LAYOUT_APPEND( l, fd_banks_map_align(), fd_banks_map_footprint( max_banks ) );
+  l = FD_LAYOUT_APPEND( l, fd_bank_clock_timestamp_votes_pool_align(), fd_bank_clock_timestamp_votes_pool_footprint( max_banks ) );
   return FD_LAYOUT_FINI( l, fd_banks_align() );
 }
 
@@ -49,9 +87,11 @@ fd_banks_new( void * shmem, ulong max_banks ) {
   fd_memset( banks, 0, fd_banks_footprint( max_banks ) );
 
   FD_SCRATCH_ALLOC_INIT( l, banks );
-  banks           = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_align(),      sizeof(fd_banks_t) );
-  void * pool_mem = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_pool_align(), fd_banks_pool_footprint( max_banks ) );
-  void * map_mem  = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_map_align(),  fd_banks_map_footprint( max_banks ) );
+  banks                                 = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_align(),                           sizeof(fd_banks_t) );
+  void * pool_mem                       = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_pool_align(),                      fd_banks_pool_footprint( max_banks ) );
+  void * map_mem                        = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_map_align(),                       fd_banks_map_footprint( max_banks ) );
+  void * clock_timestamp_votes_pool_mem = FD_SCRATCH_ALLOC_APPEND( l, fd_bank_clock_timestamp_votes_pool_align(), fd_bank_clock_timestamp_votes_pool_footprint( max_banks ) );
+
 
   if( FD_UNLIKELY( FD_SCRATCH_ALLOC_FINI( l, fd_banks_align() ) != (ulong)banks + fd_banks_footprint( max_banks ) ) ) {
     FD_LOG_WARNING(( "fd_banks_new: bad layout" ));
@@ -82,6 +122,18 @@ fd_banks_new( void * shmem, ulong max_banks ) {
     return NULL;
   }
 
+  banks->clock_timestamp_votes_pool = fd_bank_clock_timestamp_votes_pool_new( clock_timestamp_votes_pool_mem, max_banks );
+  if( FD_UNLIKELY( !banks->clock_timestamp_votes_pool ) ) {
+    FD_LOG_WARNING(( "Failed to create clock timestamp votes pool" ));
+    return NULL;
+  }
+
+  banks->clock_timestamp_votes_pool = fd_bank_clock_timestamp_votes_pool_join( clock_timestamp_votes_pool_mem );
+  if( FD_UNLIKELY( !banks->clock_timestamp_votes_pool ) ) {
+    FD_LOG_WARNING(( "Failed to join clock timestamp votes pool" ));
+    return NULL;
+  }
+
   banks->max_banks = max_banks;
   banks->magic     = FD_BANKS_MAGIC;
 
@@ -108,9 +160,10 @@ fd_banks_join( void * mem ) {
   }
 
   FD_SCRATCH_ALLOC_INIT( l, banks );
-  banks           = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_align(),      sizeof(fd_banks_t) );
-  void * pool_mem = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_pool_align(), fd_banks_pool_footprint( banks->max_banks ) );
-  void * map_mem  = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_map_align(),  fd_banks_map_footprint( banks->max_banks ) );
+  banks                                 = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_align(),                           sizeof(fd_banks_t) );
+  void * pool_mem                       = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_pool_align(),                      fd_banks_pool_footprint( banks->max_banks ) );
+  void * map_mem                        = FD_SCRATCH_ALLOC_APPEND( l, fd_banks_map_align(),                       fd_banks_map_footprint( banks->max_banks ) );
+  void * clock_timestamp_votes_pool_mem = FD_SCRATCH_ALLOC_APPEND( l, fd_bank_clock_timestamp_votes_pool_align(), fd_bank_clock_timestamp_votes_pool_footprint( banks->max_banks ) );
   FD_SCRATCH_ALLOC_FINI( l, fd_banks_align() );
 
   banks->pool = fd_banks_pool_join( pool_mem );
@@ -122,6 +175,12 @@ fd_banks_join( void * mem ) {
   banks->map = fd_banks_map_join( map_mem );
   if( FD_UNLIKELY( !banks->map ) ) {
     FD_LOG_WARNING(( "Failed to join bank map" ));
+    return NULL;
+  }
+
+  banks->clock_timestamp_votes_pool = fd_bank_clock_timestamp_votes_pool_join( clock_timestamp_votes_pool_mem );
+  if( FD_UNLIKELY( !banks->clock_timestamp_votes_pool ) ) {
+    FD_LOG_WARNING(( "Failed to join clock timestamp votes pool" ));
     return NULL;
   }
 
@@ -150,6 +209,9 @@ fd_banks_init_bank( fd_banks_t * banks, ulong slot ) {
   bank->parent_idx  = null_idx;
   bank->child_idx   = null_idx;
   bank->sibling_idx = null_idx;
+
+  ulong ctv_pool_null_idx = fd_bank_clock_timestamp_votes_pool_idx_null( banks->clock_timestamp_votes_pool );
+  bank->clock_timestamp_votes_pool_idx = ctv_pool_null_idx;
 
   fd_banks_map_ele_insert( banks->map, bank, banks->pool );
 
@@ -260,7 +322,8 @@ fd_banks_clone_from_parent( fd_banks_t * banks,
   new_bank->execution_fees              = parent_bank->execution_fees;
   new_bank->priority_fees               = parent_bank->priority_fees;
 
-  /* Return the new bank */
+  new_bank->clock_timestamp_votes_pool_idx = parent_bank->clock_timestamp_votes_pool_idx;
+  new_bank->clock_timestamp_votes_dirty    = 0UL;
 
   return new_bank;
 }
@@ -312,9 +375,19 @@ fd_banks_publish( fd_banks_t * banks, ulong slot ) {
     }
 
     fd_bank_t * next = fd_banks_pool_ele( banks->pool, head->next );
+
+    /* Decide if we need to free any CoW fields. */
+    if( head->clock_timestamp_votes_dirty && head->clock_timestamp_votes_pool_idx!=new_root->clock_timestamp_votes_pool_idx ) {
+      FD_LOG_WARNING(("FREEING CTV %lu", head->slot));
+      fd_bank_clock_timestamp_votes_pool_idx_release( banks->clock_timestamp_votes_pool, head->clock_timestamp_votes_pool_idx );
+    }
+
     fd_banks_pool_ele_release( banks->pool, head );
     head = next;
   }
+
+  /* Need to update the root to be the owner of any CoW fields. */
+  new_root->clock_timestamp_votes_dirty = 1;
 
   new_root->parent_idx = null_idx;
   banks->root_idx      = fd_banks_map_idx_query( banks->map, &slot, null_idx, banks->pool );

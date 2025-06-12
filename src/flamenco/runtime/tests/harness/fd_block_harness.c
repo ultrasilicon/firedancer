@@ -97,7 +97,7 @@ fd_runtime_fuzz_block_register_vote_account( fd_exec_slot_ctx_t *               
       __builtin_unreachable();
   }
 
-  fd_vote_record_timestamp_vote_with_slot( pubkey, ts->timestamp, ts->slot, slot_ctx->bank_mgr );
+  fd_vote_record_timestamp_vote_with_slot( pubkey, ts->timestamp, ts->slot, slot_ctx->banks, slot_ctx->bank );
 }
 
 /* Stores an entry in the stake delegations cache for the given vote account. Deserializes and uses the present
@@ -381,12 +381,11 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   fd_memset( last_hash_mem, 0, sizeof(fd_hash_t) );
 
   /* TODO: Restore this from input */
-  fd_clock_timestamp_votes_global_t * clock_timestamp_votes = fd_bank_mgr_clock_timestamp_votes_modify( bank_mgr );
+  fd_clock_timestamp_votes_global_t * clock_timestamp_votes = fd_bank_clock_timestamp_votes_modify( slot_ctx->banks, slot_ctx->bank );
   pool_mem = (uchar *)fd_ulong_align_up( (ulong)clock_timestamp_votes + sizeof(fd_clock_timestamp_votes_global_t), fd_clock_timestamp_vote_t_map_align() );
   fd_clock_timestamp_vote_t_mapnode_t * clock_pool = fd_clock_timestamp_vote_t_map_join( fd_clock_timestamp_vote_t_map_new( pool_mem, 15000UL ) );
   clock_timestamp_votes->votes_pool_offset = (ulong)fd_clock_timestamp_vote_t_map_leave( clock_pool) - (ulong)clock_timestamp_votes;
   clock_timestamp_votes->votes_root_offset = 0UL;
-  fd_bank_mgr_clock_timestamp_votes_save( bank_mgr );
 
   /* TODO: We might need to load this in from the input. We also need to
      size this out for worst case, but this also blows up the memory
