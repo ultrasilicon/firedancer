@@ -255,27 +255,19 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   // self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
   slot_ctx->bank->max_tick_height = test_ctx->epoch_ctx.hashes_per_tick;
 
-  ulong * ticks_per_slot = fd_bank_mgr_ticks_per_slot_modify( bank_mgr );
-  *ticks_per_slot = test_ctx->epoch_ctx.ticks_per_slot;
-  fd_bank_mgr_ticks_per_slot_save( bank_mgr );
+  slot_ctx->bank->ticks_per_slot = test_ctx->epoch_ctx.ticks_per_slot;
 
   slot_ctx->bank->ns_per_slot = 400000000; // TODO: restore from input
 
-  ulong * genesis_creation_time = fd_bank_mgr_genesis_creation_time_modify( bank_mgr );
-  *genesis_creation_time = test_ctx->epoch_ctx.genesis_creation_time;
-  fd_bank_mgr_genesis_creation_time_save( bank_mgr );
+  slot_ctx->bank->genesis_creation_time = test_ctx->epoch_ctx.genesis_creation_time;
 
-  double * slots_per_year = fd_bank_mgr_slots_per_year_modify( bank_mgr );
-  *slots_per_year = test_ctx->epoch_ctx.slots_per_year;
-  fd_bank_mgr_slots_per_year_save( bank_mgr );
+  slot_ctx->bank->slots_per_year = test_ctx->epoch_ctx.slots_per_year;
 
-  fd_inflation_t * inflation = fd_bank_mgr_inflation_modify( bank_mgr );
-  inflation->initial         = test_ctx->epoch_ctx.inflation.initial;
-  inflation->terminal        = test_ctx->epoch_ctx.inflation.terminal;
-  inflation->taper           = test_ctx->epoch_ctx.inflation.taper;
-  inflation->foundation      = test_ctx->epoch_ctx.inflation.foundation;
-  inflation->foundation_term = test_ctx->epoch_ctx.inflation.foundation_term;
-  fd_bank_mgr_inflation_save( bank_mgr );
+  slot_ctx->bank->inflation.initial         = test_ctx->epoch_ctx.inflation.initial;
+  slot_ctx->bank->inflation.terminal        = test_ctx->epoch_ctx.inflation.terminal;
+  slot_ctx->bank->inflation.taper           = test_ctx->epoch_ctx.inflation.taper;
+  slot_ctx->bank->inflation.foundation      = test_ctx->epoch_ctx.inflation.foundation;
+  slot_ctx->bank->inflation.foundation_term = test_ctx->epoch_ctx.inflation.foundation_term;
 
   ulong * block_height = fd_bank_mgr_block_height_modify( bank_mgr );
   *block_height = test_ctx->slot_ctx.block_height;

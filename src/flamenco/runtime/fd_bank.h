@@ -44,6 +44,10 @@ struct fd_bank {
   ulong                  eah_start_slot;
   ulong                  eah_stop_slot;
   ulong                  eah_interval;
+  ulong                  block_height;
+  fd_hash_t              epoch_account_hash;
+  ulong                  execution_fees;
+  ulong                  priority_fees;
 };
 typedef struct fd_bank fd_bank_t;
 

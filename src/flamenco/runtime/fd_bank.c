@@ -255,6 +255,10 @@ fd_banks_clone_from_parent( fd_banks_t * banks,
   new_bank->total_epoch_stake           = parent_bank->total_epoch_stake;
   new_bank->eah_start_slot              = parent_bank->eah_start_slot;
   new_bank->eah_stop_slot               = parent_bank->eah_stop_slot;
+  new_bank->block_height                = parent_bank->block_height;
+  new_bank->epoch_account_hash          = parent_bank->epoch_account_hash;
+  new_bank->execution_fees              = parent_bank->execution_fees;
+  new_bank->priority_fees               = parent_bank->priority_fees;
 
   /* Return the new bank */
 

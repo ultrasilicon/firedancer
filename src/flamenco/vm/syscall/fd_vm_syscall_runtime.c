@@ -245,8 +245,7 @@ fd_vm_syscall_sol_get_epoch_stake( /**/            void *  _vm,
     FD_VM_CU_UPDATE( vm, FD_VM_SYSCALL_BASE_COST );
 
     /* https://github.com/anza-xyz/agave/blob/v2.1.0/programs/bpf_loader/src/syscalls/mod.rs#L2074 */
-    ulong * total_epoch_stake = fd_bank_mgr_total_epoch_stake_query( vm->instr_ctx->txn_ctx->bank_mgr );
-    *_ret = !!total_epoch_stake ? *total_epoch_stake : 0UL;
+    *_ret = vm->instr_ctx->txn_ctx->bank->total_epoch_stake;
     return FD_VM_SUCCESS;
   }
 

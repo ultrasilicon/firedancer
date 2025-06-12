@@ -27,10 +27,7 @@ static long
 timestamp_from_genesis( fd_exec_slot_ctx_t * slot_ctx ) {
   /* TODO: maybe make types of timestamps the same throughout the runtime codebase. as Solana uses a signed representation */
 
-  ulong * genesis_creation_time_bm = fd_bank_mgr_genesis_creation_time_query( slot_ctx->bank_mgr );
-  ulong   genesis_creation_time = !!genesis_creation_time_bm ? *genesis_creation_time_bm : 0;
-
-  return (long)(genesis_creation_time + ((slot_ctx->slot * slot_ctx->bank->ns_per_slot) / NS_IN_S));
+  return (long)(slot_ctx->bank->genesis_creation_time + ((slot_ctx->slot * slot_ctx->bank->ns_per_slot) / NS_IN_S));
 }
 
 void

@@ -98,9 +98,7 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   slot_ctx->bank->fee_rate_governor.target_lamports_per_signature = 10000;
   slot_ctx->bank->fee_rate_governor.target_signatures_per_slot    = 20000;
 
-  ulong * ticks_per_slot = fd_bank_mgr_ticks_per_slot_modify( slot_ctx->bank_mgr );
-  *ticks_per_slot = 64;
-  fd_bank_mgr_ticks_per_slot_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->ticks_per_slot = 64;
 
   /* Set epoch bank variables if not present (defaults obtained from GenesisConfig::default() in Agave) */
   fd_epoch_schedule_t default_epoch_schedule = {
@@ -123,9 +121,7 @@ fd_runtime_fuzz_txn_ctx_create( fd_runtime_fuzz_runner_t *         runner,
   *rent_bm = default_rent;
   fd_bank_mgr_rent_save( slot_ctx->bank_mgr );
 
-  double * slots_per_year = fd_bank_mgr_slots_per_year_modify( slot_ctx->bank_mgr );
-  *slots_per_year = SECONDS_PER_YEAR * (1000000000.0 / (double)6250000) / (double)(*fd_bank_mgr_ticks_per_slot_query( slot_ctx->bank_mgr ));
-  fd_bank_mgr_slots_per_year_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->slots_per_year = SECONDS_PER_YEAR * (1000000000.0 / (double)6250000) / (double)(slot_ctx->bank->ticks_per_slot);
 
   // Override default values if provided
   fd_epoch_schedule_t * epoch_schedule = fd_sysvar_epoch_schedule_read( funk, funk_txn, runner->spad );

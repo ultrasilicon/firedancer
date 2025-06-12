@@ -299,27 +299,19 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Ticks Per Slot */
 
-  ulong * ticks_per_slot = fd_bank_mgr_ticks_per_slot_modify( slot_ctx->bank_mgr );
-  *ticks_per_slot = oldbank->ticks_per_slot;
-  fd_bank_mgr_ticks_per_slot_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->ticks_per_slot = oldbank->ticks_per_slot;
 
   /* Genesis Creation Time */
 
-  ulong * genesis_creation_time = fd_bank_mgr_genesis_creation_time_modify( slot_ctx->bank_mgr );
-  *genesis_creation_time = oldbank->genesis_creation_time;
-  fd_bank_mgr_genesis_creation_time_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->genesis_creation_time = oldbank->genesis_creation_time;
 
   /* Slots Per Year */
 
-  double * slots_per_year = fd_bank_mgr_slots_per_year_modify( slot_ctx->bank_mgr );
-  *slots_per_year = oldbank->slots_per_year;
-  fd_bank_mgr_slots_per_year_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->slots_per_year = oldbank->slots_per_year;
 
   /* Inflation */
 
-  fd_inflation_t * inflation = fd_bank_mgr_inflation_modify( slot_ctx->bank_mgr );
-  *inflation = oldbank->inflation;
-  fd_bank_mgr_inflation_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->inflation = oldbank->inflation;
 
   /* Block Height */
 
@@ -481,9 +473,7 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
         manifest->versioned_epoch_stakes[i].val.inner.Current.stakes.vote_accounts.vote_accounts_root = NULL;
 
         /* We want to save the total epoch stake for the current epoch */
-        ulong * total_epoch_stake = fd_bank_mgr_total_epoch_stake_modify( slot_ctx->bank_mgr );
-        *total_epoch_stake = manifest->versioned_epoch_stakes[i].val.inner.Current.total_stake;
-        fd_bank_mgr_total_epoch_stake_save( slot_ctx->bank_mgr );
+        slot_ctx->bank->total_epoch_stake = manifest->versioned_epoch_stakes[i].val.inner.Current.total_stake;
 
       }
       if( manifest->versioned_epoch_stakes[i].epoch == epoch+1UL ) {

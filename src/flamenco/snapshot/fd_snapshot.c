@@ -456,14 +456,11 @@ fd_should_snapshot_include_epoch_accounts_hash(fd_exec_slot_ctx_t * slot_ctx) {
     return 0;
   }
 
-  ulong * eah_start_slot = fd_bank_mgr_eah_start_slot_query( slot_ctx->bank_mgr );
-  ulong * eah_end_slot   = fd_bank_mgr_eah_stop_slot_query( slot_ctx->bank_mgr );
-
   // We need to find the correct logic
-  if( *eah_start_slot != ULONG_MAX ) {
+  if( slot_ctx->bank->eah_start_slot != ULONG_MAX ) {
     return 0;
   }
-  if( *eah_end_slot == ULONG_MAX ) {
+  if( slot_ctx->bank->eah_stop_slot == ULONG_MAX ) {
     return 0;
   }
   return 1;
