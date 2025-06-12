@@ -505,7 +505,7 @@ create_block_context_protobuf_from_block( fd_exec_test_block_context_t * block_c
   block_context->has_epoch_ctx                        = true;
   block_context->epoch_ctx.has_features               = true;
   dump_sorted_features( fd_bank_mgr_features_query( bank_mgr ), &block_context->epoch_ctx.features, spad );
-  block_context->epoch_ctx.hashes_per_tick            = *(fd_bank_mgr_hashes_per_tick_query( bank_mgr ));
+  block_context->epoch_ctx.hashes_per_tick            = slot_ctx->bank->hashes_per_tick;
   block_context->epoch_ctx.ticks_per_slot             = *(fd_bank_mgr_ticks_per_slot_query( bank_mgr ));
   block_context->epoch_ctx.slots_per_year             = *(fd_bank_mgr_slots_per_year_query( bank_mgr ));
   block_context->epoch_ctx.has_inflation              = true;

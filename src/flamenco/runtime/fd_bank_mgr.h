@@ -122,11 +122,6 @@ if( FD_UNLIKELY( !bank_mgr ) ) {                                                
 /*  Type,                              name,                        id,   footprint,   align */
 #define FD_BANK_MGR_ITER(X)                                                                    \
   X(ulong,                             slot,                        1UL,  8UL,         8UL   ) \
-  X(ulong,                             parent_signature_cnt,        7UL,  8UL,         8UL   ) \
-  X(ulong,                             tick_height,                 8UL,  8UL,         8UL   ) \
-  X(ulong,                             max_tick_height,             9UL,  8UL,         8UL   ) \
-  X(ulong,                             hashes_per_tick,             10UL, 8UL,         8UL   ) \
-  X(uint128,                           ns_per_slot,                 11UL, 16UL,        16UL  ) \
   X(ulong,                             ticks_per_slot,              12UL, 8UL,         8UL   ) \
   X(ulong,                             genesis_creation_time,       13UL, 8UL,         8UL   ) \
   X(double,                            slots_per_year,              14UL, 8UL,         8UL   ) \

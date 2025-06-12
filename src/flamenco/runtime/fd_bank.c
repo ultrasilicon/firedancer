@@ -245,6 +245,13 @@ fd_banks_clone_from_parent( fd_banks_t * banks,
   new_bank->transaction_count           = parent_bank->transaction_count;
   new_bank->parent_signature_cnt        = parent_bank->parent_signature_cnt;
   new_bank->tick_height                 = parent_bank->tick_height;
+  new_bank->ticks_per_slot              = parent_bank->ticks_per_slot;
+  new_bank->genesis_creation_time       = parent_bank->genesis_creation_time;
+  new_bank->slots_per_year              = parent_bank->slots_per_year;
+  new_bank->inflation                   = parent_bank->inflation;
+  new_bank->total_epoch_stake           = parent_bank->total_epoch_stake;
+  new_bank->eah_start_slot              = parent_bank->eah_start_slot;
+  new_bank->eah_stop_slot               = parent_bank->eah_stop_slot;
 
   /* Return the new bank */
 

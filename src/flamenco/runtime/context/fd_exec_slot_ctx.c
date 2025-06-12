@@ -279,33 +279,23 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Parent Signature Count */
 
-  ulong * parent_signature_cnt = fd_bank_mgr_parent_signature_cnt_modify( slot_ctx->bank_mgr );
-  *parent_signature_cnt = oldbank->signature_count;
-  fd_bank_mgr_parent_signature_cnt_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->parent_signature_cnt = oldbank->signature_count;
 
   /* Tick Height */
 
-  ulong * tick_height = fd_bank_mgr_tick_height_modify( slot_ctx->bank_mgr );
-  *tick_height = oldbank->tick_height;
-  fd_bank_mgr_tick_height_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->tick_height = oldbank->tick_height;
 
   /* Max Tick Height */
 
-  ulong * max_tick_height = fd_bank_mgr_max_tick_height_modify( slot_ctx->bank_mgr );
-  *max_tick_height = oldbank->max_tick_height;
-  fd_bank_mgr_max_tick_height_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->max_tick_height = oldbank->max_tick_height;
 
   /* Hashes Per Tick */
 
-  ulong * hashes_per_tick = fd_bank_mgr_hashes_per_tick_modify( slot_ctx->bank_mgr );
-  *hashes_per_tick = !!oldbank->hashes_per_tick ? *oldbank->hashes_per_tick : 0UL;
-  fd_bank_mgr_hashes_per_tick_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->hashes_per_tick = !!oldbank->hashes_per_tick ? *oldbank->hashes_per_tick : 0UL;
 
   /* NS Per Slot */
 
-  uint128 * ns_per_slot = fd_bank_mgr_ns_per_slot_modify( slot_ctx->bank_mgr );
-  *ns_per_slot = oldbank->ns_per_slot;
-  fd_bank_mgr_ns_per_slot_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->ns_per_slot = oldbank->ns_per_slot;
 
   /* Ticks Per Slot */
 

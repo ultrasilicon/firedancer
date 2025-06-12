@@ -27,13 +27,10 @@ static long
 timestamp_from_genesis( fd_exec_slot_ctx_t * slot_ctx ) {
   /* TODO: maybe make types of timestamps the same throughout the runtime codebase. as Solana uses a signed representation */
 
-  uint128 * ns_per_slot_bm = fd_bank_mgr_ns_per_slot_query( slot_ctx->bank_mgr );
-  uint128   ns_per_slot = !!ns_per_slot_bm ? *ns_per_slot_bm : 0;
-
   ulong * genesis_creation_time_bm = fd_bank_mgr_genesis_creation_time_query( slot_ctx->bank_mgr );
   ulong   genesis_creation_time = !!genesis_creation_time_bm ? *genesis_creation_time_bm : 0;
 
-  return (long)(genesis_creation_time + ((slot_ctx->slot * ns_per_slot) / NS_IN_S));
+  return (long)(genesis_creation_time + ((slot_ctx->slot * slot_ctx->bank->ns_per_slot) / NS_IN_S));
 }
 
 void
@@ -100,11 +97,9 @@ bound_timestamp_estimate( fd_exec_slot_ctx_t * slot_ctx,
                           long                 estimate,
                           long                 epoch_start_timestamp ) {
 
-  uint128 * ns_per_slot_bm = fd_bank_mgr_ns_per_slot_query( slot_ctx->bank_mgr );
-  uint128   ns_per_slot = !!ns_per_slot_bm ? *ns_per_slot_bm : 0;
   /* Determine offsets from start of epoch */
   /* TODO: handle epoch boundary case */
-  uint128 poh_estimate_offset = ns_per_slot * slot_ctx->slot;
+  uint128 poh_estimate_offset = slot_ctx->bank->ns_per_slot * slot_ctx->slot;
   uint128 estimate_offset = (uint128)( ( estimate - epoch_start_timestamp ) * NS_IN_S );
 
   uint128 max_delta_fast = ( poh_estimate_offset * MAX_ALLOWABLE_DRIFT_FAST ) / 100;
@@ -137,12 +132,11 @@ estimate_timestamp( fd_exec_slot_ctx_t * slot_ctx ) {
   if( NULL==votes ) {
     return timestamp_from_genesis( slot_ctx );
   }
-  uint128 * ns_per_slot = fd_bank_mgr_ns_per_slot_query( slot_ctx->bank_mgr );
 
   /* TODO: actually take the stake-weighted median. For now, just use the root node. */
   fd_clock_timestamp_vote_t * head = &votes->elem;
   ulong slots = slot_ctx->slot - head->slot;
-  uint128 ns_correction = *ns_per_slot * slots;
+  uint128 ns_correction = slot_ctx->bank->ns_per_slot * slots;
   return head->timestamp  + (long) (ns_correction / NS_IN_S) ;
 }
 
@@ -194,8 +188,7 @@ fd_calculate_stake_weighted_timestamp( fd_exec_slot_ctx_t * slot_ctx,
   fd_bank_mgr_t bank_mgr_obj;
   fd_bank_mgr_t * bank_mgr = fd_bank_mgr_join( &bank_mgr_obj, slot_ctx->funk, slot_ctx->funk_txn );
 
-  uint128 * ns_per_slot_bm = fd_bank_mgr_ns_per_slot_query( bank_mgr );
-  ulong     slot_duration  = !!ns_per_slot_bm ? (ulong)*ns_per_slot_bm : 0UL;
+  ulong slot_duration = (ulong)slot_ctx->bank->ns_per_slot;
   fd_sol_sysvar_clock_t const * clock = fd_sysvar_clock_read( slot_ctx->funk,
                                                               slot_ctx->funk_txn,
                                                               runtime_spad );

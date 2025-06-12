@@ -247,9 +247,8 @@ fd_hash_bank( fd_exec_slot_ctx_t *    slot_ctx,
 
   ulong * signature_cnt_bm     = fd_bank_mgr_signature_cnt_query( slot_ctx->bank_mgr );
   ulong   signature_cnt        = !!signature_cnt_bm ? *signature_cnt_bm : 0UL;
-  ulong * parent_signature_cnt = fd_bank_mgr_parent_signature_cnt_modify( slot_ctx->bank_mgr );
-  *parent_signature_cnt        = signature_cnt;
-  fd_bank_mgr_parent_signature_cnt_save( slot_ctx->bank_mgr );
+
+  slot_ctx->bank->parent_signature_cnt = signature_cnt;
 
   slot_ctx->bank->prev_lamports_per_signature = slot_ctx->bank->lamports_per_signature;
 

@@ -36,6 +36,14 @@ struct fd_bank {
   ulong                  max_tick_height;
   ulong                  hashes_per_tick;
   uint128                ns_per_slot;
+  ulong                  ticks_per_slot;
+  ulong                  genesis_creation_time;
+  double                 slots_per_year;
+  fd_inflation_t         inflation;
+  ulong                  total_epoch_stake;
+  ulong                  eah_start_slot;
+  ulong                  eah_stop_slot;
+  ulong                  eah_interval;
 };
 typedef struct fd_bank fd_bank_t;
 

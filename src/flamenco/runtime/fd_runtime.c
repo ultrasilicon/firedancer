@@ -1071,9 +1071,7 @@ fd_runtime_block_sysvar_update_pre_execute( fd_exec_slot_ctx_t * slot_ctx,
   // );
   /* https://github.com/firedancer-io/solana/blob/dab3da8e7b667d7527565bddbdbecf7ec1fb868e/runtime/src/bank.rs#L1312-L1314 */
 
-  ulong * parent_signature_cnt = fd_bank_mgr_parent_signature_cnt_query( slot_ctx->bank_mgr );
-
-  fd_runtime_new_fee_rate_governor_derived( slot_ctx, *parent_signature_cnt );
+  fd_runtime_new_fee_rate_governor_derived( slot_ctx, slot_ctx->bank->parent_signature_cnt );
 
   // TODO: move all these out to a fd_sysvar_update() call...
   long clock_update_time      = -fd_log_wallclock();
@@ -2923,25 +2921,15 @@ fd_runtime_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
      https://github.com/anza-xyz/agave/blob/v2.1.0/runtime/src/bank.rs#L6627-L6649 */
 
   if( FD_FEATURE_JUST_ACTIVATED( slot_ctx, update_hashes_per_tick6 ) ) {
-    ulong * hashes_per_tick = fd_bank_mgr_hashes_per_tick_modify( slot_ctx->bank_mgr );
-    *hashes_per_tick = UPDATED_HASHES_PER_TICK6;
-    fd_bank_mgr_hashes_per_tick_save( slot_ctx->bank_mgr );
+    slot_ctx->bank->hashes_per_tick = UPDATED_HASHES_PER_TICK6;
   } else if( FD_FEATURE_JUST_ACTIVATED( slot_ctx, update_hashes_per_tick5 ) ) {
-    ulong * hashes_per_tick = fd_bank_mgr_hashes_per_tick_modify( slot_ctx->bank_mgr );
-    *hashes_per_tick = UPDATED_HASHES_PER_TICK5;
-    fd_bank_mgr_hashes_per_tick_save( slot_ctx->bank_mgr );
+    slot_ctx->bank->hashes_per_tick = UPDATED_HASHES_PER_TICK5;
   } else if( FD_FEATURE_JUST_ACTIVATED( slot_ctx, update_hashes_per_tick4 ) ) {
-    ulong * hashes_per_tick = fd_bank_mgr_hashes_per_tick_modify( slot_ctx->bank_mgr );
-    *hashes_per_tick = UPDATED_HASHES_PER_TICK4;
-    fd_bank_mgr_hashes_per_tick_save( slot_ctx->bank_mgr );
+    slot_ctx->bank->hashes_per_tick = UPDATED_HASHES_PER_TICK4;
   } else if( FD_FEATURE_JUST_ACTIVATED( slot_ctx, update_hashes_per_tick3 ) ) {
-    ulong * hashes_per_tick = fd_bank_mgr_hashes_per_tick_modify( slot_ctx->bank_mgr );
-    *hashes_per_tick = UPDATED_HASHES_PER_TICK3;
-    fd_bank_mgr_hashes_per_tick_save( slot_ctx->bank_mgr );
+    slot_ctx->bank->hashes_per_tick = UPDATED_HASHES_PER_TICK3;
   } else if( FD_FEATURE_JUST_ACTIVATED( slot_ctx, update_hashes_per_tick2 ) ) {
-    ulong * hashes_per_tick = fd_bank_mgr_hashes_per_tick_modify( slot_ctx->bank_mgr );
-    *hashes_per_tick = UPDATED_HASHES_PER_TICK2;
-    fd_bank_mgr_hashes_per_tick_save( slot_ctx->bank_mgr );
+    slot_ctx->bank->hashes_per_tick = UPDATED_HASHES_PER_TICK2;
   }
 
   /* Get the new rate activation epoch */
@@ -3540,17 +3528,11 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
 
   slot_ctx->bank->prev_lamports_per_signature = 0UL;
 
-  ulong * max_tick_height = fd_bank_mgr_max_tick_height_modify( slot_ctx->bank_mgr );
-  *max_tick_height = genesis_block->ticks_per_slot * (slot_ctx->slot + 1);
-  fd_bank_mgr_max_tick_height_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->max_tick_height = genesis_block->ticks_per_slot * (slot_ctx->slot + 1);
 
-  ulong * hashes_per_tick = fd_bank_mgr_hashes_per_tick_modify( slot_ctx->bank_mgr );
-  *hashes_per_tick = !!poh->hashes_per_tick ? poh->hashes_per_tick : 0UL;
-  fd_bank_mgr_hashes_per_tick_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->hashes_per_tick = !!poh->hashes_per_tick ? poh->hashes_per_tick : 0UL;
 
-  uint128 * ns_per_slot = fd_bank_mgr_ns_per_slot_modify( slot_ctx->bank_mgr );
-  *ns_per_slot = target_tick_duration * genesis_block->ticks_per_slot;
-  fd_bank_mgr_ns_per_slot_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->ns_per_slot = target_tick_duration * genesis_block->ticks_per_slot;
 
   ulong * ticks_per_slot = fd_bank_mgr_ticks_per_slot_modify( slot_ctx->bank_mgr );
   *ticks_per_slot = genesis_block->ticks_per_slot;
@@ -3779,7 +3761,7 @@ fd_runtime_process_genesis_block( fd_exec_slot_ctx_t * slot_ctx,
   fd_hash_t poh_old = *fd_bank_mgr_poh_query( slot_ctx->bank_mgr );
 
   fd_hash_t * poh = fd_bank_mgr_poh_modify( slot_ctx->bank_mgr );
-  ulong hashcnt_per_slot = *(fd_bank_mgr_hashes_per_tick_query( slot_ctx->bank_mgr )) * *(fd_bank_mgr_ticks_per_slot_query( slot_ctx->bank_mgr ));
+  ulong hashcnt_per_slot = slot_ctx->bank->hashes_per_tick * *(fd_bank_mgr_ticks_per_slot_query( slot_ctx->bank_mgr ));
   while( hashcnt_per_slot-- ) {
     fd_sha256_hash( poh->hash, sizeof(fd_hash_t), &poh_old );
   }
@@ -4143,19 +4125,14 @@ fd_runtime_block_verify_tpool( fd_exec_slot_ctx_t *    slot_ctx,
                                                                           poh_verification_info_cnt * sizeof(fd_poh_verification_info_t) );
   fd_runtime_block_verify_info_collect( block_info, &tmp_in_poh_hash, poh_verification_info );
 
-  fd_bank_mgr_t   bank_mgr_obj;
-  fd_bank_mgr_t * bank_mgr        = fd_bank_mgr_join( &bank_mgr_obj, slot_ctx->funk, slot_ctx->funk_txn );
-  ulong *         tick_height     = fd_bank_mgr_tick_height_query( bank_mgr );
-  ulong *         max_tick_height = fd_bank_mgr_max_tick_height_query( bank_mgr );
-
   uchar * block_data = fd_spad_alloc( runtime_spad, 128UL, FD_SHRED_DATA_PAYLOAD_MAX_PER_SLOT );
   ulong   tick_res   = fd_runtime_block_verify_ticks( slot_ctx->blockstore,
                                                       slot_ctx->slot,
                                                       block_data,
                                                       FD_SHRED_DATA_PAYLOAD_MAX_PER_SLOT,
-                                                      *tick_height,
-                                                      *max_tick_height,
-                                                      *(fd_bank_mgr_hashes_per_tick_query( bank_mgr ))
+                                                      slot_ctx->bank->tick_height,
+                                                      slot_ctx->bank->max_tick_height,
+                                                      slot_ctx->bank->hashes_per_tick
   );
   if( FD_UNLIKELY( tick_res != FD_BLOCK_OK ) ) {
     FD_LOG_WARNING(( "failed to verify ticks res %lu slot %lu", tick_res, slot_ctx->slot ));

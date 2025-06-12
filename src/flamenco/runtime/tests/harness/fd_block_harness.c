@@ -253,17 +253,13 @@ fd_runtime_fuzz_block_ctx_create( fd_runtime_fuzz_runner_t *           runner,
   fd_bank_mgr_prev_slot_save( bank_mgr );
 
   // self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
-  ulong * max_tick_height = fd_bank_mgr_max_tick_height_modify( bank_mgr );
-  *max_tick_height = test_ctx->epoch_ctx.hashes_per_tick;
-  fd_bank_mgr_max_tick_height_save( bank_mgr );
+  slot_ctx->bank->max_tick_height = test_ctx->epoch_ctx.hashes_per_tick;
 
   ulong * ticks_per_slot = fd_bank_mgr_ticks_per_slot_modify( bank_mgr );
   *ticks_per_slot = test_ctx->epoch_ctx.ticks_per_slot;
   fd_bank_mgr_ticks_per_slot_save( bank_mgr );
 
-  uint128 * ns_per_slot = fd_bank_mgr_ns_per_slot_modify( bank_mgr );
-  *ns_per_slot = (uint128)400000000; // TODO: restore from input
-  fd_bank_mgr_ns_per_slot_save( bank_mgr );
+  slot_ctx->bank->ns_per_slot = 400000000; // TODO: restore from input
 
   ulong * genesis_creation_time = fd_bank_mgr_genesis_creation_time_modify( bank_mgr );
   *genesis_creation_time = test_ctx->epoch_ctx.genesis_creation_time;
