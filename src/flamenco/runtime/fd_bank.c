@@ -11,8 +11,7 @@ ulong
 fd_bank_footprint( void ) {
   ulong l = FD_LAYOUT_INIT;
   l = FD_LAYOUT_APPEND( l, fd_bank_align(), sizeof(fd_bank_t) );
-  FD_LAYOUT_FINI( l, fd_bank_align() );
-  return l;
+  return FD_LAYOUT_FINI( l, fd_bank_align() );
 }
 
 /**********************************************************************/
