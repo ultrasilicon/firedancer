@@ -11,18 +11,69 @@ extern "C" {
 #include "../../discof/replay/fd_replay_notif.h"
 #include "../../flamenco/runtime/fd_acc_mgr.h"
 #include "../../ballet/block/fd_microblock.h"
+#include "../../ballet/base58/fd_base58.h"
 }
+
+struct CompiledFilterAccount {
+    std::string name_;
+    std::vector<fd_hash_t> keys_;
+    std::vector<fd_hash_t> owners_;
+};
 
 class CompiledFilter {
   public:
     static CompiledFilter * compile(::geyser::SubscribeRequest * request) {
-      return new CompiledFilter();
+      CompiledFilter * filt = new CompiledFilter();
+      if( filt->compile_internal(request) )
+        return filt;
+      delete filt;
+      return NULL;
     }
 
-    bool filterAccount(fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz) {
-      return true;
-    }
+    bool filterAccount(fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz);
+
+  private:
+    bool compile_internal(::geyser::SubscribeRequest * request);
+
+    std::vector<std::unique_ptr<CompiledFilterAccount>> accts_;
 };
+
+bool
+CompiledFilter::compile_internal(::geyser::SubscribeRequest * request) {
+  for( auto& i : request->accounts() ) {
+    auto* a = new CompiledFilterAccount();
+    a->name_ = i.first;
+    auto& f = i.second;
+    for( int j = 0; j < f.account_size(); ++j ) {
+      auto& s = f.account(j);
+      fd_hash_t hash;
+      if( !fd_base58_decode_32( s.c_str(), hash.uc ) ) return false;
+      a->keys_.push_back(hash);
+    }
+    for( int j = 0; j < f.owner_size(); ++j ) {
+      auto& s = f.owner(j);
+      fd_hash_t hash;
+      if( !fd_base58_decode_32( s.c_str(), hash.uc ) ) return false;
+      a->owners_.push_back(hash);
+    }
+    accts_.push_back(std::unique_ptr<CompiledFilterAccount>(a));
+  }
+
+  return true;
+}
+
+bool
+CompiledFilter::filterAccount(fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz) {
+  for( auto& f : accts_ ) {
+    for( auto& h : f->keys_ ) {
+      if( !memcmp( h.uc, key->uc, 32 ) ) return true;
+    }
+    for( auto& h : f->owners_ ) {
+      if( !memcmp( h.uc, meta->info.owner, 32 ) ) return true;
+    }
+  }
+  return false;
+}
 
 struct geys_filter {
     struct Elem {
