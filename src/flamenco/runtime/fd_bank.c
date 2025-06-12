@@ -245,6 +245,9 @@ fd_banks_clone_from_parent( fd_banks_t * banks,
   new_bank->transaction_count           = parent_bank->transaction_count;
   new_bank->parent_signature_cnt        = parent_bank->parent_signature_cnt;
   new_bank->tick_height                 = parent_bank->tick_height;
+  new_bank->max_tick_height             = parent_bank->max_tick_height;
+  new_bank->hashes_per_tick             = parent_bank->hashes_per_tick;
+  new_bank->ns_per_slot                 = parent_bank->ns_per_slot;
   new_bank->ticks_per_slot              = parent_bank->ticks_per_slot;
   new_bank->genesis_creation_time       = parent_bank->genesis_creation_time;
   new_bank->slots_per_year              = parent_bank->slots_per_year;
