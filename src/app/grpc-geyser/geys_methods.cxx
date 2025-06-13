@@ -197,7 +197,7 @@ GeyserServiceImpl::GetVersion(::grpc::CallbackServerContext* context, const ::ge
   return new Reactor(this, request, response);
 }
 
-::geyser::SubscribeUpdateAccountInfo *
+static ::geyser::SubscribeUpdateAccountInfo *
 getAcctInfo(ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz) {
   auto* info = new ::geyser::SubscribeUpdateAccountInfo();
   info->set_pubkey(key->uc, 32U);
