@@ -85,9 +85,8 @@ fd_disco_netmux_sig( uint   hash_ip_addr,
      0<=i<=13.  Since bits are at a premium here, we compress the header
      size by just storing i. */
   ulong hdr_sz_i = ((hdr_sz - 42UL)>>2)&0xFUL;
-  ulong hash = 0xfffffUL & fd_ulong_hash( (ulong)hash_ip_addr | ((ulong)hash_port<<32) );
+  ulong hash     = 0xfffffUL & fd_ulong_hash( (ulong)hash_ip_addr | ((ulong)hash_port<<32) );
   return (hash<<44) | ((hdr_sz_i&0xFUL)<<40UL) | ((proto&0xFFUL)<<32UL) | ((ulong)dst_ip_addr);
-
 }
 
 FD_FN_CONST static inline ulong fd_disco_netmux_sig_hash  ( ulong sig ) { return (sig>>44UL); }

@@ -457,6 +457,7 @@ typedef struct {
       /* Set internally by the capture tile */
       int shreds_fd;
       int requests_fd;
+      int fecs_fd;
     } kappa;
   };
 } fd_topo_tile_t;

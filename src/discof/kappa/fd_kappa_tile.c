@@ -23,8 +23,9 @@
 #define FD_ARCHIVER_WRITER_ALLOC_TAG   (3UL)
 #define FD_ARCHIVER_WRITER_OUT_BUF_SZ  (4096UL)  /* My local filesystem block size */
 
-#define IN_KIND_SHRED  (0UL)
-#define IN_KIND_REPAIR (1UL)
+#define NET_SHRED  (0UL)
+#define REPAIR_NET (1UL)
+#define SHRED_REPAIR (2UL)
 
 typedef union {
   struct {
@@ -56,12 +57,15 @@ struct fd_capture_tile_ctx {
 
   fd_io_buffered_ostream_t shred_ostream;
   fd_io_buffered_ostream_t repair_ostream;
+  fd_io_buffered_ostream_t fecs_ostream;
 
   int  shreds_fd;
   int  repairs_fd;
+  int  fecs_fd;
 
   uchar shred_buf[FD_ARCHIVER_WRITER_OUT_BUF_SZ];
   uchar repair_buf[FD_ARCHIVER_WRITER_OUT_BUF_SZ];
+  uchar fecs_buf[FD_ARCHIVER_WRITER_OUT_BUF_SZ];
 };
 typedef struct fd_capture_tile_ctx fd_capture_tile_ctx_t;
 
@@ -84,7 +88,8 @@ populate_allowed_seccomp( fd_topo_t const *      topo FD_PARAM_UNUSED,
                                              out,
                                              (uint)fd_log_private_logfile_fd(),
                                              (uint)tile->kappa.shreds_fd,
-                                             (uint)tile->kappa.requests_fd );
+                                             (uint)tile->kappa.requests_fd,
+                                             (uint)tile->kappa.fecs_fd );
   return sock_filter_policy_fd_kappa_tile_instr_cnt;
 }
 
@@ -102,13 +107,16 @@ before_frag( fd_capture_tile_ctx_t * ctx,
              ulong            in_idx,
              ulong            seq FD_PARAM_UNUSED,
              ulong            sig ) {
-  if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_SHRED ) ) {
-    FD_LOG_INFO(("kappa SEQ %lu, sig %lu", seq, sig));
+  if( FD_LIKELY( ctx->in_kind[ in_idx ]==NET_SHRED ) ) {
     return (fd_disco_netmux_sig_proto( sig )!=DST_PROTO_SHRED) & (fd_disco_netmux_sig_proto( sig )!=DST_PROTO_REPAIR);
   }
   return 0;
 }
 
+static int
+is_fec_completes_msg( ulong sz ) {
+  return sz == FD_SHRED_DATA_HEADER_SZ + FD_SHRED_MERKLE_ROOT_SZ;
+}
 
 static inline void
 during_frag( fd_capture_tile_ctx_t * ctx,
@@ -119,7 +127,14 @@ during_frag( fd_capture_tile_ctx_t * ctx,
              ulong                   sz,
              ulong                   ctl FD_PARAM_UNUSED ) {
   ctx->skip_frag = 0;
-  if( ctx->in_kind[ in_idx ] == IN_KIND_SHRED ) {
+  if( ctx->in_kind[ in_idx ]==SHRED_REPAIR ) {
+    if( !is_fec_completes_msg( sz ) ) {
+      ctx->skip_frag = 1;
+      return;
+    }
+    fd_memcpy( ctx->shred_buffer, fd_chunk_to_laddr_const( ctx->in_links[ in_idx ].mem, chunk ), sz );
+    ctx->shred_buffer_sz = sz;
+  } else if( ctx->in_kind[ in_idx ] == NET_SHRED ) {
     uchar const * dcache_entry = fd_net_rx_translate_frag( &ctx->in_links[ in_idx ].net_rx, chunk, ctl, sz );
     ulong hdr_sz = fd_disco_netmux_sig_hdr_sz( sig );
     FD_TEST( hdr_sz <= sz ); /* Should be ensured by the net tile */
@@ -132,7 +147,7 @@ during_frag( fd_capture_tile_ctx_t * ctx,
     fd_memcpy( ctx->shred_buffer, dcache_entry+hdr_sz, sz-hdr_sz );
     ctx->shred_buffer_sz = sz-hdr_sz;
 
-  } else if( ctx->in_kind[ in_idx ] == IN_KIND_REPAIR ) {
+  } else if( ctx->in_kind[ in_idx ] == REPAIR_NET ) {
     // repair will have outgoing pings, outgoing repair requests, and outgoing served shreds
     // we want to filter everything but the repair requests
     // can index into the ip4 udp packet hdr and check if the src port is the intake listen port or serve port
@@ -166,7 +181,19 @@ after_frag( fd_capture_tile_ctx_t * ctx,
             fd_stem_context_t *     stem   FD_PARAM_UNUSED ) {
   if( FD_UNLIKELY( ctx->skip_frag ) ) return;
 
-  if( ctx->in_kind[ in_idx ] == IN_KIND_SHRED ) {
+  if( ctx->in_kind[ in_idx ] == SHRED_REPAIR ) {
+    // this is a fec completes message! we can use it to check how long
+    // it takes to complete a fec
+
+    fd_shred_t const * shred = (fd_shred_t *)fd_type_pun( ctx->shred_buffer );
+    char fec_complete[1024];
+    snprintf( fec_complete, sizeof(fec_complete),
+             "%ld,%lu,%u\n",
+              fd_log_wallclock(), shred->slot, shred->fec_set_idx );
+
+    int err = fd_io_buffered_ostream_write( &ctx->fecs_ostream, fec_complete, strlen(fec_complete) );
+    FD_TEST( err==0 );
+  } else if( ctx->in_kind[ in_idx ] == NET_SHRED ) {
     // if leader schedyle not ready it wouldve gotten skipped in shred_tile, but too much work here...
 
     fd_shred_t const * shred = fd_shred_parse( ctx->shred_buffer, ctx->shred_buffer_sz );
@@ -251,6 +278,8 @@ populate_allowed_fds( fd_topo_t const *      topo,
     out_fds[ out_cnt++ ] = tile->kappa.shreds_fd; /* shred file */
   if( FD_LIKELY( -1!=tile->kappa.requests_fd ) )
     out_fds[ out_cnt++ ] = tile->kappa.requests_fd; /* request file */
+  if( FD_LIKELY( -1!=tile->kappa.fecs_fd ) )
+    out_fds[ out_cnt++ ] = tile->kappa.fecs_fd; /* fec complete file */
 
   return out_cnt;
 }
@@ -263,7 +292,6 @@ privileged_init( fd_topo_t *      topo,
   strcpy( file_path, tile->kappa.folder_path );
   strcat( file_path, "/shred_data.csv" );
   tile->kappa.shreds_fd = open( file_path, O_WRONLY|O_CREAT|O_APPEND /*| O_DIRECT*/, 0644 );
-  FD_LOG_NOTICE(( "Opening shred csv dump file at %s", file_path ));
   if ( FD_UNLIKELY( tile->kappa.shreds_fd == -1 ) ) {
     FD_LOG_ERR(( "failed to open or create shred csv dump file %s %d %s", file_path, errno, strerror(errno) ));
   }
@@ -274,6 +302,14 @@ privileged_init( fd_topo_t *      topo,
   if ( FD_UNLIKELY( tile->kappa.requests_fd == -1 ) ) {
     FD_LOG_ERR(( "failed to open or create request csv dump file %s %d %s", file_path, errno, strerror(errno) ));
   }
+
+  strcpy( file_path, tile->kappa.folder_path );
+  strcat( file_path, "/fec_complete.csv" );
+  tile->kappa.fecs_fd = open( file_path, O_WRONLY|O_CREAT|O_APPEND /*| O_DIRECT*/, 0644 );
+  if ( FD_UNLIKELY( tile->kappa.fecs_fd == -1 ) ) {
+    FD_LOG_ERR(( "failed to open or create fec complete csv dump file %s %d %s", file_path, errno, strerror(errno) ));
+  }
+  FD_LOG_NOTICE(( "Opening shred csv dump file at %s", file_path ));
 }
 
 static void
@@ -287,8 +323,9 @@ unprivileged_init( fd_topo_t *      topo,
 
   /* Setup the csv files to be in the expected state */
 
-  ctx->shreds_fd = tile->kappa.shreds_fd;
+  ctx->shreds_fd  = tile->kappa.shreds_fd;
   ctx->repairs_fd = tile->kappa.requests_fd;
+  ctx->fecs_fd    = tile->kappa.fecs_fd;
 
   int err = ftruncate( ctx->shreds_fd, 0UL );
   if( FD_UNLIKELY( err ) ) {
@@ -308,17 +345,28 @@ unprivileged_init( fd_topo_t *      topo,
     FD_LOG_ERR(( "failed to seek to the beginning of the shred file" ));
   }
 
+  err = ftruncate( tile->kappa.fecs_fd, 0UL );
+  if( FD_UNLIKELY( err==-1 ) ) {
+    FD_LOG_ERR(( "failed to truncate the fec complete file (%i-%s)", errno, fd_io_strerror( errno ) ));
+  }
+  seek = lseek( tile->kappa.fecs_fd, 0UL, SEEK_SET );
+  if( FD_UNLIKELY( seek!=0L ) ) {
+    FD_LOG_ERR(( "failed to seek to the beginning of the fec complete file" ));
+  }
+
   /* Input links */
   for( ulong i=0; i<tile->in_cnt; i++ ) {
     fd_topo_link_t * link = &topo->links[ tile->in_link_id[ i ] ];
     fd_topo_wksp_t * link_wksp = &topo->workspaces[ topo->objs[ link->dcache_obj_id ].wksp_id ];
     if( 0==strcmp( link->name, "net_shred" ) ) {
-      ctx->in_kind[ i ] = IN_KIND_SHRED;
+      ctx->in_kind[ i ] = NET_SHRED;
       fd_net_rx_bounds_init( &ctx->in_links[ i ].net_rx, link->dcache );
       continue;
     } else if( 0==strcmp( link->name, "repair_net" ) ) {
-      ctx->in_kind[ i ] = IN_KIND_REPAIR;
-    } else {
+      ctx->in_kind[ i ] = REPAIR_NET;
+    } else if( 0==strcmp( link->name, "shred_repair" ) ) {
+      ctx->in_kind[ i ] = SHRED_REPAIR;
+    }else {
       FD_LOG_ERR(( "repair tile has unexpected input link %s", link->name ));
     }
 
@@ -346,10 +394,16 @@ unprivileged_init( fd_topo_t *      topo,
     FD_ARCHIVER_WRITER_OUT_BUF_SZ ) ) ) {
     FD_LOG_ERR(( "failed to initialize ostream" ));
   }
+  if( FD_UNLIKELY( !fd_io_buffered_ostream_init(
+    &ctx->fecs_ostream,
+    tile->kappa.fecs_fd,
+    ctx->fecs_buf,
+    FD_ARCHIVER_WRITER_OUT_BUF_SZ ) ) ) {
+    FD_LOG_ERR(( "failed to initialize ostream" ));
+  }
 
   err = fd_io_buffered_ostream_write( &ctx->shred_ostream, "hash_src,timestamp,slot,idx,is_turbine,is_data,nonce\n", 53UL );
 
-  //err = fd_io_write( ctx->shreds_fd, "timestamp,slot,idx,is_turbine,is_data,nonce\n", 44UL, 44UL, &sz );
   if( FD_UNLIKELY( err ) ) {
     FD_LOG_ERR(( "failed to write header to shred file (%i-%s)", errno, fd_io_strerror( errno ) ));
   }
@@ -358,6 +412,11 @@ unprivileged_init( fd_topo_t *      topo,
 
   if( FD_UNLIKELY( err ) ) {
     FD_LOG_ERR(( "failed to write header to repair file (%i-%s)", errno, fd_io_strerror( errno ) ));
+  }
+
+  err = fd_io_buffered_ostream_write( &ctx->fecs_ostream, "timestamp,slot,fec_set_idx\n", 27UL );
+  if( FD_UNLIKELY( err ) ) {
+    FD_LOG_ERR(( "failed to write header to fec complete file (%i-%s)", errno, fd_io_strerror( errno ) ));
   }
 }
 

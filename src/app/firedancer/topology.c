@@ -743,6 +743,9 @@ fd_topo_initialize( config_t * config ) {
     for( ulong j=0UL; j<net_tile_cnt; j++ ) {
       fd_topob_tile_in(  topo, "kappa", 0UL, "metric_in", "net_shred", j, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
     }
+    for( ulong j=0UL; j<shred_tile_cnt; j++ ) {
+      fd_topob_tile_in(  topo, "kappa", 0UL, "metric_in", "shred_repair", j, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+    }
   }
 
   fd_topob_wksp( topo, "replay_notif" );

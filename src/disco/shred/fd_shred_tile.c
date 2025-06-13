@@ -1014,7 +1014,7 @@ privileged_init( fd_topo_t *      topo,
   ulong sz = 0;
   fd_io_write( ctx->repair_data_fd, "ip4_addr,timestamp,slot,idx,is_turbine,is_data,nonce\n", 53UL, 53UL, &sz );
 
-  ctx->fec_complete_fd = open( "/data/emwang/fec_complete.csv", O_WRONLY|O_CREAT|O_APPEND, 0644 );
+  ctx->fec_complete_fd = open( "/data/emwang/fec_complete2.csv", O_WRONLY|O_CREAT|O_APPEND, 0644 );
   FD_TEST( ctx->fec_complete_fd>=0 );
   FD_TEST( ftruncate( ctx->fec_complete_fd, 0 ) == 0 );
   fd_io_write( ctx->fec_complete_fd, "timestamp,first_shred_ts,slot,fec_set_idx\n", 42UL, 42UL, &sz );
