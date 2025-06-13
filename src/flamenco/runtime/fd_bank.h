@@ -17,13 +17,11 @@ FD_PROTOTYPES_BEGIN
 
 /* 12568 is size of map representation to store 301 hashes */
 #define FD_BANK_BLOCK_HASH_QUEUE_SIZE (50000UL)
-#define FD_BANK_CLOCK_TIMESTAMP_VOTES_SIZE (5000000UL)
 #define FD_STAKE_ACCOUNT_KEYS_SIZE (160000000UL)
 
 /* Use this to avoid code duplication */
 #define FD_BANKS_COW_ITER(X) \
-  X(fd_clock_timestamp_votes_global_t, clock_timestamp_votes, 5000000UL,       128UL) \
-  X(fd_account_keys_global_t, stake_account_keys, 160000000UL, 128UL)
+  X(fd_clock_timestamp_votes_global_t, clock_timestamp_votes, 5000000UL,       128UL)
 
 
 
@@ -109,11 +107,11 @@ FD_BANKS_COW_ITER(X)
 #undef POOL_NAME
 #undef POOL_T
 
-#define POOL_NAME fd_bank_stake_account_keys_pool
-#define POOL_T    fd_bank_stake_account_keys_t
-#include "../../util/tmpl/fd_pool.c"
-#undef POOL_NAME
-#undef POOL_T
+// #define POOL_NAME fd_bank_stake_account_keys_pool
+// #define POOL_T    fd_bank_stake_account_keys_t
+// #include "../../util/tmpl/fd_pool.c"
+// #undef POOL_NAME
+// #undef POOL_T
 
 /* Banks **************************************************************/
 
@@ -132,22 +130,25 @@ FD_BANKS_COW_ITER(X)
 #undef MAP_KEY
 
 struct fd_banks {
-  ulong           magic;     /* ==FD_BANKS_MAGIC */
-  ulong           max_banks; /* Maximum number of banks */
-  ulong           root;      /* root slot */
-  ulong           root_idx;  /* root idx */
+  ulong             magic;     /* ==FD_BANKS_MAGIC */
+  ulong             max_banks; /* Maximum number of banks */
+  ulong             root;      /* root slot */
+  ulong             root_idx;  /* root idx */
 
-  fd_bank_t *                       pool;                       /* local join of pool */
-  fd_banks_map_t *                  map;                        /* local join of map */
-  fd_bank_clock_timestamp_votes_t * clock_timestamp_votes_pool; /* local join of clock vote timestamps pool */
-  fd_bank_stake_account_keys_t *    stake_account_keys_pool;    /* local join of stake account keys pool */
+  fd_bank_t *       pool; /* local join of pool */
+  fd_banks_map_t *  map;  /* local join of map */
+
+  #define X(type, name, footprint, align) \
+    fd_bank_##name##_t * name##_pool; /* local join of pool */
+  FD_BANKS_COW_ITER(X)
+  #undef X
 };
 typedef struct fd_banks fd_banks_t;
 
 /* Bank accesssors */
 
-#define X(type, name, footprint, align)                                   \
-  type * fd_bank_##name##_query( fd_banks_t * banks, fd_bank_t * bank );  \
+#define X(type, name, footprint, align)                                  \
+  type * fd_bank_##name##_query( fd_banks_t * banks, fd_bank_t * bank ); \
   type * fd_bank_##name##_modify( fd_banks_t * banks, fd_bank_t * bank );
 FD_BANKS_COW_ITER(X)
 #undef X
