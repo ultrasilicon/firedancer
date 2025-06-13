@@ -134,6 +134,7 @@ estimate_timestamp( fd_exec_slot_ctx_t * slot_ctx ) {
   fd_clock_timestamp_vote_t * head = &votes->elem;
   ulong slots = slot_ctx->slot - head->slot;
   uint128 ns_correction = slot_ctx->bank->ns_per_slot * slots;
+  FD_LOG_WARNING(("ESTIMATED TIMESTAMP %ld", head->timestamp  + (long) (ns_correction / NS_IN_S) ));
   return head->timestamp  + (long) (ns_correction / NS_IN_S) ;
 }
 
@@ -336,7 +337,7 @@ fd_calculate_stake_weighted_timestamp( fd_exec_slot_ctx_t * slot_ctx,
     *result_timestamp = clock->epoch_start_timestamp + (long)poh_estimate_offset / NS_IN_S - (long)max_delta_fast / NS_IN_S;
   }
 
-  FD_LOG_DEBUG(( "corrected stake weighted timestamp: %ld", *result_timestamp ));
+  FD_LOG_NOTICE(( "corrected stake weighted timestamp: %ld", *result_timestamp ));
 
   if (*result_timestamp < clock->unix_timestamp) {
     FD_LOG_DEBUG(( "updated timestamp to ancestor" ));

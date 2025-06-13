@@ -35,7 +35,7 @@ fd_bank_clock_timestamp_votes_modify( fd_banks_t * banks, fd_bank_t * bank ) {
     return (fd_clock_timestamp_votes_global_t *)bank_ctv->votes;
   }
 
-  FD_LOG_WARNING(("CLOCK TIMESTAMP VOTES DIRTY"));
+  FD_LOG_WARNING(("CLOCK TIMESTAMP VOTES DIRTY %lu", bank->slot));
 
   /* If the dirty flag is not set, we need to copy the votes pool from
      a parent bank if one exists and set the dirty flag. */
@@ -48,7 +48,7 @@ fd_bank_clock_timestamp_votes_modify( fd_banks_t * banks, fd_bank_t * bank ) {
   ulong child_idx = fd_bank_clock_timestamp_votes_pool_idx( banks->clock_timestamp_votes_pool, child_ctv );
   if( bank->clock_timestamp_votes_pool_idx!=fd_bank_clock_timestamp_votes_pool_idx_null( banks->clock_timestamp_votes_pool ) ) {
     fd_bank_clock_timestamp_votes_t * parent_ctv = fd_bank_clock_timestamp_votes_pool_ele( banks->clock_timestamp_votes_pool, bank->clock_timestamp_votes_pool_idx );
-    memcpy( child_ctv->votes, parent_ctv->votes, 2000000UL );
+    memcpy( child_ctv->votes, parent_ctv->votes, FD_BANK_CLOCK_TIMESTAMP_VOTES_SIZE );
   }
 
   bank->clock_timestamp_votes_pool_idx = child_idx;

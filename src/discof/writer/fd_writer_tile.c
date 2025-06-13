@@ -162,7 +162,7 @@ during_frag( fd_writer_tile_ctx_t * ctx,
       ctx->slot_ctx = slot_ctx;
 
       ctx->bank_mgr = fd_bank_mgr_join( ctx->bank_mgr, ctx->funk, ctx->slot_ctx->funk_txn );
-      ctx->bank = fd_banks_get_bank( ctx->banks, ctx->slot_ctx->slot );
+      ctx->bank = fd_banks_get_bank( ctx->banks, ctx->slot_ctx->funk_txn->xid.ul[0] );
       return;
     }
 
@@ -201,7 +201,7 @@ during_frag( fd_writer_tile_ctx_t * ctx,
       }
       FD_SPAD_FRAME_BEGIN( ctx->spad ) {
         FD_TEST( ctx->bank );
-        fd_runtime_finalize_txn( ctx->slot_ctx, NULL, &info, ctx->spad, ctx->bank_mgr, ctx->bank );
+        fd_runtime_finalize_txn( ctx->slot_ctx, NULL, &info, ctx->spad, ctx->bank_mgr, ctx->banks, ctx->bank );
       } FD_SPAD_FRAME_END;
     }
     /* Notify the replay tile. */

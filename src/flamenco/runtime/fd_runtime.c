@@ -1901,6 +1901,7 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
                          fd_execute_txn_task_info_t * task_info,
                          fd_spad_t *                  finalize_spad,
                          fd_bank_mgr_t *              bank_mgr,
+                         fd_banks_t *                 banks,
                          fd_bank_t *                  bank ) {
 
   /* for all accounts, if account->is_verified==true, propagate update
@@ -1922,7 +1923,7 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
     fd_runtime_write_transaction_status( capture_ctx, slot_ctx, txn_ctx, exec_txn_err );
   }
 
-  slot_ctx->bank->signature_cnt += txn_ctx->txn_descriptor->signature_cnt;
+  FD_ATOMIC_FETCH_AND_ADD( &bank->signature_cnt, txn_ctx->txn_descriptor->signature_cnt );
 
   // if( slot_ctx->status_cache ) {
   //   fd_txncache_insert_t status_insert = {0};
@@ -2008,8 +2009,8 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
           fd_vote_record_timestamp_vote_with_slot( acc_rec->pubkey,
                                                    ts->timestamp,
                                                    ts->slot,
-                                                   slot_ctx->banks,
-                                                   slot_ctx->bank );
+                                                   banks,
+                                                   bank );
         } FD_SPAD_FRAME_END;
       }
 
@@ -2136,7 +2137,7 @@ fd_runtime_prepare_execute_finalize_txn_task( void * tpool,
     return;
   }
 
-  fd_runtime_finalize_txn( slot_ctx, capture_ctx, task_info, task_info->txn_ctx->spad, task_info->txn_ctx->bank_mgr, slot_ctx->bank );
+  fd_runtime_finalize_txn( slot_ctx, capture_ctx, task_info, task_info->txn_ctx->spad, task_info->txn_ctx->bank_mgr, slot_ctx->banks, slot_ctx->bank );
 }
 
 /* fd_executor_txn_verify and fd_runtime_pre_execute_check are responisble
@@ -3711,7 +3712,7 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
 
   fd_clock_timestamp_votes_global_t * clock_timestamp_votes = fd_bank_clock_timestamp_votes_modify( slot_ctx->banks, slot_ctx->bank );
   uchar * clock_pool_mem = (uchar *)fd_ulong_align_up( (ulong)clock_timestamp_votes + sizeof(fd_clock_timestamp_votes_global_t), fd_clock_timestamp_vote_t_map_align() );
-  fd_clock_timestamp_vote_t_mapnode_t * clock_pool = fd_clock_timestamp_vote_t_map_join( fd_clock_timestamp_vote_t_map_new(clock_pool_mem, 15000UL ) );
+  fd_clock_timestamp_vote_t_mapnode_t * clock_pool = fd_clock_timestamp_vote_t_map_join( fd_clock_timestamp_vote_t_map_new(clock_pool_mem, 30000UL ) );
   clock_timestamp_votes->votes_pool_offset = (ulong)fd_clock_timestamp_vote_t_map_leave( clock_pool) - (ulong)clock_timestamp_votes;
   clock_timestamp_votes->votes_root_offset = 0UL;
 }

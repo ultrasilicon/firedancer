@@ -17,6 +17,7 @@ FD_PROTOTYPES_BEGIN
 
 /* 12568 is size of map representation to store 301 hashes */
 #define FD_BANK_BLOCK_HASH_QUEUE_SIZE (50000UL)
+#define FD_BANK_CLOCK_TIMESTAMP_VOTES_SIZE (5000000UL)
 
 /* fd_bank_t and fd_banks_t are used to manage the bank state in a
    fork-aware manner. */
@@ -77,7 +78,7 @@ fd_bank_footprint( void );
 
 struct fd_bank_clock_timestamp_votes {
   ulong next;
-  uchar votes[5000000UL]__attribute__((aligned(128UL)));
+  uchar votes[FD_BANK_CLOCK_TIMESTAMP_VOTES_SIZE]__attribute__((aligned(128UL)));
 };
 typedef struct fd_bank_clock_timestamp_votes fd_bank_clock_timestamp_votes_t;
 
