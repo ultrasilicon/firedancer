@@ -232,8 +232,9 @@ fd_banks_init_bank( fd_banks_t * banks, ulong slot ) {
   bank->sibling_idx = null_idx;
 
   /* Set all CoW fields to null. */
-  #define X(type, name, footprint, align) \
-    bank->name##_pool_idx = fd_bank_##name##_pool_idx_null( banks->name##_pool );
+  #define X(type, name, footprint, align)                                         \
+    bank->name##_pool_idx = fd_bank_##name##_pool_idx_null( banks->name##_pool ); \
+    bank->name##_dirty    = 0;
   FD_BANKS_COW_ITER(X)
   #undef X
 
@@ -420,7 +421,9 @@ fd_banks_publish( fd_banks_t * banks, ulong slot ) {
 
   /* Need to update the root to be the owner of any CoW fields. */
   #define X(type, name, footprint, align) \
-    new_root->name##_dirty = 1;
+    if( new_root->name##_pool_idx!=fd_bank_##name##_pool_idx_null( banks->name##_pool ) ) { \
+      new_root->name##_dirty = 1;                                                           \
+    }
   FD_BANKS_COW_ITER(X)
   #undef X
 

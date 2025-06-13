@@ -337,8 +337,6 @@ fd_calculate_stake_weighted_timestamp( fd_exec_slot_ctx_t * slot_ctx,
     *result_timestamp = clock->epoch_start_timestamp + (long)poh_estimate_offset / NS_IN_S - (long)max_delta_fast / NS_IN_S;
   }
 
-  FD_LOG_NOTICE(( "corrected stake weighted timestamp: %ld", *result_timestamp ));
-
   if (*result_timestamp < clock->unix_timestamp) {
     FD_LOG_DEBUG(( "updated timestamp to ancestor" ));
     *result_timestamp = clock->unix_timestamp;
