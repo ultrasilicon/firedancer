@@ -33,27 +33,34 @@ struct fd_snapshot_manifest_stake_delegation {
   /* The voter pubkey to whom the stake is delegated */
   uchar vote_account_pubkey[ 32UL ];
 
-  /* The activated stake amount */
+  /* The activated stake amount that is delegated */
   ulong stake;
 };
 
 typedef struct fd_snapshot_manifest_stake_delegation fd_snapshot_manifest_stake_delegation_t;
 
 struct fd_snapshot_manifest_inflation_params {
-  /* Initial inflation percentage, from time=0 */
+  /* The initial inflation percentage starting at genesis.
+     This value is set at genesis to 8% and is not expected to change. */
   double initial;
 
-  /* Terminal inflation percentage, to time=INF */
+  /* The terminal inflation percentage is the long-term steady state
+     inflation rate after a period of disinflation.  This value is set
+     at genesis to 1.5% and is not expected to change. */
   double terminal;
 
-  /* Rate per year, at which inflation is lowered until reaching terminal
-     i.e. inflation(year) == MAX(terminal, initial*((1-taper)^year)) */
+  /* The rate per year at which inflation is lowered until it reaches
+     the terminal inflation rate.  This value is set to 15% at genesis
+     and is not expected to change. */
   double taper;
 
-  /* Percentage of total inflation allocated to the foundation */
+  /* The percentage of total inflation allocated to the foundation.
+     This value is set at genesis to 5% and is not expected to change. */
   double foundation;
 
-  /* Duration of foundation pool inflation, in years */
+  /* The number of years in which a portion of the total inflation is 
+     allocated to the foundation (see foundation field).  This value is
+     set to 7 years at genesis and is not expected to change. */
   double foundation_term;
 };
 
@@ -63,32 +70,35 @@ struct fd_snapshot_manifest_epoch_schedule_params {
   /* The maximum number of slots in each epoch. */
   ulong slots_per_epoch;
 
-  /* A number of slots before beginning of an epoch to calculate
-     a leader schedule for that epoch.  This value is set to the
-     number of slots in one epoch from genesis onwards and is unlikely
-     to change. */
+  /* A number of slots before beginning of an epoch to calculate a
+     leader schedule for that epoch.  This value is set to
+     slots_per_epoch (basically one epoch) and is unlikely to change. */
   ulong leader_schedule_slot_offset;
 
-  /* Whether epochs start short and grow. */
+  /* Whether there is a warmup period where epochs are short and grow by
+     powers of two until they reach the default epoch length of
+     slots_per_epoch.  This value is set by default to true at genesis,
+     though it may be configured differently in development
+     environments. */
   uchar warmup;
 };
 
 typedef struct fd_snapshot_manifest_epoch_schedule_params fd_snapshot_manifest_epoch_schedule_params_t;
 
 struct fd_snapshot_manifest_fee_rate_governor {
-  /* Typically, transaction fees are calculated by charging a cost of
-     5,000 lamports per signature.  However, there is a mechanism to
-     dynamically adjust the cost per signature based on the cluster's
-     transaction processing capacity.  In this mechanism, the cost per
-     signature can vary between 50% to 1000% of the
-     target_lamports_per_signature value, which is the cost per
-     signature when the cluster is operating at the desired transaction
-     processing capacity defined by target_signatures_per_slot.
+  /* Transaction fees are calculated by charging a cost for each
+     signature.  There is a mechanism to dynamically adjust the cost per
+     signature based on the cluster's transaction processing capacity.
+     In this mechanism, the cost per signature can vary between 50% to
+     1000% of the target_lamports_per_signature value, which is the cost
+     per signature when the cluster is operating at the desired
+     transaction processing capacity defined by
+     target_signatures_per_slot.
 
      This value is fixed at 10,000 from genesis onwards but may be
      changed in the future with feature flags. */
   ulong target_lamports_per_signature;
-  
+
   /* The cluster transaction processing capacity is measured by
      signatures per slot.  Solana defines the desired transaction
      processing capacity using the value target_signatures_per_slot.
@@ -290,9 +300,9 @@ struct fd_snapshot_manifest {
      slot.*/
   ulong capitalization;
 
-  /* A list of all vote accounts and their state relating to rewards
-     distribution, which includes the vote account's commission and vote
-     credits.
+  /* A list of this epoch's vote accounts and their state relating to
+     rewards distribution, which includes the vote account's commission
+     and vote credits.
 
      The validator distributes vote and stake rewards for the previous
      epoch in the slots immediately after the epoch boundary.  These
