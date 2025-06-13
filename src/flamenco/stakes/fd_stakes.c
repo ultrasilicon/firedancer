@@ -753,7 +753,7 @@ fd_accumulate_stake_infos( fd_exec_slot_ctx_t const * slot_ctx,
   }
   temp_info->stake_infos_new_keys_start_idx = temp_info->stake_infos_len;
 
-  fd_account_keys_global_t *         stake_account_keys = fd_bank_mgr_stake_account_keys_query( slot_ctx->bank_mgr );
+  fd_account_keys_global_t *         stake_account_keys = fd_bank_stake_account_keys_query( slot_ctx->banks, slot_ctx->bank );
   fd_account_keys_pair_t_mapnode_t * account_keys_pool  = fd_account_keys_account_keys_pool_join( stake_account_keys );
   fd_account_keys_pair_t_mapnode_t * account_keys_root  = fd_account_keys_account_keys_root_join( stake_account_keys );
 
@@ -814,7 +814,7 @@ fd_stakes_activate_epoch( fd_exec_slot_ctx_t *  slot_ctx,
   fd_delegation_pair_t_mapnode_t * stake_delegations_pool = fd_stakes_stake_delegations_pool_join( stakes );
   fd_delegation_pair_t_mapnode_t * stake_delegations_root = fd_stakes_stake_delegations_root_join( stakes );
 
-  fd_account_keys_global_t * stake_account_keys = fd_bank_mgr_stake_account_keys_query( slot_ctx->bank_mgr );
+  fd_account_keys_global_t * stake_account_keys = fd_bank_stake_account_keys_query( slot_ctx->banks, slot_ctx->bank );
 
   fd_account_keys_pair_t_mapnode_t * account_keys_pool = NULL;
   fd_account_keys_pair_t_mapnode_t * account_keys_root = NULL;

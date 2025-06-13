@@ -105,8 +105,6 @@ fd_banks_new( void * shmem, ulong max_banks ) {
   FD_BANKS_COW_ITER(X)
   #undef X
 
-
-  FD_LOG_WARNING(("%lu %lu", (ulong)banks + fd_banks_footprint( max_banks ), FD_SCRATCH_ALLOC_FINI( l, fd_banks_align() ) ));
   if( FD_UNLIKELY( FD_SCRATCH_ALLOC_FINI( l, fd_banks_align() ) != (ulong)banks + fd_banks_footprint( max_banks ) ) ) {
     FD_LOG_WARNING(( "fd_banks_new: bad layout" ));
     return NULL;

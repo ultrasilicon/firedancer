@@ -2016,7 +2016,7 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
 
       if( dirty_stake_acc && 0==memcmp( acc_rec->vt->get_owner( acc_rec ), &fd_solana_stake_program_id, sizeof(fd_pubkey_t) ) ) {
         // TODO: does this correctly handle stake account close?
-        fd_store_stake_delegation( acc_rec, bank_mgr );
+        fd_store_stake_delegation( acc_rec, bank_mgr, banks, bank );
       }
 
       fd_txn_account_save( &txn_ctx->accounts[i], slot_ctx->funk, slot_ctx->funk_txn, txn_ctx->spad_wksp );
@@ -2316,13 +2316,10 @@ fd_update_stake_delegations( fd_exec_slot_ctx_t * slot_ctx,
   fd_stakes_stake_delegations_root_update( stakes, stake_delegations_root );
   fd_bank_mgr_stakes_save( slot_ctx->bank_mgr );
 
-  fd_account_keys_global_t * stake_account_keys = fd_bank_mgr_stake_account_keys_query( slot_ctx->bank_mgr );
-  if( FD_UNLIKELY( stake_account_keys==NULL ) ) {
-    return;
-  }
-
-  stake_account_keys = fd_bank_mgr_stake_account_keys_modify( slot_ctx->bank_mgr );
-
+  /* At the epoch boundary, release all of the stake account keys
+     because at this point all of the changes have been applied to the
+     stakes. */
+  fd_account_keys_global_t * stake_account_keys = fd_bank_stake_account_keys_modify( slot_ctx->banks, slot_ctx->bank );
   fd_account_keys_pair_t_mapnode_t * account_keys_pool = fd_account_keys_account_keys_pool_join( stake_account_keys );
   fd_account_keys_pair_t_mapnode_t * account_keys_root = fd_account_keys_account_keys_root_join( stake_account_keys );
 
@@ -2331,8 +2328,6 @@ fd_update_stake_delegations( fd_exec_slot_ctx_t * slot_ctx,
 
   fd_account_keys_account_keys_pool_update( stake_account_keys, account_keys_pool );
   fd_account_keys_account_keys_root_update( stake_account_keys, account_keys_root );
-
-  fd_bank_mgr_stake_account_keys_save( slot_ctx->bank_mgr );
 }
 
 /* Replace the stakes in T-2 (slot_ctx->slot_bank.epoch_stakes) by the stakes at T-1 (epoch_bank->next_epoch_stakes) */
@@ -3906,14 +3901,13 @@ fd_runtime_read_genesis( fd_exec_slot_ctx_t * slot_ctx,
   }
 
 
-  fd_account_keys_global_t *         stake_account_keys      = fd_bank_mgr_stake_account_keys_modify( slot_ctx->bank_mgr );
+  fd_account_keys_global_t *         stake_account_keys      = fd_bank_stake_account_keys_modify( slot_ctx->banks, slot_ctx->bank );
   uchar *                            pool_mem                = (uchar *)fd_ulong_align_up( (ulong)stake_account_keys + sizeof(fd_account_keys_global_t), fd_account_keys_pair_t_map_align() );
   fd_account_keys_pair_t_mapnode_t * stake_account_keys_pool = fd_account_keys_pair_t_map_join( fd_account_keys_pair_t_map_new( pool_mem, 100000UL ) );
   fd_account_keys_pair_t_mapnode_t * stake_account_keys_root = NULL;
 
   fd_account_keys_account_keys_pool_update( stake_account_keys, stake_account_keys_pool );
   fd_account_keys_account_keys_root_update( stake_account_keys, stake_account_keys_root );
-  fd_bank_mgr_stake_account_keys_save( slot_ctx->bank_mgr );
 
   fd_account_keys_global_t *         vote_account_keys      = fd_bank_mgr_vote_account_keys_modify( slot_ctx->bank_mgr );
                                      pool_mem               = (uchar *)fd_ulong_align_up( (ulong)vote_account_keys + sizeof(fd_account_keys_global_t), fd_account_keys_pair_t_map_align() );

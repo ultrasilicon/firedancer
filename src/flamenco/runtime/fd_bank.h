@@ -13,20 +13,25 @@
 
 FD_PROTOTYPES_BEGIN
 
-#define FD_BANKS_MAGIC 0X999999999UL
+#define FD_BANKS_MAGIC 0X99999AA9999UL
 
-/* 12568 is size of map representation to store 301 hashes */
+/* fd_bank_t and fd_banks_t are used to manage the bank state in a
+   fork-aware manner. fd_banks_t can be queried to get the bank state
+   for a given slot. This state can be cloned and modified from the
+   state of some parent bank, but it can also be responsible for
+   publishing the state to prune off rooted slots.
+
+   fd_banks_t also supports CoW semantics for more complex data
+   structures which are not written to frequently. However, this is
+   abstracted away from the caller who should only access/modify the
+   fields using getters and setters: fd_bank_{*}_{query,modfiy}(). */
+
 #define FD_BANK_BLOCK_HASH_QUEUE_SIZE (50000UL)
-#define FD_STAKE_ACCOUNT_KEYS_SIZE (160000000UL)
 
 /* Use this to avoid code duplication */
 #define FD_BANKS_COW_ITER(X) \
-  X(fd_clock_timestamp_votes_global_t, clock_timestamp_votes, 5000000UL,       128UL)
-
-
-
-/* fd_bank_t and fd_banks_t are used to manage the bank state in a
-   fork-aware manner. */
+  X(fd_clock_timestamp_votes_global_t, clock_timestamp_votes, 5000000UL,   128UL) \
+  X(fd_account_keys_global_t,          stake_account_keys,    100000000UL, 128UL) /* Supports roughly 3M stake accounts */
 
 struct fd_bank {
   /* Fields used for internal pool and bank management */
@@ -37,7 +42,7 @@ struct fd_bank {
   ulong             sibling_idx; /* index of the right-sibling in the node pool */
 
 
-  /* Simple or frequently modified fields that are always copied over */
+  /* Simple or frequently modified fields that are always copied over. */
   uchar                  block_hash_queue[FD_BANK_BLOCK_HASH_QUEUE_SIZE]__attribute__((aligned(128UL)));
   fd_fee_rate_governor_t fee_rate_governor;
   ulong                  capitalization;
@@ -65,7 +70,8 @@ struct fd_bank {
 
   /* CoW Fields. These are only copied when explicitly requested by
      the caller. A lock is used to prevent contention between multiple
-     threads trying to access the same field. */
+     threads trying to access the same field. These fields should NEVER
+     be accessed directly and are just for internal use.. */
 
   #define X(type, name, footprint, align) \
   fd_rwlock_t name##_lock;                \
@@ -78,16 +84,22 @@ struct fd_bank {
 };
 typedef struct fd_bank fd_bank_t;
 
+/* fd_bank_t is the alignment for the bank state. */
 
 ulong
 fd_bank_align( void );
 
+/* fd_bank_t is the footprint for the bank state. This does NOT
+   include the footprint for the CoW state. */
+
 ulong
 fd_bank_footprint( void );
 
-/* CoW Pools used for complex data structures */
+/**********************************************************************/
 
-/* Clock Timestamp Votes Pool */
+/* CoW Pools used for complex data structures. The pool structs are
+   just wrappers around aligned buffers. These should not be accessed
+   directly and are just for itnernal use. */
 
 #define X(type, name, footprint, align)                      \
   static const ulong fd_bank_##name##_align     = align;     \
@@ -101,19 +113,30 @@ fd_bank_footprint( void );
 FD_BANKS_COW_ITER(X)
 #undef X
 
+/* All of the pools used by CoW. TODO: Is there a way to templatize
+   this? */
+
 #define POOL_NAME fd_bank_clock_timestamp_votes_pool
 #define POOL_T    fd_bank_clock_timestamp_votes_t
 #include "../../util/tmpl/fd_pool.c"
 #undef POOL_NAME
 #undef POOL_T
 
-// #define POOL_NAME fd_bank_stake_account_keys_pool
-// #define POOL_T    fd_bank_stake_account_keys_t
-// #include "../../util/tmpl/fd_pool.c"
-// #undef POOL_NAME
-// #undef POOL_T
+#define POOL_NAME fd_bank_stake_account_keys_pool
+#define POOL_T    fd_bank_stake_account_keys_t
+#include "../../util/tmpl/fd_pool.c"
+#undef POOL_NAME
+#undef POOL_T
 
-/* Banks **************************************************************/
+/**********************************************************************/
+/* fd_banks_t is the main struct used to manage the bank state. It can
+   be used to query/modify/clone/publish the bank state.
+
+   fd_banks_t contains some metadata a map/pool pair to manage the banks.
+   It also contains pointers to the CoW pools.
+
+   The data is laid out contigiously in memory starting from fd_banks_t;
+   this can be seen in fd_banks_footprint(). */
 
 #define POOL_NAME fd_banks_pool
 #define POOL_T    fd_bank_t
@@ -153,35 +176,70 @@ typedef struct fd_banks fd_banks_t;
 FD_BANKS_COW_ITER(X)
 #undef X
 
-/* Banks accesssors */
+/* fd_banks_root reutrns the current root slot for the bank/ */
 
 FD_FN_PURE static inline fd_bank_t const *
 fd_banks_root( fd_banks_t const * banks ) {
   return fd_banks_pool_ele_const( banks->pool, banks->root_idx );
 }
 
+/* fd_banks_align() returns the alignment of fd_banks_t */
+
 ulong
 fd_banks_align( void );
+
+/* fd_banks_footprint() returns the footprint of fd_banks_t */
 
 ulong
 fd_banks_footprint( ulong max_banks );
 
+/* fd_banks_new() creates a new fd_banks_t struct. */
+
 void *
 fd_banks_new( void * mem, ulong max_banks );
+
+/* fd_banks_join() joins a new fd_banks_t struct. */
 
 fd_banks_t *
 fd_banks_join( void * mem );
 
+/* TODO: Add a fd_banks_leave()/fd_banks_delete(). */
+
+/* fd_banks_init_bank() initializes a new bank in the bank manager.
+   This should only be used during bootup. This returns an initial
+   fd_bank_t with the corresponding slot. */
+
 fd_bank_t *
 fd_banks_init_bank( fd_banks_t * banks, ulong slot );
 
+/* fd_bank_get_bank() returns a bank for a given slot. If said bank
+   does not exist, NULL is returned. */
+
 fd_bank_t *
 fd_banks_get_bank( fd_banks_t * banks, ulong slot );
+
+/* fd_banks_clone_from_parent() clones a bank from a parent bank.
+   If the bank corresponding to the parent slot does not exist,
+   NULL is returned. If a bank is not able to be created, NULL is
+   returned. The data from the parent bank will copied over into
+   the new bank.
+
+   A more detailed note: not all of the data is copied over. All of the
+   CoW fields are not copied over and will only be done so if
+   the caller explicitly calls fd_bank_{*}_modify(). */
 
 fd_bank_t *
 fd_banks_clone_from_parent( fd_banks_t * banks,
                             ulong        slot,
                             ulong        parent_slot );
+
+/* fd_banks_publish() publishes a bank to the bank manager. This
+   should only be used when a bank is no longer needed. This will
+   prune off the bank from the bank manager. It returns the new root
+   bank.
+
+   All banks that are ancestors or siblings of the slot will be
+   cancelled and their resources will be released back to the pool. */
 
 fd_bank_t const *
 fd_banks_publish( fd_banks_t * banks, ulong slot );
