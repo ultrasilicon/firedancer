@@ -197,6 +197,17 @@ GeyserServiceImpl::GetVersion(::grpc::CallbackServerContext* context, const ::ge
   return new Reactor(this, request, response);
 }
 
+::geyser::SubscribeUpdateAccountInfo *
+getAcctInfo(ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz) {
+  auto* info = new ::geyser::SubscribeUpdateAccountInfo();
+  info->set_pubkey(key->uc, 32U);
+  info->set_lamports(meta->info.lamports);
+  info->set_owner(meta->info.owner, 32U);
+  info->set_executable(meta->info.executable);
+  info->set_data(val, val_sz);
+  return info;
+}
+
 void
 GeyserServiceImpl::updateAcct(GeyserSubscribeReactor_t * reactor, ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz) {
   auto* update = new ::geyser::SubscribeUpdate();
@@ -204,13 +215,8 @@ GeyserServiceImpl::updateAcct(GeyserSubscribeReactor_t * reactor, ulong slot, fd
   update->set_allocated_account(acct);
   acct->set_slot(slot);
   acct->set_is_startup(false);
-  auto* info = new ::geyser::SubscribeUpdateAccountInfo();
+  auto* info = getAcctInfo( slot, key, meta, val, val_sz );
   acct->set_allocated_account(info);
-  info->set_pubkey(key->uc, 32U);
-  info->set_lamports(meta->info.lamports);
-  info->set_owner(meta->info.owner, 32U);
-  info->set_executable(meta->info.executable);
-  info->set_data(val, val_sz);
 
   reactor->Update( update );
 }
@@ -226,14 +232,9 @@ GeyserServiceImpl::updateSlot(GeyserSubscribeReactor_t * reactor, fd_replay_noti
   reactor->Update( update );
 }
 
-void
-GeyserServiceImpl::updateTxn(GeyserSubscribeReactor_t * reactor, fd_replay_notif_msg_t * msg, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs) {
-  auto* update = new ::geyser::SubscribeUpdate();
-  auto* txn2 = new ::geyser::SubscribeUpdateTransaction();
-  update->set_allocated_transaction(txn2);
-  txn2->set_slot(msg->slot_exec.slot);
+static ::geyser::SubscribeUpdateTransactionInfo *
+getTxnInfo(fd_replay_notif_msg_t * msg, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs) {
   auto* info = new ::geyser::SubscribeUpdateTransactionInfo();
-  txn2->set_allocated_transaction(info);
   info->set_signature(sigs, 64);
   auto* txn3 = new ::solana::storage::ConfirmedBlock::Transaction();
   info->set_allocated_transaction(txn3);
@@ -252,5 +253,43 @@ GeyserServiceImpl::updateTxn(GeyserSubscribeReactor_t * reactor, fd_replay_notif
   }
   mess->set_recent_blockhash(msg->slot_exec.block_hash.uc, 32);
 
+  return info;
+}
+
+void
+GeyserServiceImpl::updateTxn(GeyserSubscribeReactor_t * reactor, fd_replay_notif_msg_t * msg, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs) {
+  auto* update = new ::geyser::SubscribeUpdate();
+  auto* txn2 = new ::geyser::SubscribeUpdateTransaction();
+  update->set_allocated_transaction(txn2);
+  txn2->set_slot(msg->slot_exec.slot);
+  auto* info = getTxnInfo( msg, txn, accs, sigs );
+  txn2->set_allocated_transaction(info);
+
   reactor->Update( update );
+}
+
+::geyser::SubscribeUpdateBlock *
+GeyserServiceImpl::startUpdateBlock( fd_replay_notif_msg_t * msg ) {
+  auto * blk = new ::geyser::SubscribeUpdateBlock();
+  blk->set_slot(msg->slot_exec.slot);
+  blk->set_blockhash({(const char*)msg->slot_exec.block_hash.uc, 32});
+  auto * bh = new ::solana::storage::ConfirmedBlock::BlockHeight();
+  bh->set_block_height(msg->slot_exec.height);
+  blk->set_allocated_block_height(bh);
+  blk->set_parent_slot(msg->slot_exec.parent);
+  return blk;
+}
+
+void
+GeyserServiceImpl::addAcct(::geyser::SubscribeUpdateBlock * blk, ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz) {
+  auto* info = getAcctInfo( slot, key, meta, val, val_sz );
+  blk->mutable_accounts()->AddAllocated(info);
+  blk->set_updated_account_count(blk->updated_account_count() + 1);
+}
+
+void
+GeyserServiceImpl::addTxn(::geyser::SubscribeUpdateBlock * blk, fd_replay_notif_msg_t * msg, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs) {
+  auto* info = getTxnInfo( msg, txn, accs, sigs );
+  blk->mutable_transactions()->AddAllocated(info);
+  blk->set_executed_transaction_count(blk->executed_transaction_count() + 1);
 }

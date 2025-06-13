@@ -30,6 +30,14 @@ struct CompiledFilterTxn {
     std::vector<fd_hash_t> acct_required_;
 };
 
+struct CompiledFilterBlock {
+    std::string name_;
+    std::vector<fd_hash_t> acct_include_;
+    bool include_transactions_;
+    bool include_accounts_;
+    ::geyser::SubscribeUpdateBlock * currentBlock_ = NULL;
+};
+
 class CompiledFilter {
   public:
     static CompiledFilter * compile(::geyser::SubscribeRequest * request) {
@@ -44,12 +52,12 @@ class CompiledFilter {
     bool filterSlot(fd_replay_notif_msg_t * msg);
     bool filterTxn(fd_replay_notif_msg_t * msg, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs);
 
-  private:
     bool compile_internal(::geyser::SubscribeRequest * request);
 
     std::vector<std::unique_ptr<CompiledFilterAccount>> accts_;
     std::vector<std::unique_ptr<CompiledFilterSlot>> slots_;
     std::vector<std::unique_ptr<CompiledFilterTxn>> txns_;
+    std::vector<std::unique_ptr<CompiledFilterBlock>> blks_;
 };
 
 bool
@@ -102,6 +110,21 @@ CompiledFilter::compile_internal(::geyser::SubscribeRequest * request) {
       a->acct_required_.push_back(hash);
     }
     txns_.emplace_back(a);
+  }
+
+  for( auto& i : request->blocks() ) {
+    auto* a = new CompiledFilterBlock();
+    a->name_ = i.first;
+    auto& f = i.second;
+    for( int j = 0; j < f.account_include_size(); ++j ) {
+      auto& s = f.account_include(j);
+      fd_hash_t hash;
+      if( !fd_base58_decode_32( s.c_str(), hash.uc ) ) return false;
+      a->acct_include_.push_back(hash);
+    }
+    a->include_transactions_ = f.include_transactions();
+    a->include_accounts_ = f.include_accounts();
+    blks_.emplace_back(a);
   }
 
   return true;
@@ -194,7 +217,8 @@ geys_filter_add_sub(geys_filter_t * filter, /* SubscribeRequest*/ void * request
       CompiledFilter::compile( (::geyser::SubscribeRequest *) request),
       reactor
     } );
-  if( !( (::geyser::SubscribeRequest *) request)->accounts().empty() )
+  if( !( (::geyser::SubscribeRequest *) request)->accounts().empty() ||
+      !( (::geyser::SubscribeRequest *) request)->blocks().empty())
     filter->load_accts_ = true;
 }
 
@@ -215,6 +239,10 @@ geys_filter::filter_acct(ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta
     if( i.filter_->filterAccount(key, meta, val, val_sz) ) {
       GeyserServiceImpl::updateAcct(i.reactor_, slot, key, meta, val, val_sz);
     }
+    for( auto& j : i.filter_->blks_ ) {
+      if( j->include_accounts_ )
+        GeyserServiceImpl::addAcct(j->currentBlock_, slot, key, meta, val, val_sz);
+    }
   }
 }
 
@@ -233,6 +261,10 @@ geys_filter::filter_txn(fd_replay_notif_msg_t * msg, fd_txn_t * txn, fd_pubkey_t
     if( i.filter_->filterTxn(msg, txn, accs, sigs) ) {
       GeyserServiceImpl::updateTxn(i.reactor_, msg, txn, accs, sigs);
     }
+    for( auto& j : i.filter_->blks_ ) {
+      if( j->include_transactions_ )
+        GeyserServiceImpl::addTxn(j->currentBlock_, msg, txn, accs, sigs);
+    }
   }
 }
 
@@ -241,6 +273,12 @@ geys_filter_notify(geys_filter_t * filter, fd_replay_notif_msg_t * msg, uchar * 
   filter->serv_->notify(msg);
 
   filter->filter_slot(msg);
+
+  for( auto& i : filter->elems_ ) {
+    for( auto& j : i.filter_->blks_ ) {
+      j->currentBlock_ = GeyserServiceImpl::startUpdateBlock( msg );
+    }
+  }
 
   fd_funk_txn_map_t * txn_map = fd_funk_txn_map( filter->funk_ );
   fd_funk_txn_xid_t xid;
