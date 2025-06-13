@@ -133,11 +133,8 @@ during_frag( fd_capture_tile_ctx_t * ctx,
     ctx->shred_buffer_sz = sz-hdr_sz;
 
   } else if( ctx->in_kind[ in_idx ] == IN_KIND_REPAIR ) {
-    ctx->skip_frag = 1;
-    return;
     // repair will have outgoing pings, outgoing repair requests, and outgoing served shreds
     // we want to filter everything but the repair requests
-
     // can index into the ip4 udp packet hdr and check if the src port is the intake listen port or serve port
 
     uchar const * dcache_entry = fd_chunk_to_laddr_const( ctx->in_links[ in_idx ].mem, chunk );
@@ -153,28 +150,20 @@ during_frag( fd_capture_tile_ctx_t * ctx,
       ctx->skip_frag = 1;
       return;
     }
-    fd_memcpy( ctx->repair_buffer, encoded_protocol, sz - sizeof(fd_ip4_udp_hdrs_t) );
-    ctx->repair_buffer_sz = sz - sizeof(fd_ip4_udp_hdrs_t);
+    fd_memcpy( ctx->repair_buffer, dcache_entry, sz );
+    ctx->repair_buffer_sz = sz;
   }
 }
 
 static inline void
 after_frag( fd_capture_tile_ctx_t * ctx,
-            ulong                   in_idx FD_PARAM_UNUSED,
+            ulong                   in_idx,
             ulong                   seq    FD_PARAM_UNUSED,
-            ulong                   sig    FD_PARAM_UNUSED,
-            ulong                   sz,
+            ulong                   sig,
+            ulong                   sz     FD_PARAM_UNUSED,
             ulong                   tsorig FD_PARAM_UNUSED,
             ulong                   tspub  FD_PARAM_UNUSED,
             fd_stem_context_t *     stem   FD_PARAM_UNUSED ) {
-  (void)in_idx;
-  (void)ctx;
-  (void)sz;
-  /* Write frag to file */
-  //int err = fd_io_buffered_ostream_write( &ctx->shred_ostream, ctx->frag_buf, sz );
-  //if( FD_UNLIKELY( err != 0 ) ) {
-  //  FD_LOG_WARNING(( "failed to write %lu bytes to output buffer. error: %d", sz, err ));
-  //}
   if( FD_UNLIKELY( ctx->skip_frag ) ) return;
 
   if( ctx->in_kind[ in_idx ] == IN_KIND_SHRED ) {
@@ -184,39 +173,64 @@ after_frag( fd_capture_tile_ctx_t * ctx,
     int   is_turbine = fd_disco_netmux_sig_proto( sig ) == DST_PROTO_SHRED;
     uint  nonce      = is_turbine ? 0 : FD_LOAD(uint, ctx->shred_buffer + fd_shred_sz( shred ) );
     int   is_data    = fd_shred_is_data( fd_shred_type( shred->variant ) );
+    ulong hash_src   = fd_disco_netmux_sig_hash( sig );
     ulong slot       = shred->slot;
     uint  idx        = shred->idx;
     FD_LOG_INFO(("kappa kept: slot %lu, idx %u, is_repair %d, sig %lu", shred->slot, shred->idx, fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR, sig ));
 
     char repair_data_buf[1024];
     snprintf( repair_data_buf, sizeof(repair_data_buf),
-             "%ld,%lu,%u,%d,%d,%u\n",
-              fd_log_wallclock(), slot, idx, is_turbine, is_data, nonce );
+             "%lu,%ld,%lu,%u,%d,%d,%u\n",
+              hash_src, fd_log_wallclock(), slot, idx, is_turbine, is_data, nonce );
 
     int err = fd_io_buffered_ostream_write( &ctx->shred_ostream, repair_data_buf, strlen(repair_data_buf) );
     FD_TEST( err==0 );
-
-    //ulong wsz = 0;
-    //int err = fd_io_write( ctx->shreds_fd, repair_data_buf, strlen(repair_data_buf), strlen(repair_data_buf), &wsz );
-    //FD_TEST( err==0 );
   } else {
     // We have a valid repair request that we can finally decode. unfortunately we actually have to decode because i cant cast directly to the protocol
-    // struct, the VERY END gets fucked. but sadly the slot and shred idx are at the end which are importante
+    // struct, the VERY END gets fucked. but sadly the slot and shred idx are at the end which are important
+    fd_ip4_udp_hdrs_t * hdr = (fd_ip4_udp_hdrs_t *)ctx->repair_buffer;
     fd_repair_protocol_t protocol;
-    fd_bincode_decode_ctx_t bctx = { .data = ctx->repair_buffer, .dataend = ctx->repair_buffer + ctx->repair_buffer_sz };
+    fd_bincode_decode_ctx_t bctx = { .data = ctx->repair_buffer + sizeof(fd_ip4_udp_hdrs_t), .dataend = ctx->repair_buffer + ctx->repair_buffer_sz };
     fd_repair_protocol_t * decoded = fd_repair_protocol_decode( &protocol, &bctx );
 
     FD_TEST( decoded == &protocol );
     FD_TEST( decoded != NULL );
-    //FD_LOG_NOTICE(( "decoded repair req slot?? %lu", protocol.inner.window_index.slot ));
-    uint nonce = protocol.inner.window_index.header.nonce;
+
+    uint   peer_ip4_addr = hdr->ip4->daddr;
+    ushort peer_port     = hdr->udp->net_dport;
+    ulong  slot          = 0UL;
+    ulong  shred_index   = UINT_MAX;
+    uint   nonce         = 0U;
+
+    switch( protocol.discriminant ) {
+      case fd_repair_protocol_enum_window_index: {
+        slot        = protocol.inner.window_index.slot;
+        shred_index = protocol.inner.window_index.shred_index;
+        nonce       = protocol.inner.window_index.header.nonce;
+        break;
+      }
+      case fd_repair_protocol_enum_highest_window_index: {
+        slot        = protocol.inner.highest_window_index.slot;
+        shred_index = protocol.inner.highest_window_index.shred_index;
+        nonce       = protocol.inner.highest_window_index.header.nonce;
+        break;
+      }
+      case fd_repair_protocol_enum_orphan: {
+        slot  = protocol.inner.orphan.slot;
+        nonce = protocol.inner.orphan.header.nonce;
+        break;
+      }
+      default:
+        break;
+    }
+
+    ulong hash_src = 0xfffffUL & fd_ulong_hash( (ulong)peer_ip4_addr | ((ulong)peer_port<<32) );
     char repair_data_buf[1024];
     snprintf( repair_data_buf, sizeof(repair_data_buf),
-              "%ld,%u,%lu,%d\n",
-              fd_log_wallclock(), nonce, protocol.inner.window_index.slot, 0 );
-    //ulong wsz;
-    //int err = fd_io_write( ctx->repairs_fd, repair_data_buf, strlen(repair_data_buf), strlen(repair_data_buf), &wsz );
-    //FD_TEST( err==0 );
+              "%lu,%ld,%u,%lu,%lu\n",
+              hash_src, fd_log_wallclock(), nonce, slot, shred_index );
+    int err = fd_io_buffered_ostream_write( &ctx->repair_ostream, repair_data_buf, strlen(repair_data_buf) );
+    FD_TEST( err==0 );
   }
 }
 
@@ -333,13 +347,18 @@ unprivileged_init( fd_topo_t *      topo,
     FD_LOG_ERR(( "failed to initialize ostream" ));
   }
 
-  err = fd_io_buffered_ostream_write( &ctx->shred_ostream, "timestamp,slot,idx,is_turbine,is_data,nonce\n", 44UL );
+  err = fd_io_buffered_ostream_write( &ctx->shred_ostream, "hash_src,timestamp,slot,idx,is_turbine,is_data,nonce\n", 53UL );
 
   //err = fd_io_write( ctx->shreds_fd, "timestamp,slot,idx,is_turbine,is_data,nonce\n", 44UL, 44UL, &sz );
   if( FD_UNLIKELY( err ) ) {
     FD_LOG_ERR(( "failed to write header to shred file (%i-%s)", errno, fd_io_strerror( errno ) ));
   }
 
+  err = fd_io_buffered_ostream_write( &ctx->repair_ostream, "hash_peer,timestamp,nonce,slot,idx\n", 35UL );
+
+  if( FD_UNLIKELY( err ) ) {
+    FD_LOG_ERR(( "failed to write header to repair file (%i-%s)", errno, fd_io_strerror( errno ) ));
+  }
 }
 
 #define STEM_BURST (1UL)

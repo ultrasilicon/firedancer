@@ -344,6 +344,10 @@ handle_new_cluster_contact_info( fd_shred_ctx_t * ctx,
     memcpy( dests[i].pubkey.uc, in_dests[i].pubkey, 32UL );
     dests[i].ip4  = in_dests[i].ip4_addr;
     dests[i].port = in_dests[i].udp_port;
+
+    FD_LOG_INFO(("Added turbine peer: pubkey %s hash_src %lu",
+                 FD_BASE58_ENC_32_ALLOCA(in_dests[i].pubkey),
+                 0xfffffUL & fd_ulong_hash( (ulong)in_dests[i].ip4_addr | ((ulong)(fd_ushort_bswap( dests[i].port ))<<32) ) ));
   }
 }
 
