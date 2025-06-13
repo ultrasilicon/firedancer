@@ -23,7 +23,7 @@
 #endif
 static const unsigned int sock_filter_policy_fd_kappa_tile_instr_cnt = 18;
 
-static void populate_sock_filter_policy_fd_kappa_tile( ulong out_cnt, struct sock_filter * out, unsigned int logfile_fd, int shreds_fd, int requests_fd) {
+static void populate_sock_filter_policy_fd_kappa_tile( ulong out_cnt, struct sock_filter * out, unsigned int logfile_fd, uint shreds_fd, uint requests_fd) {
   FD_TEST( out_cnt >= 18 );
   struct sock_filter filter[18] = {
     /* Check: Jump to RET_KILL_PROCESS if the script's arch != the runtime arch */

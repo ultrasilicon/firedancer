@@ -362,6 +362,7 @@ before_frag( fd_shred_ctx_t * ctx,
     return (fd_disco_poh_sig_pkt_type( sig )!=POH_PKT_TYPE_MICROBLOCK) & (fd_disco_poh_sig_pkt_type( sig )!=POH_PKT_TYPE_FEAT_ACT_SLOT);
   }
   if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET ) ) {
+    FD_LOG_INFO(("shred SEQ %lu, sig %lu", seq, sig));
     return (fd_disco_netmux_sig_proto( sig )!=DST_PROTO_SHRED) & (fd_disco_netmux_sig_proto( sig )!=DST_PROTO_REPAIR);
   }
   return 0;
@@ -585,11 +586,13 @@ during_frag( fd_shred_ctx_t * ctx,
     /* all shreds in the same FEC set will have the same signature
        so we can round-robin shreds between the shred tiles based on
        just the signature without splitting individual FEC sets. */
-    ulong sig = fd_ulong_load_8( shred->signature );
-    if( FD_LIKELY( sig%ctx->round_robin_cnt!=ctx->round_robin_id ) ) {
+    ulong sign = fd_ulong_load_8( shred->signature );
+    if( FD_LIKELY( sign%ctx->round_robin_cnt!=ctx->round_robin_id ) ) {
       ctx->skip_frag = 1;
       return;
     }
+    FD_LOG_INFO(("shred shred slot %lu, idx %u, is_repair %d, sig %lu", shred->slot, shred->idx, fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR, sig ));
+
     fd_memcpy( ctx->shred_buffer, dcache_entry+hdr_sz, sz-hdr_sz );
     ctx->shred_buffer_sz = sz-hdr_sz;
   }
@@ -752,6 +755,8 @@ after_frag( fd_shred_ctx_t *    ctx,
 
     fd_pubkey_t const * slot_leader = fd_epoch_leaders_get( lsched, shred->slot );
     if( FD_UNLIKELY( !slot_leader ) ) { ctx->metrics->shred_processing_result[ 0 ]++; return; } /* Count this as bad slot too */
+
+    FD_LOG_INFO(("shred kept: slot %lu, idx %u, is_repair %d, sig %lu", shred->slot, shred->idx, fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR, sig ));
 
     fd_fec_set_t const * out_fec_set[1];
     fd_shred_t const   * out_shred[1];
@@ -999,7 +1004,7 @@ privileged_init( fd_topo_t *      topo,
   fd_shred_ctx_t * ctx = FD_SCRATCH_ALLOC_APPEND( l, alignof( fd_shred_ctx_t ), sizeof( fd_shred_ctx_t ) );
 
 #ifdef FD_HAS_REPAIR_ANALYSIS
-  ctx->repair_data_fd = open( "/data/emwang/repair_data.csv", O_WRONLY|O_CREAT|O_APPEND, 0644 );
+  ctx->repair_data_fd = open( "/data/emwang/shred_data2.csv", O_WRONLY|O_CREAT|O_APPEND, 0644 );
   FD_TEST( ctx->repair_data_fd>=0 );
   FD_TEST( ftruncate( ctx->repair_data_fd, 0 ) == 0 );
   ulong sz = 0;

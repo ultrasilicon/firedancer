@@ -421,7 +421,7 @@ struct fd_config {
 
     struct {
       int  enabled;
-      char dump_path[ PATH_MAX ];
+      char folder_path[ PATH_MAX ];
     } kappa;
 
   } tiles;

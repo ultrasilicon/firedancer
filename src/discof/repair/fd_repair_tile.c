@@ -369,7 +369,7 @@ fd_repair_sign_and_send( fd_repair_tile_ctx_t *  repair_tile_ctx,
      ^                ^             ^
      0                4             68 */
 
-  /* https://github.com/solana-labs/solana/blob/master/core/src/repair/serve_repair.rs#L874 */
+  /* https://github.com/solana-labs/solana/blob/master/core/src/repair/serve_repair.rs#L1258 */
 
   fd_memcpy( buf+64, buf, 4 );
   buf    += 64UL;
@@ -379,7 +379,7 @@ fd_repair_sign_and_send( fd_repair_tile_ctx_t *  repair_tile_ctx,
 
      [ discriminant ] [ payload ]
      ^                ^
-     0                4 */
+     buf              buf+4 */
 
   fd_signature_t sig;
   repair_signer( repair_tile_ctx, sig.uc, buf, buflen, FD_KEYGUARD_SIGN_TYPE_ED25519 );
@@ -429,6 +429,7 @@ fd_repair_send_request( fd_repair_tile_ctx_t   * repair_tile_ctx,
   ulong buflen       = fd_repair_sign_and_send( repair_tile_ctx, &protocol, &active->addr, buf, sizeof(buf) );
   ulong tsorig       = fd_frag_meta_ts_comp( fd_tickcount() );
   uint  src_ip4_addr = 0U; /* unknown */
+  //FD_LOG_NOTICE(("Request packet size: %lu", buflen));
   send_packet( repair_tile_ctx, 1, active->addr.addr, active->addr.port, src_ip4_addr, buf, buflen, tsorig );
 }
 

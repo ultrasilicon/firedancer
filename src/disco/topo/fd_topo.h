@@ -451,7 +451,8 @@ typedef struct {
       char vote_acc_path[ PATH_MAX ];
     } tower;
     struct {
-      char dump_path[ PATH_MAX ];
+      char folder_path[ PATH_MAX ];
+      ushort repair_intake_listen_port;
 
       /* Set internally by the capture tile */
       int shreds_fd;

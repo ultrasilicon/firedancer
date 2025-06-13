@@ -740,7 +740,9 @@ fd_topo_initialize( config_t * config ) {
     fd_topob_wksp( topo, "kappa" );
     fd_topob_tile( topo, "kappa", "kappa", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
     fd_topob_tile_in(  topo, "kappa", 0UL, "metric_in", "repair_net", 0UL, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
-    fd_topob_tile_in(  topo, "kappa", 0UL, "metric_in", "net_shred", 0UL, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+    for( ulong j=0UL; j<net_tile_cnt; j++ ) {
+      fd_topob_tile_in(  topo, "kappa", 0UL, "metric_in", "net_shred", j, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+    }
   }
 
   fd_topob_wksp( topo, "replay_notif" );
@@ -975,7 +977,8 @@ fd_topo_initialize( config_t * config ) {
       tile->archiver.enabled = config->tiles.archiver.enabled;
       strncpy( tile->archiver.archiver_path, config->tiles.archiver.archiver_path, sizeof(tile->archiver.archiver_path) );
     } else if( FD_UNLIKELY( !strcmp( tile->name, "kappa" ) ) ) {
-      strncpy( tile->kappa.dump_path, config->tiles.repair.capture_path, sizeof(tile->kappa.dump_path) );
+      tile->kappa.repair_intake_listen_port = config->tiles.repair.repair_intake_listen_port;
+      strncpy( tile->kappa.folder_path, config->tiles.kappa.folder_path, sizeof(config->tiles.kappa.folder_path) );
     } else {
       FD_LOG_ERR(( "unknown tile name %lu `%s`", i, tile->name ));
     }

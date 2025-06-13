@@ -2,7 +2,7 @@
 #             will open a log file on boot and write all messages there.
 #
 # archive_fd: The file that the archiver will be written to
-unsigned int logfile_fd, int shreds_fd, int requests_fd
+unsigned int logfile_fd, uint shreds_fd, uint requests_fd
 
 # logging: all log messages are written to a file and/or pipe
 #
