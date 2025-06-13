@@ -29,9 +29,10 @@ FD_PROTOTYPES_BEGIN
 #define FD_BANK_BLOCK_HASH_QUEUE_SIZE (50000UL)
 
 /* Use this to avoid code duplication */
-#define FD_BANKS_COW_ITER(X) \
-  X(fd_clock_timestamp_votes_global_t, clock_timestamp_votes, 5000000UL,   128UL) \
-  X(fd_account_keys_global_t,          stake_account_keys,    100000000UL, 128UL) /* Supports roughly 3M stake accounts */
+#define FD_BANKS_COW_ITER(X)                                                                                                 \
+  X(fd_clock_timestamp_votes_global_t, clock_timestamp_votes, 5000000UL,   128UL)  /* TODO: This needs to get sized out */   \
+  X(fd_account_keys_global_t,          stake_account_keys,    100000000UL, 128UL)  /* Supports roughly 3M stake accounts */  \
+  X(fd_account_keys_global_t,          vote_account_keys,     3200000UL,   128UL)  /* Supports roughly 100k vote accounts */
 
 struct fd_bank {
   /* Fields used for internal pool and bank management */
@@ -67,6 +68,7 @@ struct fd_bank {
   ulong                  execution_fees;
   ulong                  priority_fees;
   ulong                  signature_cnt;
+  ulong                  use_prev_epoch_stake;
 
   /* CoW Fields. These are only copied when explicitly requested by
      the caller. A lock is used to prevent contention between multiple
@@ -124,6 +126,12 @@ FD_BANKS_COW_ITER(X)
 
 #define POOL_NAME fd_bank_stake_account_keys_pool
 #define POOL_T    fd_bank_stake_account_keys_t
+#include "../../util/tmpl/fd_pool.c"
+#undef POOL_NAME
+#undef POOL_T
+
+#define POOL_NAME fd_bank_vote_account_keys_pool
+#define POOL_T    fd_bank_vote_account_keys_t
 #include "../../util/tmpl/fd_pool.c"
 #undef POOL_NAME
 #undef POOL_T

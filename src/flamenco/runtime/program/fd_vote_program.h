@@ -90,7 +90,9 @@ fd_vote_commission_split( fd_vote_state_versioned_t * vote_state_versioned,
 
 void
 fd_vote_store_account( fd_txn_account_t *   vote_account,
-                       fd_bank_mgr_t *      bank_mgr );
+                       fd_bank_mgr_t *      bank_mgr,
+                       fd_banks_t *         banks,
+                       fd_bank_t *          bank );
 
 FD_PROTOTYPES_END
 

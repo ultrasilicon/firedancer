@@ -297,7 +297,7 @@ fd_populate_vote_accounts( fd_exec_slot_ctx_t *       slot_ctx,
 
 
   // Initialize a temporary vote states cache
-  fd_account_keys_global_t * vote_account_keys = fd_bank_mgr_vote_account_keys_query( slot_ctx->bank_mgr );
+  fd_account_keys_global_t * vote_account_keys = fd_bank_vote_account_keys_query( slot_ctx->banks, slot_ctx->bank );
   fd_account_keys_pair_t_mapnode_t * vote_account_keys_pool = fd_account_keys_account_keys_pool_join( vote_account_keys );
   fd_account_keys_pair_t_mapnode_t * vote_account_keys_root = fd_account_keys_account_keys_root_join( vote_account_keys );
   ulong vote_account_keys_map_sz    = vote_account_keys_pool ? fd_account_keys_pair_t_map_size( vote_account_keys_pool, vote_account_keys_root ) : 0UL;
@@ -439,7 +439,7 @@ fd_refresh_vote_accounts( fd_exec_slot_ctx_t *       slot_ctx,
   fd_vote_accounts_pair_global_t_mapnode_t * stakes_vote_accounts_pool = fd_vote_accounts_vote_accounts_pool_join( vote_accounts );
   fd_vote_accounts_pair_global_t_mapnode_t * stakes_vote_accounts_root = fd_vote_accounts_vote_accounts_root_join( vote_accounts );
 
-  fd_account_keys_global_t *         vote_account_keys      = fd_bank_mgr_vote_account_keys_query( slot_ctx->bank_mgr );
+  fd_account_keys_global_t *         vote_account_keys      = fd_bank_vote_account_keys_query( slot_ctx->banks, slot_ctx->bank );
   fd_account_keys_pair_t_mapnode_t * vote_account_keys_pool = fd_account_keys_account_keys_pool_join( vote_account_keys );
   fd_account_keys_pair_t_mapnode_t * vote_account_keys_root = fd_account_keys_account_keys_root_join( vote_account_keys );
 
@@ -575,14 +575,12 @@ fd_refresh_vote_accounts( fd_exec_slot_ctx_t *       slot_ctx,
 
   slot_ctx->bank->total_epoch_stake = total_epoch_stake;
 
-  FD_BANK_MGR_MODIFY_BEGIN( slot_ctx->bank_mgr, vote_account_keys, vote_account_keys ) {
   vote_account_keys_pool = fd_account_keys_account_keys_pool_join( vote_account_keys );
   vote_account_keys_root = fd_account_keys_account_keys_root_join( vote_account_keys );
   fd_account_keys_pair_t_map_release_tree( vote_account_keys_pool, vote_account_keys_root );
   vote_account_keys_root = NULL;
   fd_account_keys_account_keys_pool_update( vote_account_keys, vote_account_keys_pool );
   fd_account_keys_account_keys_root_update( vote_account_keys, vote_account_keys_root );
-  } FD_BANK_MGR_MODIFY_END;
 }
 
 static void

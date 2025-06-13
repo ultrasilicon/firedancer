@@ -1978,7 +1978,7 @@ fd_runtime_finalize_txn( fd_exec_slot_ctx_t *         slot_ctx,
       fd_txn_account_t * acc_rec = &txn_ctx->accounts[i];
 
       if( dirty_vote_acc && 0==memcmp( acc_rec->vt->get_owner( acc_rec ), &fd_solana_vote_program_id, sizeof(fd_pubkey_t) ) ) {
-        fd_vote_store_account( acc_rec, bank_mgr );
+        fd_vote_store_account( acc_rec, bank_mgr, banks, bank );
         FD_SPAD_FRAME_BEGIN( finalize_spad ) {
           int err;
           fd_vote_state_versioned_t * vsv = fd_bincode_decode_spad(
@@ -3909,14 +3909,13 @@ fd_runtime_read_genesis( fd_exec_slot_ctx_t * slot_ctx,
   fd_account_keys_account_keys_pool_update( stake_account_keys, stake_account_keys_pool );
   fd_account_keys_account_keys_root_update( stake_account_keys, stake_account_keys_root );
 
-  fd_account_keys_global_t *         vote_account_keys      = fd_bank_mgr_vote_account_keys_modify( slot_ctx->bank_mgr );
+  fd_account_keys_global_t *         vote_account_keys      = fd_bank_vote_account_keys_modify( slot_ctx->banks, slot_ctx->bank );
                                      pool_mem               = (uchar *)fd_ulong_align_up( (ulong)vote_account_keys + sizeof(fd_account_keys_global_t), fd_account_keys_pair_t_map_align() );
   fd_account_keys_pair_t_mapnode_t * vote_account_keys_pool = fd_account_keys_pair_t_map_join( fd_account_keys_pair_t_map_new( pool_mem, 100000UL ) );
   fd_account_keys_pair_t_mapnode_t * vote_account_keys_root = NULL;
 
   fd_account_keys_account_keys_pool_update( vote_account_keys, vote_account_keys_pool );
   fd_account_keys_account_keys_root_update( vote_account_keys, vote_account_keys_root );
-  fd_bank_mgr_vote_account_keys_save( slot_ctx->bank_mgr );
 }
 
 /******************************************************************************/
