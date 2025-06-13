@@ -6,8 +6,6 @@
 
 typedef struct GeyserSubscribeReactor GeyserSubscribeReactor_t;
 typedef struct fd_blockstore fd_blockstore_t;
-
-struct geys_filter;
 typedef struct geys_filter geys_filter_t;
 
 geys_filter_t * geys_filter_create(fd_spad_t * spad, fd_funk_t * funk);
