@@ -186,10 +186,11 @@ after_frag( fd_capture_tile_ctx_t * ctx,
     // it takes to complete a fec
 
     fd_shred_t const * shred = (fd_shred_t *)fd_type_pun( ctx->shred_buffer );
+    uint data_cnt = fd_disco_shred_repair_fec_sig_data_cnt( sig );
     char fec_complete[1024];
     snprintf( fec_complete, sizeof(fec_complete),
-             "%ld,%lu,%u\n",
-              fd_log_wallclock(), shred->slot, shred->fec_set_idx );
+             "%ld,%lu,%u,%u\n",
+              fd_log_wallclock(), shred->slot, shred->fec_set_idx, data_cnt );
 
     int err = fd_io_buffered_ostream_write( &ctx->fecs_ostream, fec_complete, strlen(fec_complete) );
     FD_TEST( err==0 );
@@ -414,7 +415,7 @@ unprivileged_init( fd_topo_t *      topo,
     FD_LOG_ERR(( "failed to write header to repair file (%i-%s)", errno, fd_io_strerror( errno ) ));
   }
 
-  err = fd_io_buffered_ostream_write( &ctx->fecs_ostream, "timestamp,slot,fec_set_idx\n", 27UL );
+  err = fd_io_buffered_ostream_write( &ctx->fecs_ostream, "timestamp,slot,fec_set_idx,data_cnt\n", 34UL );
   if( FD_UNLIKELY( err ) ) {
     FD_LOG_ERR(( "failed to write header to fec complete file (%i-%s)", errno, fd_io_strerror( errno ) ));
   }
