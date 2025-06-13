@@ -122,7 +122,6 @@ if( FD_UNLIKELY( !bank_mgr ) ) {                                                
 /*  Type,                              name,                        id,   footprint,   align */
 #define FD_BANK_MGR_ITER(X)                                                                    \
   X(ulong,                             slot,                        1UL,  8UL,         8UL   ) \
-  X(ulong,                             signature_cnt,               25UL, 8UL,         8UL   ) \
   X(fd_account_keys_global_t,          stake_account_keys,          26UL, 160000000UL, 1024UL) \
   X(fd_account_keys_global_t,          vote_account_keys,           27UL, 3200000UL,   1024UL) \
   X(ulong,                             use_prev_epoch_stake,        28UL, 8UL,         8UL   ) \

@@ -18,6 +18,14 @@ FD_PROTOTYPES_BEGIN
 /* 12568 is size of map representation to store 301 hashes */
 #define FD_BANK_BLOCK_HASH_QUEUE_SIZE (50000UL)
 #define FD_BANK_CLOCK_TIMESTAMP_VOTES_SIZE (5000000UL)
+#define FD_STAKE_ACCOUNT_KEYS_SIZE (160000000UL)
+
+/* Use this to avoid code duplication */
+#define FD_BANKS_COW_ITER(X) \
+  X(fd_clock_timestamp_votes_global_t, clock_timestamp_votes, 5000000UL,       128UL) \
+  X(fd_account_keys_global_t, stake_account_keys, 160000000UL, 128UL)
+
+
 
 /* fd_bank_t and fd_banks_t are used to manage the bank state in a
    fork-aware manner. */
@@ -61,9 +69,14 @@ struct fd_bank {
      the caller. A lock is used to prevent contention between multiple
      threads trying to access the same field. */
 
-  fd_rwlock_t            clock_timestamp_votes_lock;
-  int                    clock_timestamp_votes_dirty;
-  ulong                  clock_timestamp_votes_pool_idx;
+  #define X(type, name, footprint, align) \
+  fd_rwlock_t name##_lock;                \
+  int         name##_dirty;               \
+  ulong       name##_pool_idx;            \
+
+  FD_BANKS_COW_ITER(X)
+
+  #undef X
 };
 typedef struct fd_bank fd_bank_t;
 
@@ -74,16 +87,30 @@ fd_bank_align( void );
 ulong
 fd_bank_footprint( void );
 
+/* CoW Pools used for complex data structures */
+
 /* Clock Timestamp Votes Pool */
 
-struct fd_bank_clock_timestamp_votes {
-  ulong next;
-  uchar votes[FD_BANK_CLOCK_TIMESTAMP_VOTES_SIZE]__attribute__((aligned(128UL)));
-};
-typedef struct fd_bank_clock_timestamp_votes fd_bank_clock_timestamp_votes_t;
+#define X(type, name, footprint, align)                      \
+  static const ulong fd_bank_##name##_align     = align;     \
+  static const ulong fd_bank_##name##_footprint = footprint; \
+                                                             \
+  struct fd_bank_##name {                                    \
+    ulong next;                                              \
+    uchar data[footprint]__attribute__((aligned(align)));    \
+  };                                                         \
+  typedef struct fd_bank_##name fd_bank_##name##_t;
+FD_BANKS_COW_ITER(X)
+#undef X
 
 #define POOL_NAME fd_bank_clock_timestamp_votes_pool
 #define POOL_T    fd_bank_clock_timestamp_votes_t
+#include "../../util/tmpl/fd_pool.c"
+#undef POOL_NAME
+#undef POOL_T
+
+#define POOL_NAME fd_bank_stake_account_keys_pool
+#define POOL_T    fd_bank_stake_account_keys_t
 #include "../../util/tmpl/fd_pool.c"
 #undef POOL_NAME
 #undef POOL_T
@@ -113,16 +140,17 @@ struct fd_banks {
   fd_bank_t *                       pool;                       /* local join of pool */
   fd_banks_map_t *                  map;                        /* local join of map */
   fd_bank_clock_timestamp_votes_t * clock_timestamp_votes_pool; /* local join of clock vote timestamps pool */
+  fd_bank_stake_account_keys_t *    stake_account_keys_pool;    /* local join of stake account keys pool */
 };
 typedef struct fd_banks fd_banks_t;
 
 /* Bank accesssors */
 
-fd_clock_timestamp_votes_global_t *
-fd_bank_clock_timestamp_votes_query( fd_banks_t * banks, fd_bank_t * bank );
-
-fd_clock_timestamp_votes_global_t *
-fd_bank_clock_timestamp_votes_modify( fd_banks_t * banks, fd_bank_t * bank );
+#define X(type, name, footprint, align)                                   \
+  type * fd_bank_##name##_query( fd_banks_t * banks, fd_bank_t * bank );  \
+  type * fd_bank_##name##_modify( fd_banks_t * banks, fd_bank_t * bank );
+FD_BANKS_COW_ITER(X)
+#undef X
 
 /* Banks accesssors */
 

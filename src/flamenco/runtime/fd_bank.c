@@ -16,46 +16,35 @@ fd_bank_footprint( void ) {
 
 /* Bank accesssors */
 
-fd_clock_timestamp_votes_global_t *
-fd_bank_clock_timestamp_votes_query( fd_banks_t * banks, fd_bank_t * bank ) {
-  if( bank->clock_timestamp_votes_pool_idx==fd_bank_clock_timestamp_votes_pool_idx_null( banks->clock_timestamp_votes_pool ) ) {
-    return NULL;
+#define X(type, name, footprint, align) \
+  type * fd_bank_##name##_query( fd_banks_t * banks, fd_bank_t * bank ) { \
+    if( bank->name##_pool_idx==fd_bank_##name##_pool_idx_null( banks->name##_pool ) ) { \
+      return NULL; \
+    } \
+    fd_bank_##name##_t * bank_##name = fd_bank_##name##_pool_ele( banks->name##_pool, bank->name##_pool_idx ); \
+    return (type *)bank_##name->data; \
+  } \
+  type * fd_bank_##name##_modify( fd_banks_t * banks, fd_bank_t * bank ) { \
+    if( bank->name##_dirty ) { \
+      fd_bank_##name##_t * bank_##name = fd_bank_##name##_pool_ele( banks->name##_pool, bank->name##_pool_idx ); \
+      return (type *)bank_##name->data; \
+    } \
+    fd_bank_##name##_t * child_##name = fd_bank_##name##_pool_ele_acquire( banks->name##_pool ); \
+    if( FD_UNLIKELY( !child_##name ) ) { \
+      FD_LOG_CRIT(( "Failed to acquire " #name " pool element" )); \
+    } \
+    ulong child_idx = fd_bank_##name##_pool_idx( banks->name##_pool, child_##name ); \
+    if( bank->name##_pool_idx!=fd_bank_##name##_pool_idx_null( banks->name##_pool ) ) { \
+      fd_bank_##name##_t * parent_##name = fd_bank_##name##_pool_ele( banks->name##_pool, bank->name##_pool_idx ); \
+      memcpy( child_##name->data, parent_##name->data, fd_bank_##name##_footprint ); \
+    } \
+    bank->name##_pool_idx = child_idx; \
+    bank->name##_dirty = 1; \
+    return (type *)child_##name->data; \
   }
-  fd_bank_clock_timestamp_votes_t * bank_ctv = fd_bank_clock_timestamp_votes_pool_ele( banks->clock_timestamp_votes_pool, bank->clock_timestamp_votes_pool_idx );
-  return (fd_clock_timestamp_votes_global_t *)bank_ctv->votes;
-}
+FD_BANKS_COW_ITER(X)
+#undef X
 
-fd_clock_timestamp_votes_global_t *
-fd_bank_clock_timestamp_votes_modify( fd_banks_t * banks, fd_bank_t * bank ) {
-
-  /* If the dirty flag is set, then we already have a votes pool that
-     corresponds to this bank and it can be returned. */
-  if( bank->clock_timestamp_votes_dirty ) {
-    fd_bank_clock_timestamp_votes_t * bank_ctv = fd_bank_clock_timestamp_votes_pool_ele( banks->clock_timestamp_votes_pool, bank->clock_timestamp_votes_pool_idx );
-    return (fd_clock_timestamp_votes_global_t *)bank_ctv->votes;
-  }
-
-  FD_LOG_WARNING(("CLOCK TIMESTAMP VOTES DIRTY %lu", bank->slot));
-
-  /* If the dirty flag is not set, we need to copy the votes pool from
-     a parent bank if one exists and set the dirty flag. */
-
-  fd_bank_clock_timestamp_votes_t * child_ctv = fd_bank_clock_timestamp_votes_pool_ele_acquire( banks->clock_timestamp_votes_pool );
-  if( FD_UNLIKELY( !child_ctv ) ) {
-    FD_LOG_CRIT(( "Failed to acquire clock timestamp votes pool element" ));
-  }
-
-  ulong child_idx = fd_bank_clock_timestamp_votes_pool_idx( banks->clock_timestamp_votes_pool, child_ctv );
-  if( bank->clock_timestamp_votes_pool_idx!=fd_bank_clock_timestamp_votes_pool_idx_null( banks->clock_timestamp_votes_pool ) ) {
-    fd_bank_clock_timestamp_votes_t * parent_ctv = fd_bank_clock_timestamp_votes_pool_ele( banks->clock_timestamp_votes_pool, bank->clock_timestamp_votes_pool_idx );
-    memcpy( child_ctv->votes, parent_ctv->votes, FD_BANK_CLOCK_TIMESTAMP_VOTES_SIZE );
-  }
-
-  bank->clock_timestamp_votes_pool_idx = child_idx;
-  bank->clock_timestamp_votes_dirty    = 1;
-
-  return (fd_clock_timestamp_votes_global_t *)child_ctv->votes;
-}
 
 /**********************************************************************/
 

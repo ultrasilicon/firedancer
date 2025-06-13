@@ -92,8 +92,6 @@ fd_stakes_accum_by_node( fd_vote_accounts_global_t const * in,
     }
   }
 
-  FD_LOG_WARNING(("SIZE %lu", fd_stake_weight_t_map_size( out_pool, out_root )));
-
   return out_root;
 }
 

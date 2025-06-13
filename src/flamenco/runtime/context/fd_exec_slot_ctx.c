@@ -180,16 +180,10 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
   fd_versioned_bank_t const * oldbank = &manifest->bank;
 
   ulong sz = fd_stakes_size( &oldbank->stakes );
-  FD_LOG_WARNING(("SZ %lu", sz));
   fd_stakes_global_t * stakes = fd_bank_mgr_stakes_modify( slot_ctx->bank_mgr );
   fd_memcpy( stakes, &manifest_global->bank.stakes, sz * 2 );
   /* Verify stakes */
 
-  FD_LOG_WARNING(("OFFSETS %lu %lu", manifest_global->bank.stakes.stake_delegations_pool_offset, stakes->stake_delegations_pool_offset));
-
-  FD_LOG_WARNING(("START OF STAKES STRUCTS %p %p", (void*)&manifest_global->bank.stakes, (void*)stakes));
-
-  FD_LOG_WARNING(("CACLAUYLTED %p %p", (void*)((uchar*)&manifest_global->bank.stakes + manifest_global->bank.stakes.stake_delegations_pool_offset), (void*)((uchar*)stakes + stakes->stake_delegations_pool_offset)));
   fd_delegation_pair_t_mapnode_t * stake_delegations_pool_og = fd_stakes_stake_delegations_pool_join( &manifest_global->bank.stakes );
   FD_TEST( stake_delegations_pool_og );
   /* Verify stakes */
@@ -206,14 +200,9 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
 
   /* Block Hash Queue */
 
-  FD_LOG_WARNING(("BANK %p", (void*)slot_ctx->bank));
-
-
   fd_block_hash_queue_global_t * bhq = (fd_block_hash_queue_global_t *)&slot_ctx->bank->block_hash_queue[0];
   uchar * last_hash_mem = (uchar *)fd_ulong_align_up( (ulong)bhq + sizeof(fd_block_hash_queue_global_t), alignof(fd_hash_t) );
   uchar * ages_pool_mem = (uchar *)fd_ulong_align_up( (ulong)last_hash_mem + sizeof(fd_hash_t), fd_hash_hash_age_pair_t_map_align() );
-    FD_LOG_WARNING(("BANK %p", (void*)slot_ctx->bank));
-
 
   fd_hash_hash_age_pair_t_mapnode_t * ages_pool = fd_hash_hash_age_pair_t_map_join( fd_hash_hash_age_pair_t_map_new( ages_pool_mem, 301 ) );
   fd_hash_hash_age_pair_t_mapnode_t * ages_root = NULL;
@@ -226,9 +215,6 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
   }
   bhq->last_hash_offset = (ulong)last_hash_mem - (ulong)bhq;
 
-    FD_LOG_WARNING(("BANK %p", (void*)slot_ctx->bank));
-
-
   for( ulong i=0UL; i<oldbank->blockhash_queue.ages_len; i++ ) {
     fd_hash_hash_age_pair_t * elem = &oldbank->blockhash_queue.ages[i];
     fd_hash_hash_age_pair_t_mapnode_t * node = fd_hash_hash_age_pair_t_map_acquire( ages_pool );
@@ -236,7 +222,6 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
     fd_hash_hash_age_pair_t_map_insert( ages_pool, &ages_root, node );
   }
 
-  FD_LOG_WARNING(("BANK %p", (void*)slot_ctx->bank));
   bhq->ages_pool_offset = (ulong)fd_hash_hash_age_pair_t_map_leave( ages_pool ) - (ulong)bhq;
   bhq->ages_root_offset = (ulong)ages_root - (ulong)bhq;
 
