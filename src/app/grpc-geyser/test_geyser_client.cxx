@@ -199,6 +199,10 @@ class GeyserClient {
       ::geyser::SubscribeRequestFilterSlots b;
       request.mutable_slots()->insert({"test2", b});
 
+      ::geyser::SubscribeRequestFilterTransactions c;
+      c.add_account_required()->operator=("Vote111111111111111111111111111111111111111");
+      request.mutable_transactions()->insert({"test3", c});
+
       // Container for the data we expect from the server.
       ::geyser::SubscribeUpdate update;
 

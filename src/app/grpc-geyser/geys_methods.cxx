@@ -8,7 +8,6 @@ extern "C" {
 #include <mutex>
 
 #include "geys_methods.hxx"
-#include "geys_filter_2.hxx"
 
 GeyserServiceImpl::GeyserServiceImpl(geys_fd_ctx_t * loop_ctx)
   : _loop_ctx(loop_ctx), filt_(geys_get_filter(loop_ctx))
@@ -24,6 +23,56 @@ GeyserServiceImpl::notify(fd_replay_notif_msg_t * msg) {
   lastinfo_ = *msg;
   validhashes_[msg->slot_exec.block_hash] = msg->slot_exec.slot;
 }
+
+struct GeyserSubscribeReactor : public ::grpc::ServerBidiReactor<::geyser::SubscribeRequest, ::geyser::SubscribeUpdate> {
+  GeyserSubscribeReactor(GeyserServiceImpl * serv, geys_filter_t * filter) : serv_(serv), filter_(filter) {
+    std::scoped_lock smut(mut_);
+    StartRead(&request_);
+  }
+  void OnReadDone(bool ok) override {
+    std::scoped_lock smut(mut_);
+    if (ok) {
+      geys_filter_add_sub(filter_, &request_, this);
+      StartRead(&request_);
+    } else {
+      Finish(::grpc::Status::OK);
+    }
+  }
+
+  void Update(::geyser::SubscribeUpdate* update) {
+    std::scoped_lock smut(mut_);
+    if( updates_.empty() ) {
+      StartWrite( update );
+    }
+    updates_.push_back(update);
+  }
+
+  void OnWriteDone(bool ok) override {
+    std::scoped_lock smut(mut_);
+    if (ok) {
+      auto i = updates_.begin();
+      delete (::geyser::SubscribeUpdate*)(*i);
+      updates_.erase(i);
+      if( !updates_.empty() ) {
+        StartWrite( *updates_.begin() );
+      }
+    }
+  }
+
+  void OnDone() override {
+    {
+      std::scoped_lock smut(mut_);
+      geys_filter_un_sub(filter_, this);
+    }
+    delete this;
+  }
+
+  std::mutex mut_;
+  GeyserServiceImpl * serv_ = NULL;
+  geys_filter_t * filter_ = NULL;
+  ::geyser::SubscribeRequest request_;
+  std::vector<::geyser::SubscribeUpdate*> updates_;
+};
 
 ::grpc::ServerBidiReactor<::geyser::SubscribeRequest, ::geyser::SubscribeUpdate>*
 GeyserServiceImpl::Subscribe(::grpc::CallbackServerContext* context) {
@@ -146,4 +195,42 @@ GeyserServiceImpl::GetVersion(::grpc::CallbackServerContext* context, const ::ge
       }
   };
   return new Reactor(this, request, response);
+}
+
+void
+GeyserServiceImpl::updateAcct(GeyserSubscribeReactor_t * reactor, ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz) {
+  auto* update = new ::geyser::SubscribeUpdate();
+  auto* acct = new ::geyser::SubscribeUpdateAccount();
+  update->set_allocated_account(acct);
+  acct->set_slot(slot);
+  acct->set_is_startup(false);
+  auto* info = new ::geyser::SubscribeUpdateAccountInfo();
+  acct->set_allocated_account(info);
+  info->set_pubkey(key->uc, 32U);
+  info->set_lamports(meta->info.lamports);
+  info->set_owner(meta->info.owner, 32U);
+  info->set_executable(meta->info.executable);
+  info->set_data(val, val_sz);
+
+  reactor->Update( update );
+}
+
+void
+GeyserServiceImpl::updateSlot(GeyserSubscribeReactor_t * reactor, fd_replay_notif_msg_t * msg) {
+  auto* update = new ::geyser::SubscribeUpdate();
+  auto* slot = new ::geyser::SubscribeUpdateSlot();
+  update->set_allocated_slot(slot);
+  slot->set_slot(msg->slot_exec.slot);
+  slot->set_parent(msg->slot_exec.parent);
+
+  reactor->Update( update );
+}
+
+void
+GeyserServiceImpl::updateTxn(GeyserSubscribeReactor_t * reactor, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs) {
+  auto* update = new ::geyser::SubscribeUpdate();
+  auto* txn2 = new ::geyser::SubscribeUpdateTransaction();
+  update->set_allocated_transaction(txn2);
+
+  reactor->Update( update );
 }
