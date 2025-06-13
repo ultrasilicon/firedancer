@@ -143,7 +143,6 @@ during_frag( fd_capture_tile_ctx_t * ctx,
       ctx->skip_frag = 1;
       return;
     };
-    FD_LOG_INFO(("kappa shred slot %lu, idx %u, is_repair %d, sig %lu", shred->slot, shred->idx, fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR, sig ));
     fd_memcpy( ctx->shred_buffer, dcache_entry+hdr_sz, sz-hdr_sz );
     ctx->shred_buffer_sz = sz-hdr_sz;
 
@@ -204,7 +203,6 @@ after_frag( fd_capture_tile_ctx_t * ctx,
     ulong hash_src   = fd_disco_netmux_sig_hash( sig );
     ulong slot       = shred->slot;
     uint  idx        = shred->idx;
-    FD_LOG_INFO(("kappa kept: slot %lu, idx %u, is_repair %d, sig %lu", shred->slot, shred->idx, fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR, sig ));
 
     char repair_data_buf[1024];
     snprintf( repair_data_buf, sizeof(repair_data_buf),

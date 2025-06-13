@@ -366,7 +366,6 @@ before_frag( fd_shred_ctx_t * ctx,
     return (fd_disco_poh_sig_pkt_type( sig )!=POH_PKT_TYPE_MICROBLOCK) & (fd_disco_poh_sig_pkt_type( sig )!=POH_PKT_TYPE_FEAT_ACT_SLOT);
   }
   if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET ) ) {
-    FD_LOG_INFO(("shred SEQ %lu, sig %lu", seq, sig));
     return (fd_disco_netmux_sig_proto( sig )!=DST_PROTO_SHRED) & (fd_disco_netmux_sig_proto( sig )!=DST_PROTO_REPAIR);
   }
   return 0;
@@ -595,8 +594,6 @@ during_frag( fd_shred_ctx_t * ctx,
       ctx->skip_frag = 1;
       return;
     }
-    FD_LOG_INFO(("shred shred slot %lu, idx %u, is_repair %d, sig %lu", shred->slot, shred->idx, fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR, sig ));
-
     fd_memcpy( ctx->shred_buffer, dcache_entry+hdr_sz, sz-hdr_sz );
     ctx->shred_buffer_sz = sz-hdr_sz;
   }
