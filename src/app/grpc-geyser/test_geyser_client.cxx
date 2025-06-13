@@ -43,6 +43,34 @@ printUpdate(::geyser::SubscribeUpdate const * update) {
       "  slot=" << slot.slot() << "\n" <<
       "  parent=" << slot.parent() << "\n";
   }
+
+  if( update->update_oneof_case() == ::geyser::SubscribeUpdate::kTransaction ) {
+    auto& txn2 = update->transaction();
+    auto& info = txn2.transaction();
+    auto& txn3 = info.transaction();
+    auto& mess = txn3.message();
+    auto& head = mess.header();
+    std::cout <<
+      "transaction\n" <<
+      "  slot=" << txn2.slot() << "\n" <<
+      "  num_required_signatures=" << head.num_required_signatures() << "\n" <<
+      "  num_readonly_signed_accounts=" << head.num_readonly_signed_accounts() << "\n" <<
+      "  num_readonly_unsigned_accounts=" << head.num_readonly_unsigned_accounts() << "\n" <<
+      "  signatures\n";
+    for( int i = 0; i < txn3.signatures_size(); i++ ) {
+      FD_BASE58_ENCODE_64_BYTES((const uchar*)txn3.signatures(i).c_str(), sig);
+      std::cout << "    " << std::string(sig, sig_len) << "\n";
+    }
+    std::cout << "  accounts\n";
+    for( int i = 0; i < mess.account_keys_size(); i++ ) {
+      FD_BASE58_ENCODE_32_BYTES((const uchar*)mess.account_keys(i).c_str(), acct);
+      std::cout << "    " << std::string(acct, acct_len) << "\n";
+    }
+    {
+      FD_BASE58_ENCODE_32_BYTES((const uchar*)mess.recent_blockhash().c_str(), hash);
+      std::cout << "  block_hash=" << std::string(hash, hash_len) << "\n";
+    }
+  }
 }
 
 class GeyserClient {

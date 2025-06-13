@@ -42,7 +42,7 @@ class CompiledFilter {
 
     bool filterAccount(fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz);
     bool filterSlot(fd_replay_notif_msg_t * msg);
-    bool filterTxn(fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs);
+    bool filterTxn(fd_replay_notif_msg_t * msg, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs);
 
   private:
     bool compile_internal(::geyser::SubscribeRequest * request);
@@ -129,7 +129,7 @@ CompiledFilter::filterSlot(fd_replay_notif_msg_t * msg) {
 }
 
 bool
-CompiledFilter::filterTxn(fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs) {
+CompiledFilter::filterTxn(fd_replay_notif_msg_t * msg, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs) {
   for( auto& f : txns_ ) {
     if( !f->acct_include_.empty() ) {
       for( auto& h : f->acct_include_ ) {
@@ -170,11 +170,12 @@ struct geys_filter {
     fd_spad_t * spad_;
     fd_funk_t * funk_;
     GeyserServiceImpl * serv_;
+    bool load_accts_ = false;
 
     geys_filter(fd_spad_t * spad, fd_funk_t * funk) : spad_(spad), funk_(funk) { }
     void filter_acct(ulong slot, fd_pubkey_t * key, fd_account_meta_t * meta, const uchar * val, ulong val_sz);
     void filter_slot(fd_replay_notif_msg_t * msg);
-    void filter_txn(fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs);
+    void filter_txn(fd_replay_notif_msg_t * msg, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs);
 };
 
 geys_filter_t *
@@ -193,6 +194,8 @@ geys_filter_add_sub(geys_filter_t * filter, /* SubscribeRequest*/ void * request
       CompiledFilter::compile( (::geyser::SubscribeRequest *) request),
       reactor
     } );
+  if( !( (::geyser::SubscribeRequest *) request)->accounts().empty() )
+    filter->load_accts_ = true;
 }
 
 void
@@ -225,10 +228,10 @@ geys_filter::filter_slot(fd_replay_notif_msg_t * msg) {
 }
 
 void
-geys_filter::filter_txn(fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs) {
+geys_filter::filter_txn(fd_replay_notif_msg_t * msg, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs) {
   for( auto& i : elems_ ) {
-    if( i.filter_->filterTxn(txn, accs, sigs) ) {
-      GeyserServiceImpl::updateTxn(i.reactor_, txn, accs, sigs);
+    if( i.filter_->filterTxn(msg, txn, accs, sigs) ) {
+      GeyserServiceImpl::updateTxn(i.reactor_, msg, txn, accs, sigs);
     }
   }
 }
@@ -271,24 +274,26 @@ geys_filter_notify(geys_filter_t * filter, fd_replay_notif_msg_t * msg, uchar * 
 
         fd_pubkey_t * accs = (fd_pubkey_t *)((uchar *)raw + txn->acct_addr_off);
         fd_ed25519_sig_t const * sigs = (fd_ed25519_sig_t const *)(raw + txn->signature_off);
-        filter->filter_txn( txn, accs, sigs );
+        filter->filter_txn( msg, txn, accs, sigs );
 
         /* Loop across accoounts */
-        for( int i = 0UL; i < txn->acct_addr_cnt; i++ ) {
-          bool writable = ((i < txn->signature_cnt - txn->readonly_signed_cnt) ||
-                           ((i >= txn->signature_cnt) && (i < txn->acct_addr_cnt - txn->readonly_unsigned_cnt)));
-          if( !writable ) continue;
+        if( filter->load_accts_ ) {
+          for( int i = 0; i < txn->acct_addr_cnt; i++ ) {
+            bool writable = ((i < txn->signature_cnt - txn->readonly_signed_cnt) ||
+                             ((i >= txn->signature_cnt) && (i < txn->acct_addr_cnt - txn->readonly_unsigned_cnt)));
+            if( !writable ) continue;
 
-          fd_spad_push(filter->spad_);
+            fd_spad_push(filter->spad_);
 
-          fd_funk_rec_key_t recid = fd_funk_acc_key(&accs[i]);
-          ulong val_sz;
-          const uchar * val = (const uchar *) fd_funk_rec_query_copy( filter->funk_, funk_txn, &recid, fd_spad_virtual(filter->spad_), &val_sz );
-          if( val ) {
-            filter->filter_acct(msg->slot_exec.slot, &accs[i], (fd_account_meta_t *)val, val + sizeof(fd_account_meta_t), val_sz - sizeof(fd_account_meta_t));
+            fd_funk_rec_key_t recid = fd_funk_acc_key(&accs[i]);
+            ulong val_sz;
+            const uchar * val = (const uchar *) fd_funk_rec_query_copy( filter->funk_, funk_txn, &recid, fd_spad_virtual(filter->spad_), &val_sz );
+            if( val ) {
+              filter->filter_acct(msg->slot_exec.slot, &accs[i], (fd_account_meta_t *)val, val + sizeof(fd_account_meta_t), val_sz - sizeof(fd_account_meta_t));
+            }
+
+            fd_spad_pop(filter->spad_);
           }
-
-          fd_spad_pop(filter->spad_);
         }
 
         blockoff += pay_sz;

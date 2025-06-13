@@ -227,10 +227,30 @@ GeyserServiceImpl::updateSlot(GeyserSubscribeReactor_t * reactor, fd_replay_noti
 }
 
 void
-GeyserServiceImpl::updateTxn(GeyserSubscribeReactor_t * reactor, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs) {
+GeyserServiceImpl::updateTxn(GeyserSubscribeReactor_t * reactor, fd_replay_notif_msg_t * msg, fd_txn_t * txn, fd_pubkey_t * accs, fd_ed25519_sig_t const * sigs) {
   auto* update = new ::geyser::SubscribeUpdate();
   auto* txn2 = new ::geyser::SubscribeUpdateTransaction();
   update->set_allocated_transaction(txn2);
+  txn2->set_slot(msg->slot_exec.slot);
+  auto* info = new ::geyser::SubscribeUpdateTransactionInfo();
+  txn2->set_allocated_transaction(info);
+  info->set_signature(sigs, 64);
+  auto* txn3 = new ::solana::storage::ConfirmedBlock::Transaction();
+  info->set_allocated_transaction(txn3);
+  for( uint i = 0UL; i < txn->signature_cnt; i++ ) {
+    txn3->mutable_signatures()->Add({(const char*)&sigs[i], 64});
+  }
+  auto* mess = new ::solana::storage::ConfirmedBlock::Message();
+  txn3->set_allocated_message(mess);
+  auto* head = new ::solana::storage::ConfirmedBlock::MessageHeader();
+  mess->set_allocated_header(head);
+  head->set_num_required_signatures( 1 );
+  head->set_num_readonly_signed_accounts( txn->readonly_signed_cnt );
+  head->set_num_readonly_unsigned_accounts( txn->readonly_unsigned_cnt );
+  for( uint i = 0; i < txn->acct_addr_cnt; i++ ) {
+    mess->mutable_account_keys()->Add({(const char*)&accs[i], 32});
+  }
+  mess->set_recent_blockhash(msg->slot_exec.block_hash.uc, 32);
 
   reactor->Update( update );
 }
