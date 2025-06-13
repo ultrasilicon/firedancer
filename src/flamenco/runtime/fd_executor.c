@@ -1387,7 +1387,7 @@ fd_executor_setup_accounts_for_txn( fd_exec_txn_ctx_t * txn_ctx ) {
                        txn_ctx->capture_ctx->dump_elf_to_pb;
   if( FD_UNLIKELY( dump_elf_to_pb ) ) {
     for( ushort i=0; i<txn_ctx->accounts_cnt; i++ ) {
-      fd_dump_elf_to_protobuf( txn_ctx, &txn_ctx->account_keys[i] );
+      fd_dump_elf_to_protobuf( txn_ctx, &txn_ctx->accounts[i] );
     }
   }
 

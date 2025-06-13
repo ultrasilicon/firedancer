@@ -95,6 +95,17 @@ fd_bpf_get_sbpf_versions( uint *                sbpf_min_version,
                           ulong                 slot,
                           fd_features_t const * features );
 
+/* Parses the programdata from a program account. Returns a pointer to the program data
+   and sets `out_program_data_len` on success. Returns NULL on failure or if the program
+   account is not owned by a BPF loader program ID, and leaves `out_program_data_len`
+   in an undefined state. */
+uchar const *
+fd_bpf_get_programdata_from_account( fd_funk_t *        funk,
+                                     fd_funk_txn_t *    funk_txn,
+                                     fd_txn_account_t * program_acc,
+                                     ulong *            out_program_data_len,
+                                     fd_spad_t *        runtime_spad );
+
 /* Updates the program cache for a single program. This function is called for every program
    that is referenced in a transaction, plus every single account in a lookup table referenced
    in the transaction. This function...

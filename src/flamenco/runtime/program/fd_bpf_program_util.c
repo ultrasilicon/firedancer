@@ -89,10 +89,11 @@ fd_bpf_get_executable_program_content_for_v4_loader( fd_txn_account_t * program_
    as well as the programdata account. Returns a pointer to the programdata on success,
    and NULL on failure */
 static uchar const *
-fd_bpf_get_executable_program_content_for_upgradeable_loader( fd_exec_slot_ctx_t * slot_ctx,
-                                                              fd_txn_account_t *   program_acc,
-                                                              ulong *              program_data_len,
-                                                              fd_spad_t *          runtime_spad ) {
+fd_bpf_get_executable_program_content_for_upgradeable_loader( fd_funk_t *        funk,
+                                                              fd_funk_txn_t *    funk_txn,
+                                                              fd_txn_account_t * program_acc,
+                                                              ulong *            program_data_len,
+                                                              fd_spad_t *        runtime_spad ) {
   FD_TXN_ACCOUNT_DECL( programdata_acc );
 
   fd_bpf_upgradeable_loader_state_t * program_account_state =
@@ -110,10 +111,7 @@ fd_bpf_get_executable_program_content_for_upgradeable_loader( fd_exec_slot_ctx_t
 
   fd_pubkey_t * programdata_address = &program_account_state->inner.program.programdata_address;
 
-  if( fd_txn_account_init_from_funk_readonly( programdata_acc,
-                                              programdata_address,
-                                              slot_ctx->funk,
-                                              slot_ctx->funk_txn ) != FD_ACC_MGR_SUCCESS ) {
+  if( fd_txn_account_init_from_funk_readonly( programdata_acc, programdata_address, funk, funk_txn )!=FD_ACC_MGR_SUCCESS ) {
     return NULL;
   }
 
@@ -170,21 +168,18 @@ fd_bpf_get_sbpf_versions( uint *                sbpf_min_version,
   }
 }
 
-/* Parses the programdata from a program account. Returns a pointer to the program data
-   and sets `out_program_data_len` on success. Returns NULL on failure or if the program
-   account is not owned by a BPF loader program ID, and leaves `out_program_data_len`
-   in an undefined state. */
-static uchar const *
-fd_bpf_get_programdata_from_account( fd_exec_slot_ctx_t * slot_ctx,
-                                     fd_txn_account_t *   program_acc,
-                                     ulong *              out_program_data_len,
-                                     fd_spad_t *          runtime_spad ) {
+uchar const *
+fd_bpf_get_programdata_from_account( fd_funk_t *        funk,
+                                     fd_funk_txn_t *    funk_txn,
+                                     fd_txn_account_t * program_acc,
+                                     ulong *            out_program_data_len,
+                                     fd_spad_t *        runtime_spad ) {
   /* v1/v2 loaders: Programdata is just the account data.
      v3 loader: Programdata lives in a separate account. Deserialize the program account
                 and lookup the programdata account. Deserialize the programdata account.
      v4 loader: Programdata lives in the program account, offset by LOADER_V4_PROGRAM_DATA_OFFSET. */
   if( !memcmp( program_acc->vt->get_owner( program_acc ), fd_solana_bpf_loader_upgradeable_program_id.key, sizeof(fd_pubkey_t) ) ) {
-    return fd_bpf_get_executable_program_content_for_upgradeable_loader( slot_ctx, program_acc, out_program_data_len, runtime_spad );
+    return fd_bpf_get_executable_program_content_for_upgradeable_loader( funk, funk_txn, program_acc, out_program_data_len, runtime_spad );
   } else if( !memcmp( program_acc->vt->get_owner( program_acc ), fd_solana_bpf_loader_v4_program_id.key, sizeof(fd_pubkey_t) ) ) {
     return fd_bpf_get_executable_program_content_for_v4_loader( program_acc, out_program_data_len );
   } else if( !memcmp( program_acc->vt->get_owner( program_acc ), fd_solana_bpf_loader_program_id.key, sizeof(fd_pubkey_t) ) ||
@@ -361,7 +356,7 @@ fd_bpf_create_bpf_program_cache_entry( fd_exec_slot_ctx_t * slot_ctx,
     }
 
     ulong         program_data_len = 0UL;
-    uchar const * program_data     = fd_bpf_get_programdata_from_account( slot_ctx, program_acc, &program_data_len, runtime_spad );
+    uchar const * program_data     = fd_bpf_get_programdata_from_account( funk, funk_txn, program_acc, &program_data_len, runtime_spad );
 
     if( FD_UNLIKELY( program_data==NULL ) ) {
       fd_publish_failed_verification_rec( funk, prepare, rec );
@@ -718,7 +713,11 @@ FD_SPAD_FRAME_BEGIN( runtime_spad ) {
 
   /* Get the program data from the account */
   ulong         program_data_len = 0UL;
-  uchar const * program_data     = fd_bpf_get_programdata_from_account( slot_ctx, exec_rec, &program_data_len, runtime_spad );
+  uchar const * program_data     = fd_bpf_get_programdata_from_account( slot_ctx->funk,
+                                                                        slot_ctx->funk_txn,
+                                                                        exec_rec,
+                                                                        &program_data_len,
+                                                                        runtime_spad );
   if( FD_UNLIKELY( program_data==NULL ) ) {
     modified_prog->failed_verification = 1;
     fd_funk_rec_modify_publish( query );
