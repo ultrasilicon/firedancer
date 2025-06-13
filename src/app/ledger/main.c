@@ -1284,7 +1284,7 @@ initial_setup( int argc, char ** argv, fd_ledger_args_t * args ) {
   ulong        snapshot_tcnt         = fd_env_strip_cmdline_ulong ( &argc, &argv, "--snapshot-tcnt",         NULL, 0UL                                                );
   double       allowed_mem_delta     = fd_env_strip_cmdline_double( &argc, &argv, "--allowed-mem-delta",     NULL, 0.1                                                );
   ulong        thread_mem_bound      = fd_env_strip_cmdline_ulong ( &argc, &argv, "--thread-mem-bound",      NULL, FD_RUNTIME_TRANSACTION_EXECUTION_FOOTPRINT_DEFAULT );
-  ulong        runtime_mem_bound     = fd_env_strip_cmdline_ulong ( &argc, &argv, "--runtime-mem-bound",     NULL, (ulong)50e9                                        );
+  ulong        runtime_mem_bound     = fd_env_strip_cmdline_ulong ( &argc, &argv, "--runtime-mem-bound",     NULL, (ulong)30e9                                        );
 
   if( FD_UNLIKELY( !verify_acc_hash ) ) {
     /* We've got full snapshots that contain all 0s for the account
