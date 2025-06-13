@@ -370,7 +370,6 @@ struct fd_config {
       ushort repair_intake_listen_port;
       ushort repair_serve_listen_port;
       char   good_peer_cache_file[ PATH_MAX ];
-      char   capture_path[ PATH_MAX ];
     } repair;
 
     struct {
