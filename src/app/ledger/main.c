@@ -363,11 +363,11 @@ runtime_replay( fd_ledger_args_t * ledger_args ) {
     fd_hash_t expected;
     int err = fd_blockstore_block_hash_query( blockstore, slot, &expected );
     if( FD_UNLIKELY( err ) ) FD_LOG_ERR( ( "slot %lu is missing its hash", slot ) );
-    else if( FD_UNLIKELY( 0 != memcmp( fd_bank_mgr_poh_query( ledger_args->slot_ctx->bank_mgr )->hash, expected.hash, sizeof(fd_hash_t) ) ) ) {
+    else if( FD_UNLIKELY( 0 != memcmp( ledger_args->slot_ctx->bank->poh.hash, expected.hash, sizeof(fd_hash_t) ) ) ) {
       char expected_hash[ FD_BASE58_ENCODED_32_SZ ];
       fd_acct_addr_cstr( expected_hash, expected.hash );
       char poh_hash[ FD_BASE58_ENCODED_32_SZ ];
-      fd_acct_addr_cstr( poh_hash, fd_bank_mgr_poh_query( ledger_args->slot_ctx->bank_mgr )->hash );
+      fd_acct_addr_cstr( poh_hash, ledger_args->slot_ctx->bank->poh.hash );
       FD_LOG_WARNING(( "PoH hash mismatch! slot=%lu expected=%s, got=%s",
                         slot,
                         expected_hash,

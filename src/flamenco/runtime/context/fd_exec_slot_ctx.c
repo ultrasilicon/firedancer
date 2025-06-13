@@ -327,9 +327,7 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
   /* PoH */
 
   if( oldbank->blockhash_queue.last_hash ) {
-    fd_hash_t * poh = fd_bank_mgr_poh_modify( slot_ctx->bank_mgr );
-    *poh = *oldbank->blockhash_queue.last_hash;
-    fd_bank_mgr_poh_save( slot_ctx->bank_mgr );
+    slot_ctx->bank->poh = *oldbank->blockhash_queue.last_hash;
   }
 
   /* Prev Bank Hash */
@@ -452,9 +450,7 @@ fd_exec_slot_ctx_recover( fd_exec_slot_ctx_t *         slot_ctx,
       // }
     }
 
-    ulong * use_prev_stakes = fd_bank_mgr_use_prev_epoch_stake_modify( slot_ctx->bank_mgr );
-    *use_prev_stakes = epoch + 2UL;
-    fd_bank_mgr_use_prev_epoch_stake_save( slot_ctx->bank_mgr );
+    slot_ctx->bank->use_prev_epoch_stake = epoch + 2UL;
 
     // slot_ctx->slot_bank.use_preceeding_epoch_stakes     = epoch + 2UL;
 

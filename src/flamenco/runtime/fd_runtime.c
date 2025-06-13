@@ -2926,8 +2926,7 @@ fd_runtime_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
       This is due to a subtlety in how Agave's stake caches interact when loading from snapshots.
       See the comment in fd_exec_slot_ctx_recover_. */
 
-  ulong * use_prev_stakes = fd_bank_mgr_use_prev_epoch_stake_query( slot_ctx->bank_mgr );
-  if( use_prev_stakes && *use_prev_stakes == epoch ) {
+  if( slot_ctx->bank->use_prev_epoch_stake == epoch ) {
     fd_update_epoch_stakes( slot_ctx );
   }
 
@@ -3447,9 +3446,7 @@ fd_runtime_init_bank_from_genesis( fd_exec_slot_ctx_t *        slot_ctx,
                                    fd_spad_t *                 runtime_spad ) {
   slot_ctx->slot = 0UL;
 
-  fd_hash_t * poh_bm = fd_bank_mgr_poh_modify( slot_ctx->bank_mgr );
-  fd_memcpy( poh_bm->hash, genesis_hash->hash, FD_SHA256_HASH_SZ );
-  fd_bank_mgr_poh_save( slot_ctx->bank_mgr );
+  slot_ctx->bank->poh = *genesis_hash;
 
   fd_hash_t * bank_hash = fd_bank_mgr_bank_hash_modify( slot_ctx->bank_mgr );
   memset( bank_hash->hash, 0, FD_SHA256_HASH_SZ );
@@ -3717,14 +3714,11 @@ fd_runtime_process_genesis_block( fd_exec_slot_ctx_t * slot_ctx,
                                   fd_capture_ctx_t *   capture_ctx,
                                   fd_spad_t *          runtime_spad ) {
 
-  fd_hash_t poh_old = *fd_bank_mgr_poh_query( slot_ctx->bank_mgr );
 
-  fd_hash_t * poh = fd_bank_mgr_poh_modify( slot_ctx->bank_mgr );
   ulong hashcnt_per_slot = slot_ctx->bank->hashes_per_tick * slot_ctx->bank->ticks_per_slot;
   while( hashcnt_per_slot-- ) {
-    fd_sha256_hash( poh->hash, sizeof(fd_hash_t), &poh_old );
+    fd_sha256_hash( slot_ctx->bank->poh.hash, sizeof(fd_hash_t), slot_ctx->bank->poh.hash );
   }
-  fd_bank_mgr_poh_save( slot_ctx->bank_mgr );
 
   slot_ctx->bank->execution_fees = 0UL;
 
@@ -4374,13 +4368,12 @@ fd_runtime_block_eval_tpool( fd_exec_slot_ctx_t * slot_ctx,
     *txn_cnt = block_info.txn_cnt;
 
     fd_hash_t poh_out = {0};
-    fd_hash_t poh_in = *fd_bank_mgr_poh_query( slot_ctx->bank_mgr );
+    fd_hash_t poh_in = slot_ctx->bank->poh;
     if( FD_UNLIKELY( (ret = fd_runtime_block_verify_tpool( slot_ctx, &block_info, &poh_in, &poh_out, tpool, runtime_spad )) != FD_RUNTIME_EXECUTE_SUCCESS ) ) {
       break;
     }
-    fd_hash_t * poh = fd_bank_mgr_poh_modify( slot_ctx->bank_mgr );
-    fd_memcpy( poh->hash, poh_out.hash, sizeof(fd_hash_t) );
-    fd_bank_mgr_poh_save( slot_ctx->bank_mgr );
+
+    slot_ctx->bank->poh = poh_out;
 
     /* Dump the remainder of the block after preparation, POH verification, etc */
     if( FD_UNLIKELY( dump_block ) ) {
@@ -4390,8 +4383,6 @@ fd_runtime_block_eval_tpool( fd_exec_slot_ctx_t * slot_ctx,
     if( FD_UNLIKELY( (ret = fd_runtime_block_execute_tpool( slot_ctx, capture_ctx, &block_info, tpool, exec_spads, exec_spad_cnt, runtime_spad )) != FD_RUNTIME_EXECUTE_SUCCESS ) ) {
       break;
     }
-
-    poh = fd_bank_mgr_poh_query( slot_ctx->bank_mgr );
 
     } FD_SPAD_FRAME_END;
 

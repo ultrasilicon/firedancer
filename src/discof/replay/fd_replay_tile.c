@@ -1511,9 +1511,7 @@ exec_slice( fd_replay_tile_ctx_t * ctx,
     fd_block_map_prepare( ctx->blockstore->block_map, &ctx->curr_slot, NULL, query, FD_MAP_FLAG_BLOCKING );
     fd_block_info_t * block_info = fd_block_map_query_ele( query );
 
-    fd_hash_t * poh = fd_bank_mgr_poh_modify( fork->slot_ctx->bank_mgr );
-    memcpy( poh->hash, hdr->hash, sizeof(fd_hash_t) );
-    fd_bank_mgr_poh_save( fork->slot_ctx->bank_mgr );
+    memcpy( ctx->slot_ctx->bank->poh.hash, hdr->hash, sizeof(fd_hash_t) );
     block_info->flags = fd_uchar_set_bit( block_info->flags, FD_BLOCK_FLAG_PROCESSED );
     FD_COMPILER_MFENCE();
     block_info->flags = fd_uchar_clear_bit( block_info->flags, FD_BLOCK_FLAG_REPLAYING );
@@ -1797,12 +1795,9 @@ init_after_snapshot( fd_replay_tile_ctx_t * ctx,
     ctx->slot_ctx->slot      = 1UL;
 
     ulong hashcnt_per_slot = ctx->slot_ctx->bank->hashes_per_tick * ctx->slot_ctx->bank->ticks_per_slot;
-    fd_hash_t * poh = fd_bank_mgr_poh_modify( ctx->slot_ctx->bank_mgr );
-    fd_hash_t poh_hash = *poh;
     while(hashcnt_per_slot--) {
-      fd_sha256_hash( poh->hash, 32UL, &poh_hash );
+      fd_sha256_hash( ctx->slot_ctx->bank->poh.hash, 32UL, ctx->slot_ctx->bank->poh.hash );
     }
-    fd_bank_mgr_poh_save( ctx->slot_ctx->bank_mgr );
 
     FD_TEST( fd_runtime_block_execute_prepare( ctx->slot_ctx, ctx->runtime_spad ) == 0 );
     fd_runtime_block_info_t info = { .signature_cnt = 0 };
